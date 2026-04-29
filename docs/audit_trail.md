@@ -10,3 +10,7 @@ edited or removed.
 |---|---|---|---|---|---|---|---|
 | 1.1 | Stage 1 import | - | b8d7152 | phase-1.1-stage1-candidate | docs/reviews/phase1.1/stage1_claude.md | docs/reviews/phase1.1/stage1_codex.md | PASS |
 | 1.1 | Freeze | #1 | 4be314d | phase-1.1-contract-1.0.0 | docs/reviews/phase1.1/freeze_claude.md | docs/reviews/phase1.1/freeze_codex.md | PASS (Codex S/M patched locally) |
+| 1.1 | Stage 2 ledger | #3 | ba8166b | - | docs/reviews/phase1.1/stage2_ledger_claude.md | docs/reviews/phase1.1/stage2_ledger_codex.md | PASS (consensus 2M deferred to Phase 1.2: reader LOCK_SH + iter_all generator handle) |
+| 1.1 | Stage 2 guard | #4 | bcfa1a1 | - | docs/reviews/phase1.1/stage2_guard_claude.md | docs/reviews/phase1.1/stage2_guard_codex.md | PASS |
+| 1.1 | Stage 2 console | #5 | bcc5502 | - | docs/reviews/phase1.1/stage2_console_claude.md + stage2_console_patch_claude.md | docs/reviews/phase1.1/stage2_console_codex.md + stage2_console_patch_codex.md | PASS (local patched 1 vitest race + 1 src/README; package.json description NOT modified per v3 byte-freeze) |
+| 1.1 | Stage 2 integration | #6 | 510350a | phase-1.1-complete | (rolled-up review evidence above) | (rolled-up review evidence above) | PASS (CI gate green: pytest 383 / contract_diff / source_of_truth / private leak / vitest 6/6 / typecheck) |
