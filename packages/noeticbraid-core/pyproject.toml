@@ -1,6 +1,6 @@
 [project]
 name = "noeticbraid-core"
-version = "0.1.0-stage0"
+version = "0.1.0+stage0"
 description = "Core contracts, guards, ledger vocabulary, schemas, and orchestration interfaces."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
