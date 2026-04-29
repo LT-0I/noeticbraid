@@ -1,0 +1,7 @@
+# NOTICE
+
+This Stage 0 package contains placeholders and draft documents only.
+
+Third-party candidates are listed in `reuse_log/phase1_1_reuse_candidates.md` with `license_status: pending_review`. No third-party code is vendored in this package.
+
+Before any direct dependency is introduced, the local integration process must complete license review and update NOTICE / LICENSES as needed.

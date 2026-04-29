@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: NoeticBraid Phase 1.1 Draft API
+  version: 0.1.0
+  x-contract-version: 0.1.0
+  x-status: DRAFT_NON_AUTHORITATIVE
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Health response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/auth/startup_token:
+    post:
+      summary: Validate startup token
+      responses:
+        '200':
+          description: Startup token validation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /api/dashboard/empty:
+    get:
+      summary: Empty dashboard state
+      responses:
+        '200':
+          description: Empty dashboard response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyDashboard'
+  /api/workspace/threads:
+    get:
+      summary: List workspace threads
+      responses:
+        '200':
+          description: Workspace thread list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceThreads'
+  /api/approval/queue:
+    get:
+      summary: List approval queue
+      responses:
+        '200':
+          description: Approval queue response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalQueue'
+  /api/account/pool:
+    get:
+      summary: Account pool draft state
+      responses:
+        '200':
+          description: Account pool response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPoolDraft'
+  /api/ledger/runs:
+    get:
+      summary: List run records
+      responses:
+        '200':
+          description: Run ledger response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunLedgerRuns'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        contract_version:
+          type: string
+          example: 0.1.0
+        authoritative:
+          type: boolean
+          example: false
+    AuthResponse:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        mode:
+          type: string
+          example: localhost_startup_token
+    EmptyDashboard:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            type: object
+        approvals:
+          type: array
+          items:
+            type: object
+        accounts:
+          type: array
+          items:
+            type: object
+    WorkspaceThreads:
+      type: object
+      properties:
+        threads:
+          type: array
+          items:
+            type: object
+    ApprovalQueue:
+      type: object
+      properties:
+        approvals:
+          type: array
+          items:
+            type: object
+    AccountPoolDraft:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            type: object
+    RunLedgerRuns:
+      type: object
+      properties:
+        runs:
+          type: array
+          items:
+            type: object

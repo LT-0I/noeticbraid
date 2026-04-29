@@ -1,0 +1,10 @@
+{
+  "$schema_status": "draft_nonbinding",
+  "contract_version": "0.1.0",
+  "source_ref_id": "src_draft_001",
+  "source_type": "user_note",
+  "title": "Draft source",
+  "content_hash": "draft_sha256_placeholder",
+  "source_fingerprint": "draft_fingerprint_placeholder",
+  "used_for_purpose": "project_positioning"
+}

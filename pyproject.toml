@@ -1,0 +1,20 @@
+[project]
+name = "noeticbraid-workspace"
+version = "0.1.0-stage0"
+description = "NoeticBraid monorepo workspace root for Phase 1.1 Stage 0 drafts."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+[tool.uv.workspace]
+members = [
+  "packages/noeticbraid-core",
+  "packages/noeticbraid-obsidian",
+  "packages/noeticbraid-runtime"
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "packages/noeticbraid-core/src",
+  "packages/noeticbraid-obsidian/src",
+  "packages/noeticbraid-runtime/src"
+]

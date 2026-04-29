@@ -1,0 +1,44 @@
+# Private state and secrets
+state/
+.env
+.env.*
+*.secret
+*.key
+*.pem
+
+# Private subtree: keep placeholder READMEs (public-safe boundary docs),
+# exclude actual private code/data that lands later
+private/**
+!private/README.md
+!private/*/
+!private/*/README.md
+
+# Browser profile data is never committed (placeholder README is OK)
+**/browser-profiles/cookies/
+**/browser-profiles/sessions/
+**/browser-profiles/Default/
+**/browser-profiles/*.json
+**/browser-profiles/*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Generated package checksums
+*.zip
+*.zip.sha256

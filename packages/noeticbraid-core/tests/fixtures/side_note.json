@@ -1,0 +1,14 @@
+{
+  "$schema_status": "draft_nonbinding",
+  "contract_version": "0.1.0",
+  "note_id": "note_stage1_candidate_001",
+  "created_at": "2026-04-28T09:34:00+00:00",
+  "linked_source_refs": [
+    "source_stage1_candidate_001"
+  ],
+  "note_type": "challenge",
+  "claim": "Contract files must remain unchanged until the local freeze commit.",
+  "confidence": "high",
+  "user_response": "unread",
+  "follow_up_ref": "task_stage1_candidate_001"
+}

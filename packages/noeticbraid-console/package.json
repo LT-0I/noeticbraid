@@ -1,0 +1,23 @@
+{
+  "name": "noeticbraid-console",
+  "version": "0.1.0-stage0",
+  "private": false,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "NoeticBraid Web Console Stage 0 placeholder.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "echo \"Stage 0: no console implementation tests yet\""
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@tanstack/react-query": "latest",
+    "@tanstack/react-router": "latest"
+  },
+  "devDependencies": {}
+}

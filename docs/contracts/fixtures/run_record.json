@@ -1,0 +1,11 @@
+{
+  "$schema_status": "draft_nonbinding",
+  "contract_version": "0.1.0",
+  "run_id": "run_draft_001",
+  "task_id": "task_draft_001",
+  "event_type": "task_created",
+  "source_refs": [
+    "src_draft_001"
+  ],
+  "status": "recorded"
+}

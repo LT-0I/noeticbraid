@@ -1,0 +1,1 @@
+legacy asset library; treat as read-only. Apply ACL using scripts/apply_legacy_readonly.ps1 after placement.
