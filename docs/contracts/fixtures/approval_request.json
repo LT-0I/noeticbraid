@@ -1,9 +1,13 @@
 {
-  "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
-  "approval_id": "approval_draft_001",
-  "task_id": "task_draft_001",
+  "$schema_status": "authoritative",
+  "contract_version": "1.0.0",
+  "approval_id": "approval_stage1_candidate_001",
+  "task_id": "task_stage1_candidate_001",
+  "run_id": "run_stage1_candidate_001",
   "approval_level": "light",
-  "requested_action": "draft_action",
+  "requested_at": "2026-04-28T09:33:00+00:00",
+  "requested_action": "Review candidate schema constraints before freeze.",
+  "reason": "Stage 1 business implementation is pending local double review.",
+  "diff_ref": "diff_schema_candidate_001",
   "status": "pending"
 }

@@ -1,8 +1,11 @@
 {
-  "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
-  "digestion_id": "digestion_draft_001",
-  "side_note_id": "side_note_draft_001",
-  "c_status": "c0",
+  "$schema_status": "authoritative",
+  "contract_version": "1.0.0",
+  "digestion_id": "digestion_stage1_candidate_001",
+  "side_note_id": "note_stage1_candidate_001",
+  "created_at": "2026-04-28T09:35:00+00:00",
+  "c_status": "c1",
+  "user_response_ref": "note_stage1_candidate_001",
+  "next_review_at": "2026-05-05T09:35:00+00:00",
   "status": "open"
 }

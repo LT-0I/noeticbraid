@@ -1,11 +1,20 @@
 {
-  "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
-  "run_id": "run_draft_001",
-  "task_id": "task_draft_001",
-  "event_type": "task_created",
-  "source_refs": [
-    "src_draft_001"
+  "$schema_status": "authoritative",
+  "contract_version": "1.0.0",
+  "run_id": "run_stage1_candidate_001",
+  "task_id": "task_stage1_candidate_001",
+  "event_type": "context_built",
+  "created_at": "2026-04-28T09:31:00+00:00",
+  "actor": "system",
+  "model_refs": [
+    "model_chatgpt_primary"
   ],
+  "source_refs": [
+    "source_stage1_candidate_001"
+  ],
+  "artifact_refs": [
+    "artifact_schema_candidate_001"
+  ],
+  "routing_advice": "Route as low-risk schema implementation work.",
   "status": "recorded"
 }

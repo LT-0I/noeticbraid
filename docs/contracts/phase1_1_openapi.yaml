@@ -1,9 +1,11 @@
 openapi: 3.0.3
 info:
-  title: NoeticBraid Phase 1.1 Draft API
-  version: 0.1.0
-  x-contract-version: 0.1.0
-  x-status: DRAFT_NON_AUTHORITATIVE
+  title: NoeticBraid Phase 1.1 API
+  version: 1.0.0
+  x-contract-version: 1.0.0
+  x-status: AUTHORITATIVE
+  x-frozen: true
+  x-stage1-implementation-commit: b8d7152
 paths:
   /api/health:
     get:
@@ -85,10 +87,10 @@ components:
           example: ok
         contract_version:
           type: string
-          example: 0.1.0
+          example: 1.0.0
         authoritative:
           type: boolean
-          example: false
+          example: true
     AuthResponse:
       type: object
       properties:
@@ -140,3 +142,341 @@ components:
           type: array
           items:
             type: object
+    Task:
+      type: object
+      additionalProperties: false
+      required: [task_id, task_type, risk_level, approval_level, user_request, source_channel]
+      properties:
+        task_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^task_[A-Za-z0-9_]+$'
+          description: Stable task identifier prefixed with 'task_'.
+        task_type:
+          type: string
+          enum: [project_planning, research, code_review]
+          description: Phase 1.1 supported task categories.
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+          description: Estimated risk level for routing and approval.
+        approval_level:
+          type: string
+          enum: [none, light, strong, forbidden]
+          description: Required user approval level before execution.
+        created_at:
+          type: string
+          format: date-time
+          description: UTC-normalized task creation timestamp.
+        status:
+          type: string
+          enum: [draft, ready, queued, running, waiting_for_user, failed, completed]
+          default: draft
+          description: Current lifecycle status of the task.
+        user_request:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: Original user request text that initiated the task.
+        source_channel:
+          type: string
+          enum: [console, obsidian, im, schedule, local]
+          description: Channel from which the request entered NoeticBraid.
+        account_hint:
+          type: string
+          maxLength: 64
+          nullable: true
+          default: null
+          description: Optional non-authoritative account routing hint; blank string normalizes to null.
+        project_ref:
+          type: string
+          maxLength: 128
+          nullable: true
+          default: null
+          description: Optional project or workspace reference; blank string normalizes to null.
+    RunRecord:
+      type: object
+      additionalProperties: false
+      required: [run_id, task_id, event_type, actor]
+      properties:
+        run_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^run_[A-Za-z0-9_]+$'
+          description: Stable run identifier prefixed with 'run_'.
+        task_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^task_[A-Za-z0-9_]+$'
+          description: Task identifier linked to this event.
+        event_type:
+          type: string
+          enum: [task_created, task_classified, context_built, approval_requested, approval_decision_recorded, web_ai_call_requested, profile_health_checked, source_record_linked, artifact_created, security_violation, lesson_candidate_created, routing_advice_recorded, task_completed, task_failed]
+          description: Allowed Phase 1.1 run ledger event type.
+        created_at:
+          type: string
+          format: date-time
+          description: UTC-normalized run event timestamp.
+        actor:
+          type: string
+          enum: [user, system, model, local_review]
+          description: Actor responsible for the event.
+        model_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: '^model_[A-Za-z0-9_]+$'
+          default: []
+          description: Model references involved in this run event; duplicates are rejected.
+        source_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: '^source_[A-Za-z0-9_]+$'
+          default: []
+          description: Source record references linked to this run event; duplicates are rejected.
+        artifact_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: '^artifact_[A-Za-z0-9_]+$'
+          default: []
+          description: Artifact references produced or used by this run event; duplicates are rejected.
+        routing_advice:
+          type: string
+          maxLength: 4096
+          nullable: true
+          default: null
+          description: Optional routing advice captured during orchestration; blank string normalizes to null.
+        status:
+          type: string
+          enum: [draft, recorded, failed]
+          default: draft
+          description: Persistence status for the ledger entry.
+    SourceRecord:
+      type: object
+      additionalProperties: false
+      required: [source_ref_id, source_type, title, retrieved_by_run_id, content_hash, source_fingerprint, evidence_role, used_for_purpose]
+      properties:
+        source_ref_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^source_[A-Za-z0-9_]+$'
+          description: Stable source identifier prefixed with 'source_'.
+        source_type:
+          type: string
+          enum: [user_note, web_page, github_repo, paper, patent, video, ai_output, paid_database]
+          description: Kind of source captured for grounding or memory.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: Source title.
+        canonical_url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          default: null
+          description: Optional canonical HTTP(S) URL; if present, must start with http:// or https://; blank string normalizes to null.
+        local_path:
+          type: string
+          maxLength: 1024
+          nullable: true
+          default: null
+          description: Optional local path for local-only or mirrored source material; blank string normalizes to null.
+        author:
+          type: string
+          maxLength: 256
+          nullable: true
+          default: null
+          description: Optional author, organization, or account label; blank string normalizes to null.
+        captured_at:
+          type: string
+          format: date-time
+          description: UTC-normalized capture timestamp.
+        retrieved_by_run_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^run_[A-Za-z0-9_]+$'
+          description: Run identifier that retrieved or linked this source.
+        content_hash:
+          type: string
+          minLength: 71
+          maxLength: 71
+          pattern: '^sha256:[A-Fa-f0-9]{64}$'
+          description: sha256-prefixed content hash; implementation normalizes the hex portion to lowercase.
+        source_fingerprint:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^fingerprint_[A-Za-z0-9_]+$'
+          description: Stable deduplication fingerprint prefixed with 'fingerprint_'.
+        quality_score:
+          type: string
+          enum: [low, medium, high, unknown]
+          default: unknown
+          description: Quality assessment for the source.
+        relevance_score:
+          type: string
+          enum: [low, medium, high, unknown]
+          default: unknown
+          description: Relevance assessment for the current task.
+        evidence_role:
+          type: string
+          enum: [user_context, reference_project, source_grounding, contradiction, memory_update_evidence]
+          description: Role this source plays in evidence handling.
+        used_for_purpose:
+          type: string
+          enum: [project_positioning, constraint_extraction, source_grounding, prior_art_check, other]
+          description: Purpose for which the source was used.
+    ApprovalRequest:
+      type: object
+      additionalProperties: false
+      required: [approval_id, task_id, approval_level, requested_action, reason]
+      properties:
+        approval_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^approval_[A-Za-z0-9_]+$'
+          description: Stable approval identifier prefixed with 'approval_'.
+        task_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^task_[A-Za-z0-9_]+$'
+          description: Task requesting approval.
+        run_id:
+          type: string
+          maxLength: 128
+          pattern: '^run_[A-Za-z0-9_]+$'
+          nullable: true
+          default: null
+          description: Optional run identifier that raised this request; blank string normalizes to null and null skips pattern validation.
+        approval_level:
+          type: string
+          enum: [none, light, strong, forbidden]
+          description: Approval strength needed for the requested action.
+        requested_at:
+          type: string
+          format: date-time
+          description: UTC-normalized approval request timestamp.
+        requested_action:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Action that requires approval.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Reason the action requires approval or is blocked.
+        diff_ref:
+          type: string
+          maxLength: 256
+          nullable: true
+          default: null
+          description: Optional diff or artifact reference for user review; blank string normalizes to null.
+        status:
+          type: string
+          enum: [pending, approved, rejected, blocked]
+          default: pending
+          description: Current approval decision status.
+    SideNote:
+      type: object
+      additionalProperties: false
+      required: [note_id, note_type, claim, confidence]
+      properties:
+        note_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^note_[A-Za-z0-9_]+$'
+          description: Stable note identifier prefixed with 'note_'.
+        created_at:
+          type: string
+          format: date-time
+          description: UTC-normalized note creation timestamp.
+        linked_source_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: '^source_[A-Za-z0-9_]+$'
+          default: []
+          description: Source references supporting or challenging the note; duplicates are rejected.
+        note_type:
+          type: string
+          enum: [fact, hypothesis, challenge, action]
+          description: Type of side note.
+        claim:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Claim or action text.
+        confidence:
+          type: string
+          enum: [low, medium, high]
+          description: Confidence in the claim.
+        user_response:
+          type: string
+          enum: [unread, accepted, rejected, modified]
+          default: unread
+          description: User handling state for the note.
+        follow_up_ref:
+          type: string
+          maxLength: 128
+          nullable: true
+          default: null
+          description: Optional follow-up task, approval, note, or digestion reference; blank string normalizes to null.
+    DigestionItem:
+      type: object
+      additionalProperties: false
+      required: [digestion_id, side_note_id]
+      properties:
+        digestion_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^digestion_[A-Za-z0-9_]+$'
+          description: Stable digestion identifier prefixed with 'digestion_'.
+        side_note_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^note_[A-Za-z0-9_]+$'
+          description: Side note from which this digestion item was created.
+        created_at:
+          type: string
+          format: date-time
+          description: UTC-normalized digestion item creation timestamp.
+        c_status:
+          type: string
+          enum: [c0, c1, c2, c3, c4, cX]
+          default: c0
+          description: Review cadence state.
+        user_response_ref:
+          type: string
+          maxLength: 128
+          nullable: true
+          default: null
+          description: Optional reference to the user response that updated this item; blank string normalizes to null.
+        next_review_at:
+          type: string
+          format: date-time
+          nullable: true
+          default: null
+          description: Optional next review timestamp normalized to UTC.
+        status:
+          type: string
+          enum: [open, closed, rejected, snoozed]
+          default: open
+          description: Current digestion workflow status.

@@ -1,10 +1,18 @@
 {
-  "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
-  "source_ref_id": "src_draft_001",
+  "$schema_status": "authoritative",
+  "contract_version": "1.0.0",
+  "source_ref_id": "source_stage1_candidate_001",
   "source_type": "user_note",
-  "title": "Draft source",
-  "content_hash": "draft_sha256_placeholder",
-  "source_fingerprint": "draft_fingerprint_placeholder",
-  "used_for_purpose": "project_positioning"
+  "title": "Stage 1 schema implementation request",
+  "canonical_url": "https://example.com/noeticbraid/stage1",
+  "local_path": "docs/tasks/TASK-1.1.4_schema.md",
+  "author": "local_main_session",
+  "captured_at": "2026-04-28T09:32:00+00:00",
+  "retrieved_by_run_id": "run_stage1_candidate_001",
+  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source_fingerprint": "fingerprint_stage1_candidate_001",
+  "quality_score": "high",
+  "relevance_score": "high",
+  "evidence_role": "source_grounding",
+  "used_for_purpose": "constraint_extraction"
 }

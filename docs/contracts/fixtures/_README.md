@@ -1,20 +1,19 @@
-# Fixtures (DRAFT, non-authoritative)
+# Fixtures (Authoritative, frozen 1.0.0)
 
-contract_version: 0.1.0
-status: draft_fixture_nonbinding
+contract_version: 1.0.0
+status: authoritative
+frozen: true
+stage1_implementation_commit: b8d7152
 
-These fixtures are NOT test baselines or gate inputs.
+These fixtures are the authoritative test baseline for Phase 1.1 1.0.0.
 
-阶段 1 GPT-A schema 冻结 1.0.0 后，必须刷新 fixtures 并升级到 contract_version: 1.0.0 + status: authoritative。
-This is a TASK-1.1.4 exit requirement.
+每个 JSON 文件顶部含 `$schema_status: authoritative` + `contract_version: 1.0.0` 元字段。下游消费者（Stage 2 GPT-B/C/D / 本地集成 / Console MSW mock）必须先 pop 这两个元字段后再 model_validate，与 `packages/noeticbraid-core/tests/conftest.py` 的 `read_fixture()` 行为等值。
 
-阶段 0 fixtures 仅用作:
+允许用作:
 
-- Console 端 MSW mock 的初步占位（用户可跳过）
-- 设计文档示例
-
-**禁止**用作:
-
-- pytest fixture
+- pytest 等价基线（实测样本与 `packages/.../tests/fixtures/` 字节级等值）
 - gate 验证输入
-- 阶段 1 之前任何 CI 测试基线
+- Console MSW mock baseline
+- Stage 2 GPT-B/C/D 消费的 schema example
+
+任何修改必须走 `docs/contracts/contract_change_requests/` 流程。

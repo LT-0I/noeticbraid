@@ -1,10 +1,14 @@
 {
-  "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
-  "task_id": "task_draft_001",
+  "$schema_status": "authoritative",
+  "contract_version": "1.0.0",
+  "task_id": "task_stage1_candidate_001",
   "task_type": "project_planning",
   "risk_level": "low",
   "approval_level": "none",
+  "created_at": "2026-04-28T09:30:00+00:00",
   "status": "draft",
-  "account_hint": "chatgpt_primary_hint"
+  "user_request": "Plan NoeticBraid Phase 1.1 schema implementation.",
+  "source_channel": "console",
+  "account_hint": "chatgpt_primary_hint",
+  "project_ref": "noeticbraid_phase_1_1"
 }
