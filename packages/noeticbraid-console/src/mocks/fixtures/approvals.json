@@ -1,0 +1,26 @@
+{
+  "approvals": [
+    {
+      "approval_id": "approval_stage1_candidate_001",
+      "task_id": "task_stage1_candidate_001",
+      "run_id": "run_stage1_candidate_001",
+      "approval_level": "light",
+      "requested_at": "2026-04-28T09:33:00+00:00",
+      "requested_action": "Review candidate schema constraints before freeze.",
+      "reason": "Stage 1 business implementation is pending local double review.",
+      "diff_ref": "diff_schema_candidate_001",
+      "status": "pending"
+    },
+    {
+      "approval_id": "approval_console_queue_002",
+      "task_id": "task_console_workspace_002",
+      "run_id": "run_console_timeline_002",
+      "approval_level": "strong",
+      "requested_at": "2026-04-28T10:17:00+00:00",
+      "requested_action": "Confirm Console Stage 2 remains frontend-only before review.",
+      "reason": "Phase 1.1 does not expose a real backend process; all API calls must remain mocked by MSW.",
+      "diff_ref": null,
+      "status": "pending"
+    }
+  ]
+}
