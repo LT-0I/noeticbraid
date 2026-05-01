@@ -9,12 +9,14 @@ license = { text = "Apache-2.0" }
 members = [
   "packages/noeticbraid-core",
   "packages/noeticbraid-obsidian",
-  "packages/noeticbraid-runtime"
+  "packages/noeticbraid-runtime",
+  "packages/noeticbraid-backend"
 ]
 
 [tool.pytest.ini_options]
 pythonpath = [
   "packages/noeticbraid-core/src",
   "packages/noeticbraid-obsidian/src",
-  "packages/noeticbraid-runtime/src"
+  "packages/noeticbraid-runtime/src",
+  "packages/noeticbraid-backend/src"
 ]
