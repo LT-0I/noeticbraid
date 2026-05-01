@@ -37,8 +37,16 @@ jobs:
           # Markdown is excluded: .md prose may legitimately mention forbidden field
           # names in negative context (e.g., "禁止 cookie 类字段" in api_contract.md).
           # account_hint is allowed (Phase 1.1 placeholder, in schema by design).
+          # Phase 1.2 carve-out: noeticbraid-backend is the auth-bearing package by
+          # design (DPAPI vault + token store) — its src/tests legitimately reference
+          # account_id and similar. Scope here is open-core packages + public contracts;
+          # backend's own public OpenAPI (when published) is checked separately.
           pattern='\b(cookie_value|cookie_jar_path|csrf_token|account_id|profile_id|profile_dir|quota_window|session_token|encrypted_password|browser_session_id)\b'
-          if grep -rE "$pattern" packages/ docs/contracts/ \
+          if grep -rE "$pattern" \
+              packages/noeticbraid-core/ \
+              packages/noeticbraid-obsidian/ \
+              packages/noeticbraid-runtime/ \
+              docs/contracts/ \
             --include='*.py' --include='*.yaml' --include='*.yml' --include='*.json'; then
             echo "ERROR: private/auth field name leaked into public contract or open core code"
             echo "Note: account_hint is the only auth-adjacent field allowed in Phase 1.1."
