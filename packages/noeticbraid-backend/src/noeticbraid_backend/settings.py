@@ -59,3 +59,9 @@ class Settings(BaseModel):
         """Return `{state_dir}/approval/queue.jsonl`."""
 
         return self.state_dir / "approval" / "queue.jsonl"
+
+    @property
+    def account_quota_dir(self) -> Path:
+        """Return `{state_dir}/account_quota`."""
+
+        return self.state_dir / "account_quota"
