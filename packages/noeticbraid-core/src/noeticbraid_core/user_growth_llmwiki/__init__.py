@@ -1,0 +1,67 @@
+"""Public surface for the user-growth LLMwiki mirror module."""
+
+from .candidates import (
+    build_growth_report_input,
+    build_report_inputs,
+    generate_digestion_candidates,
+    generate_side_note_candidates,
+    generate_structure_suggestions,
+    vault_profile_source_record,
+)
+from .models import (
+    ActivityLogRecord,
+    ContentReusePlan,
+    DigestionCandidate,
+    DuplicateTopicName,
+    FolderSummary,
+    GrowthReportInput,
+    LLMWikiSourceRecord,
+    LayerCandidate,
+    LinkHint,
+    ModuleManifest,
+    NoteSummary,
+    OrphanCluster,
+    RiskFlag,
+    SideNoteCandidate,
+    StructureSuggestion,
+    VaultProfile,
+)
+from .persistence import LLMWikiSQLiteStore
+from .reuse import build_content_reuse_plan, lint_content_reuse_plan, sha256_content, source_record_from_file, source_record_from_text
+from .scanner import RealVaultIntegrationBoundary, VaultScanConfig, VaultScanner, extract_link_hints, parse_frontmatter
+
+__all__ = [
+    "ActivityLogRecord",
+    "ContentReusePlan",
+    "DigestionCandidate",
+    "DuplicateTopicName",
+    "FolderSummary",
+    "GrowthReportInput",
+    "LLMWikiSQLiteStore",
+    "LLMWikiSourceRecord",
+    "LayerCandidate",
+    "LinkHint",
+    "ModuleManifest",
+    "NoteSummary",
+    "OrphanCluster",
+    "RiskFlag",
+    "RealVaultIntegrationBoundary",
+    "SideNoteCandidate",
+    "StructureSuggestion",
+    "VaultProfile",
+    "VaultScanConfig",
+    "VaultScanner",
+    "build_content_reuse_plan",
+    "build_growth_report_input",
+    "build_report_inputs",
+    "extract_link_hints",
+    "generate_digestion_candidates",
+    "generate_side_note_candidates",
+    "generate_structure_suggestions",
+    "lint_content_reuse_plan",
+    "parse_frontmatter",
+    "sha256_content",
+    "source_record_from_file",
+    "source_record_from_text",
+    "vault_profile_source_record",
+]
