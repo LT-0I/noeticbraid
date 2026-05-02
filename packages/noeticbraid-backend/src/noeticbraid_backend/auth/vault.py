@@ -1,46 +1,44 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Credential-vault skeleton for DPAPI startup-token blobs."""
+"""Credential-vault boundary for DPAPI startup-token blobs."""
 
 from __future__ import annotations
 
-import logging
-import os
 from pathlib import Path
 
 from noeticbraid_backend.auth.dpapi import DpapiBlob
-from noeticbraid_backend.settings import DPAPI_BLOB_PATH_ENV, PRIVATE_DPAPI_BLOB_PATH
-
-LOGGER = logging.getLogger(__name__)
 
 
 class CredentialVault:
-    """Resolve a DPAPI blob path without reading or writing real secrets in Stage 1."""
+    """Resolve and load a configured DPAPI blob path without exposing secrets."""
 
     def __init__(self, blob_path: Path | None = None) -> None:
-        self.blob_path = blob_path if blob_path is not None else self._resolve_default_path()
-
-    def _resolve_default_path(self) -> Path | None:
-        """Resolve env override or private-fork default; return None if unset."""
-
-        explicit = os.environ.get(DPAPI_BLOB_PATH_ENV)
-        if explicit:
-            return Path(explicit)
-        if Path("private").exists():
-            return PRIVATE_DPAPI_BLOB_PATH
-        return None
+        # Settings.from_env() is the only environment reader. A None vault path
+        # means no configured startup credential blob for this app instance.
+        self.blob_path = blob_path
 
     def load_credential(self) -> DpapiBlob | None:
-        """Load DPAPI blob from disk. Stage 1 returns None."""
+        """Load a configured DPAPI ciphertext blob, or None when unavailable."""
 
-        if self.blob_path and self.blob_path.exists():
-            LOGGER.info("DPAPI blob path is present but real vault load is deferred to Stage 2")
-        return None
+        if self.blob_path is None:
+            return None
+        try:
+            ciphertext = Path(self.blob_path).read_bytes()
+        except OSError:
+            return None
+        if not ciphertext:
+            return None
+        return DpapiBlob(ciphertext=ciphertext)
 
     def store_credential(self, blob: DpapiBlob) -> None:
-        """Store DPAPI blob. Stage 1 is a no-op."""
+        """Store an opaque DPAPI blob at the explicitly configured path."""
 
-        del blob
-        LOGGER.info("DPAPI blob store is deferred to Stage 2")
+        if self.blob_path is None:
+            raise ValueError("blob_path must be configured before storing credentials")
+        if not isinstance(blob, DpapiBlob):
+            raise TypeError("blob must be a DpapiBlob")
+        path = Path(self.blob_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(blob.ciphertext)
 
 
 __all__ = ["CredentialVault"]

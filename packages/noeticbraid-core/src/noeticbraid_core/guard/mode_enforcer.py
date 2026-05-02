@@ -208,6 +208,19 @@ class ModeEnforcer:
     def ledger_sink(self) -> LedgerSink:
         return self._ledger_sink
 
+    def set_ledger_sink(self, sink: LedgerSink) -> None:
+        """Replace the append-only ledger sink after construction.
+
+        This additive hook lets backend wiring inject or rotate the concrete
+        sink without requiring guard to import a ledger implementation. Runtime
+        Protocol validation keeps failures local and explicit while preserving
+        constructor compatibility with Phase 1.1.
+        """
+
+        if not isinstance(sink, LedgerSink):
+            raise TypeError("ledger sink must implement LedgerSink.append(record)")
+        self._ledger_sink = sink
+
     @property
     def cli_runner_registry(self) -> CliRunnerRegistry:
         return self._cli_runner_registry

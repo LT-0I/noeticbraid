@@ -1,16 +1,11 @@
-"""Phase 1.1 guard package: ModeEnforcer + CliRunnerRegistry."""
+"""Public exports for the Phase 1.1 guard package."""
 
 from __future__ import annotations
 
 from .actions import Action
 from .cli_runner_registry import CliRunnerRegistry, CliRunnerSpec
 from .decisions import Decision, DecisionVerdict
-from .errors import (
-    CliRunnerRegistryError,
-    GuardError,
-    InvalidContextError,
-    UnknownActionError,
-)
+from .errors import CliRunnerRegistryError, GuardError, InvalidContextError, UnknownActionError
 from .mode_enforcer import (
     APPROVAL_TIMEOUT_DEFAULT_SEC,
     APPROVAL_TIMEOUT_ENV_VAR,

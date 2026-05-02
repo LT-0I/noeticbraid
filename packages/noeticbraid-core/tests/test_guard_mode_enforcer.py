@@ -381,3 +381,62 @@ def test_invalid_context_type_raises() -> None:
     enforcer = ModeEnforcer(mode="supervised")
     with pytest.raises(InvalidContextError):
         enforcer.check(Action.READ_LOCAL_FILE, context="not-a-dict")  # type: ignore[arg-type]
+
+
+# ---------- Stage 2.2 mutable ledger-sink hook ----------
+
+
+def test_set_ledger_sink_replaces_default_sink() -> None:
+    class ReplacementSink:
+        def __init__(self) -> None:
+            self.records: list = []
+
+        def append(self, record) -> None:
+            self.records.append(record)
+
+    enforcer = ModeEnforcer(mode="supervised")
+    replacement = ReplacementSink()
+
+    enforcer.set_ledger_sink(replacement)
+
+    assert enforcer.ledger_sink is replacement
+    assert isinstance(enforcer.ledger_sink, LedgerSink)
+
+
+def test_set_ledger_sink_rejects_non_sink_input() -> None:
+    enforcer = ModeEnforcer(mode="supervised")
+
+    with pytest.raises(TypeError, match="LedgerSink.append"):
+        enforcer.set_ledger_sink(object())  # type: ignore[arg-type]
+
+
+def test_with_mode_reuses_replaced_ledger_sink() -> None:
+    class ReplacementSink:
+        def append(self, record) -> None:
+            del record
+
+    enforcer = ModeEnforcer(mode="dry_run")
+    replacement = ReplacementSink()
+    enforcer.set_ledger_sink(replacement)
+
+    updated = enforcer.with_mode("autonomous")
+
+    assert updated.mode == "autonomous"
+    assert updated.ledger_sink is replacement
+
+
+@pytest.mark.parametrize("action", sorted(RED_LINE_ACTIONS, key=lambda item: item.value))
+@pytest.mark.parametrize("mode", ["dry_run", "supervised", "autonomous"])
+def test_red_line_actions_still_deny_after_ledger_sink_replacement(action: Action, mode: Mode) -> None:
+    class ReplacementSink:
+        def append(self, record) -> None:
+            del record
+
+    enforcer = ModeEnforcer(mode=mode)
+    enforcer.set_ledger_sink(ReplacementSink())
+
+    decision = enforcer.check(action)
+
+    assert decision.verdict == DecisionVerdict.DENY
+    assert decision.approval_request_id is None
+    assert "red line" in decision.reason.lower()

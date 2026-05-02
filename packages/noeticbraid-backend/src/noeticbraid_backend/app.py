@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""FastAPI application factory for the NoeticBraid backend skeleton."""
+"""FastAPI application factory for the NoeticBraid backend."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def _validate_core_imports(app: FastAPI) -> None:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Create and configure the Phase 1.2 Stage 2.1 FastAPI application."""
+    """Create and configure the Phase 1.2 Stage 2.2 FastAPI application."""
 
     resolved_settings = settings or Settings.from_env()
 
@@ -88,11 +88,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title=OPENAPI_TITLE,
         version=CONTRACT_VERSION,
-        openapi_version="3.0.3",
+        openapi_version="3.1.0",
         lifespan=lifespan,
     )
     app.state.settings = resolved_settings
 
+    # CORS does not expose X-NoeticBraid-Bearer to browsers in stage-2.2.
+    # Browser integration with the auth header belongs to the stage-2.3 Console
+    # real-backend swap; add expose_headers=[auth.BEARER_TOKEN_RESPONSE_HEADER]
+    # there if the browser client needs to read the startup bearer response.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(DEV_CORS_ORIGINS),

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Environment-backed settings for the NoeticBraid backend skeleton."""
+"""Environment-backed settings for the NoeticBraid backend."""
 
 from __future__ import annotations
 
@@ -10,15 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 STATE_DIR_ENV = "NOETICBRAID_STATE_DIR"
 DPAPI_BLOB_PATH_ENV = "NOETICBRAID_DPAPI_BLOB_PATH"
-PRIVATE_DPAPI_BLOB_PATH = Path("private") / "noeticbraid-private" / "auth" / "startup_token.dpapi"
 
 
 class Settings(BaseModel):
     """Resolved backend settings.
 
-    `state_dir` defaults to `state/`. `dpapi_blob_path` is optional: an explicit
-    `NOETICBRAID_DPAPI_BLOB_PATH` wins, otherwise a private-fork default is used
-    only when a local `private/` directory exists.
+    `state_dir` defaults to `state/`. `dpapi_blob_path` is optional and is
+    resolved only from an explicit `NOETICBRAID_DPAPI_BLOB_PATH` value.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
@@ -46,8 +44,6 @@ class Settings(BaseModel):
         explicit_blob = os.environ.get(DPAPI_BLOB_PATH_ENV)
         if explicit_blob:
             dpapi_blob_path: Path | None = Path(explicit_blob)
-        elif Path("private").exists():
-            dpapi_blob_path = PRIVATE_DPAPI_BLOB_PATH
         else:
             dpapi_blob_path = None
         return cls(state_dir=state_dir, dpapi_blob_path=dpapi_blob_path)
@@ -57,3 +53,9 @@ class Settings(BaseModel):
         """Return `{state_dir}/auth/tokens.sqlite`."""
 
         return self.state_dir / "auth" / "tokens.sqlite"
+
+    @property
+    def approval_queue_path(self) -> Path:
+        """Return `{state_dir}/approval/queue.jsonl`."""
+
+        return self.state_dir / "approval" / "queue.jsonl"
