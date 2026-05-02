@@ -15,14 +15,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install noeticbraid-core (editable + test extras)
+      - name: Install noeticbraid packages (editable + existing test extras)
         run: |
           python -m pip install --upgrade pip
           pip install -e "packages/noeticbraid-core[test]"
+          pip install -e "packages/noeticbraid-backend[dev]"
 
-      - name: Run pytest
-        run: |
-          pytest packages/noeticbraid-core/tests/ tests/ -v
+      - name: Run core pytest
+        run: pytest packages/noeticbraid-core -v
+
+      - name: Run backend pytest
+        run: pytest packages/noeticbraid-backend -v
+
+      - name: Run repository pytest gates
+        run: pytest tests -v
 
       - name: Contract diff gate
         run: python scripts/contract_diff.py
@@ -30,34 +36,14 @@ jobs:
       - name: Source-of-truth consistency gate
         run: python scripts/check_source_of_truth_consistency.py
 
-      - name: Private leak detection (field-level, code/schema/fixtures only)
+      - name: Phase 1.1 contract freeze gate
         run: |
-          # Detect private/auth field NAMES leaking into public contract or open core.
-          # Restricted to .py / .yaml / .json (where field NAMES live as code/schema).
-          # Markdown is excluded: .md prose may legitimately mention forbidden field
-          # names in negative context (e.g., "禁止 cookie 类字段" in api_contract.md).
-          # account_hint is allowed (Phase 1.1 placeholder, in schema by design).
-          # Phase 1.2 carve-out: noeticbraid-backend is the auth-bearing package by
-          # design (DPAPI vault + token store) — its src/tests legitimately reference
-          # account_id and similar. Scope here is open-core packages + public contracts;
-          # backend's own public OpenAPI (when published) is checked separately.
-          pattern='\b(cookie_value|cookie_jar_path|csrf_token|account_id|profile_id|profile_dir|quota_window|session_token|encrypted_password|browser_session_id)\b'
-          if grep -rE "$pattern" \
-              packages/noeticbraid-core/ \
-              packages/noeticbraid-obsidian/ \
-              packages/noeticbraid-runtime/ \
-              docs/contracts/ \
-            --include='*.py' --include='*.yaml' --include='*.yml' --include='*.json'; then
-            echo "ERROR: private/auth field name leaked into public contract or open core code"
-            echo "Note: account_hint is the only auth-adjacent field allowed in Phase 1.1."
-            exit 1
-          fi
+          grep -q 'contract_version: 1.0.0' docs/contracts/phase1_1_api_contract.md || (echo "phase1_1_api_contract.md contract_version not 1.0.0" && exit 1)
+          grep -q 'authoritative: true' docs/contracts/phase1_1_api_contract.md || (echo "phase1_1_api_contract.md authoritative not true" && exit 1)
+          grep -q 'frozen: true' docs/contracts/phase1_1_api_contract.md || (echo "phase1_1_api_contract.md frozen not true" && exit 1)
 
-      - name: Contract version freeze gate
-        run: |
-          grep -q '^- contract_version: 1.0.0' manifest.md || (echo "manifest.md contract_version not 1.0.0" && exit 1)
-          grep -q '^- frozen: true' manifest.md || (echo "manifest.md frozen not true" && exit 1)
-          grep -q '^- authoritative: true' manifest.md || (echo "manifest.md authoritative not true" && exit 1)
-          grep -q 'contract_version: 1.0.0' docs/contracts/phase1_1_api_contract.md || (echo "api_contract contract_version not 1.0.0" && exit 1)
-          grep -q 'authoritative: true' docs/contracts/phase1_1_api_contract.md || (echo "api_contract authoritative not true" && exit 1)
-          grep -q 'frozen: true' docs/contracts/phase1_1_api_contract.md || (echo "api_contract frozen not true" && exit 1)
+      - name: Phase 1.2 contract sidecar/runtime gate
+        run: python scripts/check_phase1_2_contract_gate.py
+
+      - name: Private leak scan (tracked files, redacted report)
+        run: python scripts/private_leak_scan.py
