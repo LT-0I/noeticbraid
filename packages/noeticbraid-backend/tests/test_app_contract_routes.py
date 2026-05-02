@@ -27,7 +27,7 @@ from noeticbraid_core.ledger import RunLedger
 from noeticbraid_core.schemas import RunRecord
 
 FROZEN_OPENAPI_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml"
-FROZEN_OPENAPI_SHA256 = "0667bdec52cb4fe958d526bd171d43b21ecf92a2b2b56eef53c11bb0cb818438"
+FROZEN_OPENAPI_SHA256_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml.sha256"
 EXPECTED_RUN_RECORD_FIELDS = (
     "run_id",
     "task_id",
@@ -40,6 +40,39 @@ EXPECTED_RUN_RECORD_FIELDS = (
     "routing_advice",
     "status",
 )
+
+EXPECTED_TARGET_OPERATIONS = {
+    "/api/health": ("get", ["health"], "Health check", "health_api_health_get", "HealthResponse"),
+    "/api/dashboard/empty": (
+        "get",
+        ["dashboard"],
+        "Empty dashboard state",
+        "dashboard_empty_api_dashboard_empty_get",
+        "EmptyDashboard",
+    ),
+    "/api/workspace/threads": (
+        "get",
+        ["workspace"],
+        "List workspace threads",
+        "workspace_threads_api_workspace_threads_get",
+        "WorkspaceThreads",
+    ),
+    "/api/account/pool": (
+        "get",
+        ["account"],
+        "Account pool draft state",
+        "account_pool_api_account_pool_get",
+        "AccountPoolDraft",
+    ),
+    "/api/ledger/runs": ("get", ["ledger"], "List run records", "ledger_runs_api_ledger_runs_get", "RunLedgerRuns"),
+    "/api/approval/queue": (
+        "get",
+        ["approval"],
+        "List approval queue",
+        "approval_queue_api_approval_queue_get",
+        "ApprovalQueue",
+    ),
+}
 
 EXPECTED_FIXTURES = {
     ("GET", "/api/health"): {
@@ -233,7 +266,7 @@ def test_openapi_has_seven_paths_and_expected_response_schemas(tmp_path: Path) -
         assert ref == f"#/components/schemas/{spec['response_schema']}"
 
 
-def test_runtime_metadata_and_ledger_operation_match_phase1_2_contract(tmp_path: Path) -> None:
+def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     assert schema["openapi"] == "3.1.0"
     assert schema["info"]["title"] == "NoeticBraid Phase 1.2 API"
@@ -243,14 +276,15 @@ def test_runtime_metadata_and_ledger_operation_match_phase1_2_contract(tmp_path:
     assert schema["info"]["x-frozen"] is True
     assert CONTRACT_VERSION == "1.1.0"
 
-    operation = schema["paths"]["/api/ledger/runs"]["get"]
-    assert operation["tags"] == ["ledger"]
-    assert operation["summary"] == "List run records"
-    assert operation["operationId"] == "ledger_runs_api_ledger_runs_get"
-    assert (
-        operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
-        == "#/components/schemas/RunLedgerRuns"
-    )
+    for path, (method, tags, summary, operation_id, response_schema) in EXPECTED_TARGET_OPERATIONS.items():
+        operation = schema["paths"][path][method]
+        assert operation["tags"] == tags
+        assert operation["summary"] == summary
+        assert operation["operationId"] == operation_id
+        assert (
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            == f"#/components/schemas/{response_schema}"
+        )
 
 
 def test_thirteen_schema_names_are_referenced_by_contract_helpers() -> None:
@@ -287,7 +321,10 @@ def test_openapi_components_contain_all_thirteen_schemas(tmp_path: Path) -> None
 
 def test_frozen_openapi_1_1_0_yaml_anchors_and_sha_are_unchanged() -> None:
     contract_bytes = FROZEN_OPENAPI_PATH.read_bytes()
-    assert hashlib.sha256(contract_bytes).hexdigest() == FROZEN_OPENAPI_SHA256
+    sidecar_text = FROZEN_OPENAPI_SHA256_PATH.read_bytes().decode("ascii").strip()
+    sidecar_hash, sidecar_name = sidecar_text.split(maxsplit=1)
+    assert sidecar_name == f"*{FROZEN_OPENAPI_PATH.name}"
+    assert hashlib.sha256(contract_bytes).hexdigest() == sidecar_hash.lower()
     contract = contract_bytes.decode("utf-8")
     for anchor in (
         "openapi: 3.1.0",
