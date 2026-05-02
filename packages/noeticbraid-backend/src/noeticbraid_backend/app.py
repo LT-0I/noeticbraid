@@ -13,7 +13,12 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 
 from noeticbraid_backend.api.routes import account, approval, auth, dashboard, health, ledger, workspace
-from noeticbraid_backend.contracts import CONTRACT_VERSION, CORE_SCHEMA_MODELS, OPENAPI_TITLE
+from noeticbraid_backend.contracts import (
+    CONTRACT_AUTHORITATIVE,
+    CONTRACT_VERSION,
+    CORE_SCHEMA_MODELS,
+    OPENAPI_TITLE,
+)
 from noeticbraid_backend.settings import Settings
 
 LOGGER = logging.getLogger(__name__)
@@ -41,6 +46,10 @@ def _build_custom_openapi(app: FastAPI) -> dict[str, Any]:
         description=app.description,
         routes=app.routes,
     )
+    schema.setdefault("info", {})["x-contract-version"] = CONTRACT_VERSION
+    schema["info"]["x-status"] = "AUTHORITATIVE"
+    schema["info"]["x-frozen"] = CONTRACT_AUTHORITATIVE
+
     component_schemas = schema.setdefault("components", {}).setdefault("schemas", {})
     for model in CORE_SCHEMA_MODELS:
         component_schemas.setdefault(
@@ -67,7 +76,7 @@ def _validate_core_imports(app: FastAPI) -> None:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Create and configure the Phase 1.2 Stage 1 FastAPI application."""
+    """Create and configure the Phase 1.2 Stage 2.1 FastAPI application."""
 
     resolved_settings = settings or Settings.from_env()
 

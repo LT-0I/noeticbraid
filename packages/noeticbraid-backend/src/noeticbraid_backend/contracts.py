@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Static helpers for the frozen Phase 1.1 v1.0.0 API contract."""
+"""Static helpers for the frozen Phase 1.2 v1.1.0 API contract."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 CONTRACT_AUTHORITATIVE = True
-OPENAPI_TITLE = "NoeticBraid Phase 1.1 API"
+OPENAPI_TITLE = "NoeticBraid Phase 1.2 API"
 
 FROZEN_ROUTE_SPECS: tuple[dict[str, str], ...] = (
     {
@@ -59,7 +59,7 @@ FROZEN_ROUTE_SPECS: tuple[dict[str, str], ...] = (
 
 
 class _FrozenBaseModel(BaseModel):
-    """Base model that rejects additive fields in Stage 1 route wrappers."""
+    """Base model that rejects additive fields in frozen route wrappers."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -1,11 +1,17 @@
-"""RunLedger pytest (Stage 2 GPT-B)."""
+"""RunLedger pytest (Stage 2 GPT-B, tightened for Phase 1.2 Stage 2.1)."""
 
 from __future__ import annotations
 
 import multiprocessing
+import os
+import queue
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import portalocker
+import pytest
+
+import noeticbraid_core.ledger.run_ledger as run_ledger_module
 from noeticbraid_core.ledger import RunLedger
 from noeticbraid_core.schemas import RunRecord
 
@@ -57,6 +63,17 @@ def _worker_append(args: tuple[str, str]) -> None:
         )
 
 
+def _reader_collect_run_ids(root_str: str, started_queue, result_queue) -> None:
+    """Spawned in subprocess: collect ledger run IDs after signalling readiness."""
+
+    started_queue.put("started")
+    try:
+        ledger = RunLedger(root=Path(root_str))
+        result_queue.put(("ok", [record.run_id for record in ledger.iter_all()]))
+    except Exception as exc:  # pragma: no cover - defensive child-process reporting
+        result_queue.put(("error", repr(exc)))
+
+
 class TestRunLedgerConcurrency:
     def test_4_processes_400_records_no_corruption(self, tmp_path: Path) -> None:
         prefixes = ["a", "b", "c", "d"]
@@ -69,6 +86,55 @@ class TestRunLedgerConcurrency:
         records = list(ledger.iter_all())
         assert len(records) == 400
         assert len({record.run_id for record in records}) == 400
+
+    def test_reader_shared_lock_does_not_expose_partial_jsonl_line(self, tmp_path: Path) -> None:
+        ledger = RunLedger(root=tmp_path)
+        ledger.append(make_record(run_id="run_before_lock", task_id="task_before_lock"))
+        locked_record_json = make_record(
+            run_id="run_after_lock",
+            task_id="task_after_lock",
+        ).model_dump_json()
+        split_at = len(locked_record_json) // 2
+
+        started_queue = multiprocessing.Queue()
+        result_queue = multiprocessing.Queue()
+        process = multiprocessing.Process(
+            target=_reader_collect_run_ids,
+            args=(str(tmp_path), started_queue, result_queue),
+        )
+
+        early_result = None
+        with open(ledger.path, "a", encoding="utf-8") as fh:
+            portalocker.lock(fh, portalocker.LOCK_EX)
+            try:
+                fh.write(locked_record_json[:split_at])
+                fh.flush()
+                os.fsync(fh.fileno())
+
+                process.start()
+                assert started_queue.get(timeout=5) == "started"
+                try:
+                    early_result = result_queue.get(timeout=0.5)
+                except queue.Empty:
+                    early_result = None
+
+                fh.write(locked_record_json[split_at:])
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            finally:
+                portalocker.unlock(fh)
+
+        process.join(timeout=5)
+        if process.is_alive():  # pragma: no cover - protects the test runner on lock regressions
+            process.terminate()
+            process.join(timeout=5)
+
+        assert early_result is None, f"reader returned before writer lock release: {early_result!r}"
+        assert not process.is_alive()
+        status, payload = result_queue.get(timeout=1)
+        assert status == "ok"
+        assert payload == ["run_before_lock", "run_after_lock"]
 
 
 class TestRunLedgerCorruptedLine:
@@ -95,6 +161,14 @@ class TestRunLedgerReplayDeterministic:
 
         assert first == second
         assert first == [f"run_{i:03d}" for i in range(10)]
+
+    def test_multiple_appended_records_replay_in_write_order(self, tmp_path: Path) -> None:
+        ledger = RunLedger(root=tmp_path)
+        expected = ["run_alpha", "run_bravo", "run_charlie"]
+        for run_id in expected:
+            ledger.append(make_record(run_id=run_id, task_id=f"task_{run_id[4:]}"))
+
+        assert [record.run_id for record in ledger.iter_all()] == expected
 
 
 class TestRunLedgerIterSince:
@@ -155,3 +229,45 @@ class TestRunLedgerEmpty:
         ledger = RunLedger(root=tmp_path)
         ledger.path.touch()
         assert list(ledger.iter_all()) == []
+
+
+class TestRunLedgerReaderHandleLifetime:
+    def test_below_threshold_snapshot_releases_handle_before_yielding(self, tmp_path: Path) -> None:
+        ledger = RunLedger(root=tmp_path)
+        ledger.append(make_record(run_id="run_alpha"))
+        ledger.append(make_record(run_id="run_bravo"))
+
+        iterator = ledger.iter_all()
+        first = next(iterator)
+        renamed = ledger.path.with_name("run_ledger.renamed.jsonl")
+        ledger.path.rename(renamed)
+        renamed.unlink()
+
+        assert first.run_id == "run_alpha"
+        assert [record.run_id for record in iterator] == ["run_bravo"]
+        assert not ledger.path.exists()
+        assert not renamed.exists()
+
+    def test_iter_all_docstring_documents_fifty_mib_streaming_threshold(self) -> None:
+        doc = RunLedger.iter_all.__doc__ or ""
+        assert "50 MiB" in doc
+        assert "LOCK_SH" in doc
+        assert "file handle remains open" in doc
+
+    def test_at_or_above_threshold_stream_path_uses_shared_lock(self, tmp_path: Path, monkeypatch) -> None:
+        ledger = RunLedger(root=tmp_path)
+        ledger.append(make_record(run_id="run_streamed"))
+        lock_calls: list[int] = []
+        original_lock = run_ledger_module.portalocker.lock
+
+        def recording_lock(fh, flags):
+            lock_calls.append(flags)
+            return original_lock(fh, flags)
+
+        monkeypatch.setattr(run_ledger_module, "SMALL_LEDGER_SNAPSHOT_MAX_BYTES", 1)
+        monkeypatch.setattr(run_ledger_module.portalocker, "lock", recording_lock)
+
+        records = list(ledger.iter_all())
+
+        assert [record.run_id for record in records] == ["run_streamed"]
+        assert run_ledger_module.portalocker.LOCK_SH in lock_calls

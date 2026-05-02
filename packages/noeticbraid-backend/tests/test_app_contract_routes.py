@@ -1,26 +1,48 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Contract route smoke tests for all seven frozen v1.0.0 paths."""
+"""Contract route smoke tests for all seven frozen Phase 1.2 v1.1.0 paths."""
 
 from __future__ import annotations
 
+import hashlib
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PACKAGE_ROOT.parent.parent
 SRC_ROOT = PACKAGE_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+CORE_SRC_ROOT = REPO_ROOT / "packages" / "noeticbraid-core" / "src"
+for path in (CORE_SRC_ROOT, SRC_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from fastapi.testclient import TestClient
 
 from noeticbraid_backend.app import create_app
-from noeticbraid_backend.contracts import ALL_SCHEMA_NAMES, FROZEN_ROUTE_SPECS
+from noeticbraid_backend.contracts import ALL_SCHEMA_NAMES, CONTRACT_VERSION, FROZEN_ROUTE_SPECS
 from noeticbraid_backend.settings import Settings
+from noeticbraid_core.ledger import RunLedger
+from noeticbraid_core.schemas import RunRecord
+
+FROZEN_OPENAPI_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml"
+FROZEN_OPENAPI_SHA256 = "0667bdec52cb4fe958d526bd171d43b21ecf92a2b2b56eef53c11bb0cb818438"
+EXPECTED_RUN_RECORD_FIELDS = (
+    "run_id",
+    "task_id",
+    "event_type",
+    "created_at",
+    "actor",
+    "model_refs",
+    "source_refs",
+    "artifact_refs",
+    "routing_advice",
+    "status",
+)
 
 EXPECTED_FIXTURES = {
     ("GET", "/api/health"): {
         "status": "ok",
-        "contract_version": "1.0.0",
+        "contract_version": "1.1.0",
         "authoritative": True,
     },
     ("POST", "/api/auth/startup_token"): {"accepted": False, "mode": "stage1_skeleton"},
@@ -32,9 +54,35 @@ EXPECTED_FIXTURES = {
 }
 
 
+def make_record(
+    run_id: str,
+    task_id: str,
+    created_at: datetime | None = None,
+) -> RunRecord:
+    return RunRecord(
+        run_id=run_id,
+        task_id=task_id,
+        event_type="task_created",
+        created_at=created_at or datetime(2026, 5, 2, 12, 0, 0, tzinfo=timezone.utc),
+        actor="system",
+        model_refs=[],
+        source_refs=[],
+        artifact_refs=[],
+        routing_advice=None,
+        status="recorded",
+    )
+
+
 def _client(tmp_path: Path) -> TestClient:
     app = create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None))
     return TestClient(app)
+
+
+def _seed_ledger(tmp_path: Path, *records: RunRecord) -> RunLedger:
+    ledger = RunLedger(root=tmp_path)
+    for record in records:
+        ledger.append(record)
+    return ledger
 
 
 def test_all_frozen_routes_return_200_and_exact_fixtures(tmp_path: Path) -> None:
@@ -54,6 +102,48 @@ def test_account_pool_preserves_v1_0_0_profiles_only(tmp_path: Path) -> None:
     assert "profile_records" not in response.json()
 
 
+def test_ledger_route_returns_empty_runs_for_missing_state_ledger(tmp_path: Path) -> None:
+    response = _client(tmp_path).get("/api/ledger/runs")
+
+    assert response.status_code == 200
+    assert response.json() == {"runs": []}
+    assert not (tmp_path / "state" / "ledger" / "run_ledger.jsonl").exists()
+
+
+def test_ledger_route_returns_seeded_run_records_from_configured_state_dir(tmp_path: Path) -> None:
+    _seed_ledger(
+        tmp_path,
+        make_record("run_alpha", "task_alpha", datetime(2026, 5, 2, 12, 0, 0, tzinfo=timezone.utc)),
+        make_record("run_bravo", "task_bravo", datetime(2026, 5, 2, 12, 1, 0, tzinfo=timezone.utc)),
+    )
+
+    response = _client(tmp_path).get("/api/ledger/runs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {"runs"}
+    assert [record["run_id"] for record in body["runs"]] == ["run_alpha", "run_bravo"]
+    assert len(body["runs"]) == 2
+    for record in body["runs"]:
+        assert tuple(record.keys()) == EXPECTED_RUN_RECORD_FIELDS
+        RunRecord.model_validate(record)
+
+
+def test_ledger_route_skips_corrupted_jsonl_without_500(tmp_path: Path) -> None:
+    ledger = _seed_ledger(tmp_path, make_record("run_good_001", "task_good_001"))
+    with open(ledger.path, "a", encoding="utf-8") as fh:
+        fh.write("{this is not valid json\n")
+    ledger.append(make_record("run_good_002", "task_good_002"))
+
+    response = _client(tmp_path).get("/api/ledger/runs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [record["run_id"] for record in body["runs"]] == ["run_good_001", "run_good_002"]
+    for record in body["runs"]:
+        RunRecord.model_validate(record)
+
+
 def test_openapi_has_seven_paths_and_expected_response_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     assert set(schema["paths"].keys()) == {spec["path"] for spec in FROZEN_ROUTE_SPECS}
@@ -62,6 +152,25 @@ def test_openapi_has_seven_paths_and_expected_response_schemas(tmp_path: Path) -
         assert operation["summary"] == spec["summary"]
         ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
         assert ref == f"#/components/schemas/{spec['response_schema']}"
+
+
+def test_runtime_metadata_and_ledger_operation_match_phase1_2_contract(tmp_path: Path) -> None:
+    schema = _client(tmp_path).app.openapi()
+    assert schema["info"]["title"] == "NoeticBraid Phase 1.2 API"
+    assert schema["info"]["version"] == "1.1.0"
+    assert schema["info"]["x-contract-version"] == "1.1.0"
+    assert schema["info"]["x-status"] == "AUTHORITATIVE"
+    assert schema["info"]["x-frozen"] is True
+    assert CONTRACT_VERSION == "1.1.0"
+
+    operation = schema["paths"]["/api/ledger/runs"]["get"]
+    assert operation["tags"] == ["ledger"]
+    assert operation["summary"] == "List run records"
+    assert operation["operationId"] == "ledger_runs_api_ledger_runs_get"
+    assert (
+        operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/RunLedgerRuns"
+    )
 
 
 def test_thirteen_schema_names_are_referenced_by_contract_helpers() -> None:
@@ -81,6 +190,7 @@ def test_thirteen_schema_names_are_referenced_by_contract_helpers() -> None:
         "DigestionItem",
     )
 
+
 def test_openapi_components_contain_all_thirteen_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     components = schema["components"]["schemas"]
@@ -94,3 +204,27 @@ def test_openapi_components_contain_all_thirteen_schemas(tmp_path: Path) -> None
     assert "approvals" in components["ApprovalQueue"]["properties"]
     assert "tasks" in components["EmptyDashboard"]["properties"]
 
+
+def test_frozen_openapi_1_1_0_yaml_anchors_and_sha_are_unchanged() -> None:
+    contract_bytes = FROZEN_OPENAPI_PATH.read_bytes()
+    assert hashlib.sha256(contract_bytes).hexdigest() == FROZEN_OPENAPI_SHA256
+    contract = contract_bytes.decode("utf-8")
+    for anchor in (
+        "openapi: 3.1.0",
+        "title: NoeticBraid Phase 1.2 API",
+        "version: 1.1.0",
+        "x-contract-version: 1.1.0",
+        "x-status: AUTHORITATIVE",
+        "x-frozen: true",
+        "  /api/ledger/runs:",
+        "      tags:\n      - ledger",
+        "      summary: List run records",
+        "      operationId: ledger_runs_api_ledger_runs_get",
+        "                $ref: '#/components/schemas/RunLedgerRuns'",
+        "    RunLedgerRuns:",
+        "    RunRecord:",
+        "    SourceRecord:",
+    ):
+        assert anchor in contract
+    for schema_name in ALL_SCHEMA_NAMES:
+        assert f"    {schema_name}:" in contract
