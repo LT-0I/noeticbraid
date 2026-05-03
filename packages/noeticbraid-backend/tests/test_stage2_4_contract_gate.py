@@ -30,6 +30,7 @@ EXPECTED_PATHS = (
     "/api/approval/queue",
     "/api/account/pool",
     "/api/ledger/runs",
+    "/api/ledger/runs/aggregate",
 )
 EXPECTED_SCHEMAS = {
     "HealthResponse",
@@ -45,6 +46,10 @@ EXPECTED_SCHEMAS = {
     "ApprovalRequest",
     "SideNote",
     "DigestionItem",
+    "Workflow",
+    "ModelRoute",
+    "VaultLayoutMinimum",
+    "RunRecordAggregate",
 }
 
 
@@ -56,6 +61,7 @@ def test_stage2_4_contract_gate_runs_mechanical_sidecar_and_runtime_checks() -> 
     assert report.frozen_paths == EXPECTED_PATHS
     assert report.runtime_paths == EXPECTED_PATHS
     assert set(report.runtime_schema_names) == EXPECTED_SCHEMAS
+    assert report.path_policy_cases == 10
 
 
 def test_sidecar_parser_rejects_non_sidecar_format() -> None:

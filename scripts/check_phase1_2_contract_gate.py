@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Phase 1.2 OpenAPI 1.1.0 contract sidecar and runtime drift gate.
+"""Phase 1.2 OpenAPI 1.2.0 contract sidecar and runtime drift gate.
 
 This gate intentionally avoids a YAML dependency. It mechanically reads the
 frozen OpenAPI bytes and SHA-256 sidecar, checks exact anchor text for the frozen
@@ -10,6 +10,7 @@ file, and compares runtime FastAPI OpenAPI anchors produced by create_app().
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -19,12 +20,14 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml"
 SIDECAR_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml.sha256"
+VAULT_LAYOUT_PATH = REPO_ROOT / "docs" / "contracts" / "vault_layout.yaml"
+PATH_POLICY_CASES_PATH = REPO_ROOT / "docs" / "contracts" / "fixtures" / "path_policy_cases.json"
 
 EXPECTED_INFO = {
     "openapi": "3.1.0",
     "title": "NoeticBraid Phase 1.2 API",
-    "version": "1.1.0",
-    "x-contract-version": "1.1.0",
+    "version": "1.2.0",
+    "x-contract-version": "1.2.0",
     "x-status": "AUTHORITATIVE",
     "x-frozen": True,
 }
@@ -86,6 +89,14 @@ EXPECTED_ROUTES: tuple[dict[str, object], ...] = (
         "operation_id": "ledger_runs_api_ledger_runs_get",
         "response_schema": "RunLedgerRuns",
     },
+    {
+        "path": "/api/ledger/runs/aggregate",
+        "method": "get",
+        "tag": "ledger",
+        "summary": "Aggregate run record",
+        "operation_id": "aggregate_run_record_api_ledger_runs_aggregate_get",
+        "response_schema": "RunRecordAggregate",
+    },
 )
 
 EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
@@ -102,6 +113,11 @@ EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
     "ApprovalRequest",
     "SideNote",
     "DigestionItem",
+    # T-MID-1 contract 1.2.0
+    "Workflow",
+    "ModelRoute",
+    "VaultLayoutMinimum",
+    "RunRecordAggregate",
 )
 
 EXPECTED_WRAPPER_FIELDS: dict[str, tuple[str, ...]] = {
@@ -134,6 +150,7 @@ class ContractGateReport:
     frozen_paths: tuple[str, ...]
     runtime_paths: tuple[str, ...]
     runtime_schema_names: tuple[str, ...]
+    path_policy_cases: int
 
 
 def _fail(message: str) -> None:
@@ -150,6 +167,14 @@ def _contract_path(repo_root: Path) -> Path:
 
 def _sidecar_path(repo_root: Path) -> Path:
     return repo_root / "docs" / "contracts" / "phase1_2_openapi.yaml.sha256"
+
+
+def _vault_layout_path(repo_root: Path) -> Path:
+    return repo_root / "docs" / "contracts" / "vault_layout.yaml"
+
+
+def _path_policy_cases_path(repo_root: Path) -> Path:
+    return repo_root / "docs" / "contracts" / "fixtures" / "path_policy_cases.json"
 
 
 def parse_sidecar(sidecar_bytes: bytes) -> tuple[str, str]:
@@ -282,8 +307,8 @@ def _assert_frozen_contract(contract_text: str) -> tuple[str, ...]:
     for anchor in (
         "openapi: 3.1.0",
         "  title: NoeticBraid Phase 1.2 API",
-        "  version: 1.1.0",
-        "  x-contract-version: 1.1.0",
+        "  version: 1.2.0",
+        "  x-contract-version: 1.2.0",
         "  x-status: AUTHORITATIVE",
         "  x-frozen: true",
     ):
@@ -307,6 +332,14 @@ def _assert_frozen_contract(contract_text: str) -> tuple[str, ...]:
         ):
             if anchor not in section:
                 _fail(f"missing frozen anchor for {method.upper()} {path}: {anchor}")
+        if path == "/api/ledger/runs/aggregate":
+            for anchor in (
+                "        - name: run_id",
+                '            pattern: "^run_[A-Za-z0-9_]+$"',
+                "            maxLength: 128",
+            ):
+                if anchor not in section:
+                    _fail(f"missing aggregate query anchor: {anchor}")
         if path == "/api/auth/startup_token" and "requestBody" in section:
             _fail("POST /api/auth/startup_token must not define requestBody")
         if re.search(r"^\s+security:\s*$", section, re.MULTILINE):
@@ -331,6 +364,98 @@ def _assert_frozen_contract(contract_text: str) -> tuple[str, ...]:
         if actual_required != expected_required:
             _fail(f"frozen {schema_name} required order mismatch: actual={actual_required}, expected={expected_required}")
     return actual_paths
+
+
+def _extract_yaml_scalar(text: str, key: str) -> str:
+    match = re.search(rf"^{re.escape(key)}:\s*(?P<value>\S+)\s*$", text, re.MULTILINE)
+    if match is None:
+        _fail(f"vault_layout.yaml missing scalar: {key}")
+    return match.group("value")
+
+
+def _extract_yaml_list(text: str, key: str) -> tuple[str, ...]:
+    match = re.search(rf"^\s{{2}}{re.escape(key)}:\s*$", text, re.MULTILINE)
+    if match is None:
+        _fail(f"vault_layout.yaml missing list: {key}")
+    start = match.end()
+    values: list[str] = []
+    for line in text[start:].splitlines():
+        if line == "":
+            continue
+        if not line.startswith("    - "):
+            break
+        values.append(line.removeprefix("    - ").strip())
+    if not values:
+        _fail(f"vault_layout.yaml empty list: {key}")
+    return tuple(values)
+
+
+def _assert_vault_layout_and_path_policy(repo_root: Path) -> int:
+    text = _vault_layout_path(repo_root).read_text(encoding="utf-8")
+    layout_id = _extract_yaml_scalar(text, "layout_id")
+    if not re.fullmatch(r"layout_[A-Za-z0-9_]+", layout_id):
+        _fail(f"vault_layout.yaml layout_id mismatch: {layout_id!r}")
+    namespace_default = _extract_yaml_scalar(text, "namespace_default")
+    if namespace_default != "NoeticBraid/":
+        _fail(f"vault_layout.yaml namespace_default mismatch: {namespace_default!r}")
+    if _extract_yaml_scalar(text, "traversal_check") != "strict_no_parent":
+        _fail("vault_layout.yaml traversal_check must be strict_no_parent")
+    max_depth = int(_extract_yaml_scalar(text, "max_depth"))
+    if max_depth < 4 or max_depth > 12:
+        _fail(f"vault_layout.yaml max_depth out of contract bounds: {max_depth}")
+    if _extract_yaml_scalar(text, "test_cases_ref") != "noeticbraid/docs/contracts/fixtures/path_policy_cases.json":
+        _fail("vault_layout.yaml test_cases_ref mismatch")
+
+    allow_write_kinds = set(_extract_yaml_list(text, "allow_write_kinds"))
+    deny_write_kinds = set(_extract_yaml_list(text, "deny_write_kinds"))
+    cases = json.loads(_path_policy_cases_path(repo_root).read_text(encoding="utf-8"))
+    if not isinstance(cases, list) or len(cases) != 10:
+        _fail("path_policy_cases.json must contain exactly 10 cases")
+
+    for case in cases:
+        case_id = case["case_id"]
+        target_path = case["target_path"]
+        write_kind = case["write_kind"]
+        expected_allowed = bool(case["expected_allowed"])
+        actual_allowed = _classify_path_policy(
+            target_path=target_path,
+            write_kind=write_kind,
+            namespace_default=namespace_default,
+            allow_write_kinds=allow_write_kinds,
+            deny_write_kinds=deny_write_kinds,
+        )
+        if actual_allowed != expected_allowed:
+            _fail(
+                "path_policy case mismatch: "
+                f"{case_id} actual_allowed={actual_allowed} expected_allowed={expected_allowed}"
+            )
+    return len(cases)
+
+
+def _classify_path_policy(
+    *,
+    target_path: str,
+    write_kind: str,
+    namespace_default: str,
+    allow_write_kinds: set[str],
+    deny_write_kinds: set[str],
+) -> bool:
+    normalized = target_path.replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part]
+    if ".." in parts:
+        return False
+    if not normalized.startswith(namespace_default):
+        return False
+    relative = normalized[len(namespace_default) :]
+    if relative.startswith(".obsidian/") or "/.obsidian/" in relative:
+        return False
+    if relative.startswith(".git/") or "/.git/" in relative:
+        return False
+    if relative.startswith("20_episodic_memory/10_user_raw/"):
+        return False
+    if write_kind in deny_write_kinds:
+        return False
+    return write_kind in allow_write_kinds
 
 
 def _runtime_schema(repo_root: Path) -> dict[str, Any]:
@@ -417,12 +542,14 @@ def run_checks(repo_root: Path | None = None) -> ContractGateReport:
     runtime = _runtime_schema(root)
     runtime_paths = _assert_runtime_contract(runtime, root)
     runtime_schema_names = tuple(runtime["components"]["schemas"].keys())
+    path_policy_cases = _assert_vault_layout_and_path_policy(root)
     return ContractGateReport(
         contract_sha256=actual_sha,
         sidecar_sha256=sidecar_sha,
         frozen_paths=frozen_paths,
         runtime_paths=runtime_paths,
         runtime_schema_names=runtime_schema_names,
+        path_policy_cases=path_policy_cases,
     )
 
 
@@ -437,6 +564,7 @@ def main() -> int:
     print(f"  sidecar_sha256={report.sidecar_sha256}")
     print(f"  paths={len(report.runtime_paths)}")
     print(f"  schemas={len(report.runtime_schema_names)}")
+    print(f"  path_policy_cases={report.path_policy_cases}")
     return 0
 
 

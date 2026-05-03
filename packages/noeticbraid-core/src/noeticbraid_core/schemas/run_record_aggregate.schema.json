@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "AggregateArtifact": {
+      "additionalProperties": false,
+      "description": "Artifact emitted by a run event.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "artifact_ref": {
+          "title": "Artifact Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "artifact_ref"
+      ],
+      "title": "AggregateArtifact",
+      "type": "object"
+    },
+    "AggregateError": {
+      "additionalProperties": false,
+      "description": "Failure entry summarized from a run event.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "error_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Kind"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "title": "AggregateError",
+      "type": "object"
+    },
+    "AggregateLesson": {
+      "additionalProperties": false,
+      "description": "Lesson candidate entry summarized from a run event.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "lesson_candidate_text": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lesson Candidate Text"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "title": "AggregateLesson",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Aggregate view over RunRecord events sharing one run_id.",
+  "properties": {
+    "run_id": {
+      "maxLength": 128,
+      "pattern": "^run_[A-Za-z0-9_]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "task_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^task_[A-Za-z0-9_]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Task Id"
+    },
+    "event_count": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Event Count",
+      "type": "integer"
+    },
+    "first_event_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Event At"
+    },
+    "last_event_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Event At"
+    },
+    "models_used": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Models Used",
+      "type": "array"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/AggregateArtifact"
+      },
+      "maxItems": 1000,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/AggregateError"
+      },
+      "maxItems": 1000,
+      "title": "Errors",
+      "type": "array"
+    },
+    "lessons_summary": {
+      "items": {
+        "$ref": "#/$defs/AggregateLesson"
+      },
+      "maxItems": 1000,
+      "title": "Lessons Summary",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "task_id",
+    "event_count"
+  ],
+  "title": "RunRecordAggregate",
+  "type": "object"
+}

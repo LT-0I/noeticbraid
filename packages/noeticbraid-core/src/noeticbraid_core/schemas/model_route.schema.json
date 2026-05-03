@@ -1,0 +1,242 @@
+{
+  "$defs": {
+    "RejectedModel": {
+      "additionalProperties": false,
+      "description": "A model considered but rejected for this route.",
+      "properties": {
+        "model_ref": {
+          "maxLength": 128,
+          "pattern": "^model_[A-Za-z0-9_]+$",
+          "title": "Model Ref",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_ref",
+        "reason"
+      ],
+      "title": "RejectedModel",
+      "type": "object"
+    },
+    "SelectedModel": {
+      "additionalProperties": false,
+      "description": "A selected model and its invocation role.",
+      "properties": {
+        "model_ref": {
+          "maxLength": 128,
+          "pattern": "^model_[A-Za-z0-9_]+$",
+          "title": "Model Ref",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "orchestrator",
+            "planner",
+            "researcher",
+            "producer",
+            "writer",
+            "coder",
+            "reviewer",
+            "adversary",
+            "source_auditor",
+            "verifier",
+            "convergence_editor",
+            "human_decision"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "invocation": {
+          "enum": [
+            "local_session",
+            "codex_cli",
+            "chatgpt_web",
+            "subagent",
+            "manual"
+          ],
+          "title": "Invocation",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_ref",
+        "role",
+        "invocation",
+        "reason"
+      ],
+      "title": "SelectedModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Contract 1.2.0 record for deciding model alliance routes.",
+  "properties": {
+    "route_id": {
+      "maxLength": 128,
+      "pattern": "^route_[A-Za-z0-9_]+$",
+      "title": "Route Id",
+      "type": "string"
+    },
+    "task_id": {
+      "maxLength": 128,
+      "pattern": "^task_[A-Za-z0-9_]+$",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "workflow_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Id"
+    },
+    "route_type": {
+      "enum": [
+        "single_model",
+        "producer_reviewer",
+        "dual_review",
+        "multi_review",
+        "manual_convergence"
+      ],
+      "title": "Route Type",
+      "type": "string"
+    },
+    "trigger": {
+      "enum": [
+        "user_request",
+        "task_card",
+        "workflow_step",
+        "review_gate",
+        "failure_recovery"
+      ],
+      "title": "Trigger",
+      "type": "string"
+    },
+    "risk_level": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "disputed"
+      ],
+      "title": "Risk Level",
+      "type": "string"
+    },
+    "required_capabilities": {
+      "items": {
+        "enum": [
+          "planning",
+          "research",
+          "writing",
+          "coding",
+          "code_review",
+          "adversary",
+          "source_audit",
+          "browser",
+          "file_io",
+          "verification",
+          "security_review",
+          "convergence"
+        ],
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Required Capabilities",
+      "type": "array"
+    },
+    "selected_models": {
+      "items": {
+        "$ref": "#/$defs/SelectedModel"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Selected Models",
+      "type": "array"
+    },
+    "rejected_models": {
+      "items": {
+        "$ref": "#/$defs/RejectedModel"
+      },
+      "maxItems": 32,
+      "title": "Rejected Models",
+      "type": "array"
+    },
+    "run_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Run Refs",
+      "type": "array"
+    },
+    "artifact_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Artifact Refs",
+      "type": "array"
+    },
+    "source_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Source Refs",
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "selected",
+        "invoked",
+        "superseded",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    }
+  },
+  "required": [
+    "route_id",
+    "task_id",
+    "route_type",
+    "trigger",
+    "risk_level",
+    "required_capabilities",
+    "selected_models",
+    "rejected_models",
+    "run_refs",
+    "artifact_refs",
+    "source_refs",
+    "status",
+    "rationale"
+  ],
+  "title": "ModelRoute",
+  "type": "object"
+}

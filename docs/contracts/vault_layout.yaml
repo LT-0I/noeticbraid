@@ -1,0 +1,35 @@
+layout_id: layout_noeticbraid_v0
+namespace_default: NoeticBraid/
+root_dirs:
+  - path: 00_dashboard/
+    role: dashboard_workbench
+  - path: 10_program_memory/
+    role: program_memory
+  - path: 20_episodic_memory/
+    role: episodic_memory
+  - path: 30_run_ledger/
+    role: run_ledger_mirror
+  - path: 60_templates/
+    role: templates
+  - path: 70_bases/
+    role: bases
+  - path: 80_inbox/
+    role: inbox
+  - path: 90_system/
+    role: system_metadata
+path_policy:
+  allow_write_kinds:
+    - generated_dashboard
+    - stable_record_create_only
+    - inbox_staging
+    - candidate_proposal
+    - sync_log_append_only
+  deny_write_kinds:
+    - protected_user_raw
+    - plugin_or_config
+    - git_metadata
+    - outside_namespace
+    - path_traversal
+max_depth: 8
+traversal_check: strict_no_parent
+test_cases_ref: noeticbraid/docs/contracts/fixtures/path_policy_cases.json

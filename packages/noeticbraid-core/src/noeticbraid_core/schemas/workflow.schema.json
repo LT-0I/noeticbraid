@@ -1,0 +1,210 @@
+{
+  "$defs": {
+    "WorkflowStep": {
+      "additionalProperties": false,
+      "description": "One ordered step in a workflow definition.",
+      "properties": {
+        "step_id": {
+          "maxLength": 64,
+          "pattern": "^step_[A-Za-z0-9_]+$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "step_order": {
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Step Order",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "orchestrator",
+            "planner",
+            "researcher",
+            "producer",
+            "writer",
+            "coder",
+            "reviewer",
+            "adversary",
+            "source_auditor",
+            "verifier",
+            "convergence_editor",
+            "human_decision"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "capability": {
+          "anyOf": [
+            {
+              "enum": [
+                "planning",
+                "research",
+                "writing",
+                "coding",
+                "code_review",
+                "adversary",
+                "source_audit",
+                "browser",
+                "file_io",
+                "verification",
+                "security_review",
+                "convergence",
+                "human_review"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability"
+        },
+        "input_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "task_card",
+                "source_record",
+                "run_record",
+                "artifact",
+                "prior_step_output",
+                "user_input"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Kind"
+        },
+        "output_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "artifact",
+                "run_record",
+                "approval_request",
+                "side_note",
+                "digestion_item",
+                "convergence_decision"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Kind"
+        },
+        "gate_policy": {
+          "default": "none",
+          "enum": [
+            "none",
+            "dual_review",
+            "multi_review",
+            "human_required"
+          ],
+          "title": "Gate Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_id",
+        "step_order",
+        "role"
+      ],
+      "title": "WorkflowStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Workflow definition frozen into contract 1.2.0.",
+  "properties": {
+    "workflow_id": {
+      "maxLength": 128,
+      "pattern": "^workflow_[A-Za-z0-9_]+$",
+      "title": "Workflow Id",
+      "type": "string"
+    },
+    "workflow_type": {
+      "enum": [
+        "information_radar",
+        "idea_to_project",
+        "literature_review",
+        "code_generation_review",
+        "weekly_reflection",
+        "custom"
+      ],
+      "title": "Workflow Type",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/WorkflowStep"
+      },
+      "maxItems": 50,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "related_routes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Related Routes",
+      "type": "array"
+    },
+    "related_runs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Related Runs",
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "deprecated",
+        "candidate"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "workflow_id",
+    "workflow_type",
+    "title",
+    "steps",
+    "status"
+  ],
+  "title": "Workflow",
+  "type": "object"
+}

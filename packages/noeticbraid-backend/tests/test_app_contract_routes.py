@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Contract route smoke tests for all seven frozen Phase 1.2 v1.1.0 paths."""
+"""Contract route smoke tests for frozen Phase 1.2 v1.2.0 paths."""
 
 from __future__ import annotations
 
@@ -65,6 +65,13 @@ EXPECTED_TARGET_OPERATIONS = {
         "AccountPoolDraft",
     ),
     "/api/ledger/runs": ("get", ["ledger"], "List run records", "ledger_runs_api_ledger_runs_get", "RunLedgerRuns"),
+    "/api/ledger/runs/aggregate": (
+        "get",
+        ["ledger"],
+        "Aggregate run record",
+        "aggregate_run_record_api_ledger_runs_aggregate_get",
+        "RunRecordAggregate",
+    ),
     "/api/approval/queue": (
         "get",
         ["approval"],
@@ -77,7 +84,7 @@ EXPECTED_TARGET_OPERATIONS = {
 EXPECTED_FIXTURES = {
     ("GET", "/api/health"): {
         "status": "ok",
-        "contract_version": "1.1.0",
+        "contract_version": "1.2.0",
         "authoritative": True,
     },
     ("POST", "/api/auth/startup_token"): {
@@ -89,6 +96,17 @@ EXPECTED_FIXTURES = {
     ("GET", "/api/approval/queue"): {"approvals": []},
     ("GET", "/api/account/pool"): {"profiles": []},
     ("GET", "/api/ledger/runs"): {"runs": []},
+    ("GET", "/api/ledger/runs/aggregate"): {
+        "run_id": "run_contract_empty",
+        "task_id": None,
+        "event_count": 0,
+        "first_event_at": None,
+        "last_event_at": None,
+        "models_used": [],
+        "artifacts": [],
+        "errors": [],
+        "lessons_summary": [],
+    },
 }
 
 
@@ -142,7 +160,8 @@ def test_all_frozen_routes_return_expected_contract_bodies(tmp_path: Path) -> No
         method = spec["method"]
         path = spec["path"]
         headers = _bearer_headers(tmp_path) if path == "/api/account/pool" else None
-        response = client.request(method, path, headers=headers)
+        url = f"{path}?run_id=run_contract_empty" if path == "/api/ledger/runs/aggregate" else path
+        response = client.request(method, url, headers=headers)
         assert response.status_code == 200
         assert response.json() == EXPECTED_FIXTURES[(method, path)]
 
@@ -270,11 +289,11 @@ def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path
     schema = _client(tmp_path).app.openapi()
     assert schema["openapi"] == "3.1.0"
     assert schema["info"]["title"] == "NoeticBraid Phase 1.2 API"
-    assert schema["info"]["version"] == "1.1.0"
-    assert schema["info"]["x-contract-version"] == "1.1.0"
+    assert schema["info"]["version"] == "1.2.0"
+    assert schema["info"]["x-contract-version"] == "1.2.0"
     assert schema["info"]["x-status"] == "AUTHORITATIVE"
     assert schema["info"]["x-frozen"] is True
-    assert CONTRACT_VERSION == "1.1.0"
+    assert CONTRACT_VERSION == "1.2.0"
 
     for path, (method, tags, summary, operation_id, response_schema) in EXPECTED_TARGET_OPERATIONS.items():
         operation = schema["paths"][path][method]
@@ -287,7 +306,7 @@ def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path
         )
 
 
-def test_thirteen_schema_names_are_referenced_by_contract_helpers() -> None:
+def test_seventeen_schema_names_are_referenced_by_contract_helpers() -> None:
     assert ALL_SCHEMA_NAMES == (
         "HealthResponse",
         "AuthResponse",
@@ -302,10 +321,14 @@ def test_thirteen_schema_names_are_referenced_by_contract_helpers() -> None:
         "ApprovalRequest",
         "SideNote",
         "DigestionItem",
+        "Workflow",
+        "ModelRoute",
+        "VaultLayoutMinimum",
+        "RunRecordAggregate",
     )
 
 
-def test_openapi_components_contain_all_thirteen_schemas(tmp_path: Path) -> None:
+def test_openapi_components_contain_all_seventeen_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     components = schema["components"]["schemas"]
     missing = set(ALL_SCHEMA_NAMES) - set(components.keys())
@@ -319,7 +342,7 @@ def test_openapi_components_contain_all_thirteen_schemas(tmp_path: Path) -> None
     assert "tasks" in components["EmptyDashboard"]["properties"]
 
 
-def test_frozen_openapi_1_1_0_yaml_anchors_and_sha_are_unchanged() -> None:
+def test_frozen_openapi_1_2_0_yaml_anchors_and_sha_are_unchanged() -> None:
     contract_bytes = FROZEN_OPENAPI_PATH.read_bytes()
     sidecar_text = FROZEN_OPENAPI_SHA256_PATH.read_bytes().decode("ascii").strip()
     sidecar_hash, sidecar_name = sidecar_text.split(maxsplit=1)
@@ -329,8 +352,8 @@ def test_frozen_openapi_1_1_0_yaml_anchors_and_sha_are_unchanged() -> None:
     for anchor in (
         "openapi: 3.1.0",
         "title: NoeticBraid Phase 1.2 API",
-        "version: 1.1.0",
-        "x-contract-version: 1.1.0",
+        "version: 1.2.0",
+        "x-contract-version: 1.2.0",
         "x-status: AUTHORITATIVE",
         "x-frozen: true",
         "  /api/auth/startup_token:",
@@ -349,6 +372,13 @@ def test_frozen_openapi_1_1_0_yaml_anchors_and_sha_are_unchanged() -> None:
         "    RunLedgerRuns:",
         "    RunRecord:",
         "    SourceRecord:",
+        "  /api/ledger/runs/aggregate:",
+        "      operationId: aggregate_run_record_api_ledger_runs_aggregate_get",
+        "                $ref: '#/components/schemas/RunRecordAggregate'",
+        "    Workflow:",
+        "    ModelRoute:",
+        "    VaultLayoutMinimum:",
+        "    RunRecordAggregate:",
     ):
         assert anchor in contract
     startup_section = contract.split("  /api/auth/startup_token:", 1)[1].split("  /api/dashboard/empty:", 1)[0]

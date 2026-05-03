@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -52,13 +53,43 @@ def _build_custom_openapi(app: FastAPI) -> dict[str, Any]:
 
     component_schemas = schema.setdefault("components", {}).setdefault("schemas", {})
     for model in CORE_SCHEMA_MODELS:
-        component_schemas.setdefault(
-            model.__name__,
-            model.model_json_schema(ref_template="#/components/schemas/{model}"),
+        component_schemas[model.__name__] = _inline_component_defs(
+            model.model_json_schema(ref_template="#/components/schemas/{model}")
         )
+    for path_item in schema.get("paths", {}).values():
+        for operation in path_item.values():
+            if isinstance(operation, dict):
+                operation.get("responses", {}).pop("422", None)
+    component_schemas.pop("HTTPValidationError", None)
+    component_schemas.pop("ValidationError", None)
+    component_schemas.pop("AggregateArtifact", None)
+    component_schemas.pop("AggregateError", None)
+    component_schemas.pop("AggregateLesson", None)
 
     app.openapi_schema = schema
     return app.openapi_schema
+
+
+def _inline_component_defs(component_schema: dict[str, Any]) -> dict[str, Any]:
+    """Inline Pydantic sub-model definitions to keep contract components stable."""
+
+    defs = component_schema.pop("$defs", {})
+    if not defs:
+        return component_schema
+
+    def visit(value: Any) -> Any:
+        if isinstance(value, dict):
+            ref = value.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+                name = ref.rsplit("/", 1)[-1]
+                if name in defs:
+                    return visit(deepcopy(defs[name]))
+            return {key: visit(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [visit(item) for item in value]
+        return value
+
+    return visit(component_schema)
 
 
 def _validate_core_imports(app: FastAPI) -> None:

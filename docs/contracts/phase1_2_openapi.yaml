@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
   title: NoeticBraid Phase 1.2 API
-  version: 1.1.0
-  x-contract-version: 1.1.0
+  version: 1.2.0
+  x-contract-version: 1.2.0
   x-status: AUTHORITATIVE
   x-frozen: true
   x-phase: "1.2"
-  x-stage: "1.5-contract-freeze"
+  x-stage: "contract-1.2.0"
 paths:
   /api/health:
     get:
@@ -106,6 +106,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RunLedgerRuns'
+  /api/ledger/runs/aggregate:
+    get:
+      operationId: aggregate_run_record_api_ledger_runs_aggregate_get
+      tags:
+        - ledger
+      summary: Aggregate run record
+      parameters:
+        - name: run_id
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^run_[A-Za-z0-9_]+$"
+            maxLength: 128
+      responses:
+        '200':
+          description: Aggregated run record view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunRecordAggregate'
 components:
   schemas:
     AccountPoolDraft:
@@ -679,3 +700,487 @@ components:
           - snoozed
           default: open
           description: Current digestion workflow status.
+    Workflow:
+      type: object
+      additionalProperties: false
+      required:
+        - workflow_id
+        - workflow_type
+        - title
+        - steps
+        - status
+      properties:
+        workflow_id:
+          type: string
+          pattern: "^workflow_[A-Za-z0-9_]+$"
+          maxLength: 128
+          description: Stable identifier for this workflow definition.
+        workflow_type:
+          type: string
+          enum:
+            - information_radar
+            - idea_to_project
+            - literature_review
+            - code_generation_review
+            - weekly_reflection
+            - custom
+          description: One of the workflow categories defined by Blueprint section 16.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Human-readable workflow name.
+        description:
+          type: string
+          maxLength: 4096
+          description: Optional workflow description.
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - step_id
+              - step_order
+              - role
+            properties:
+              step_id:
+                type: string
+                pattern: "^step_[A-Za-z0-9_]+$"
+                maxLength: 64
+                description: Stable identifier within the workflow.
+              step_order:
+                type: integer
+                minimum: 1
+                maximum: 50
+                description: 1-based ordering key within the workflow.
+              role:
+                type: string
+                enum:
+                  - orchestrator
+                  - planner
+                  - researcher
+                  - producer
+                  - writer
+                  - coder
+                  - reviewer
+                  - adversary
+                  - source_auditor
+                  - verifier
+                  - convergence_editor
+                  - human_decision
+                description: Role responsible for this step.
+              capability:
+                type: string
+                enum:
+                  - planning
+                  - research
+                  - writing
+                  - coding
+                  - code_review
+                  - adversary
+                  - source_audit
+                  - browser
+                  - file_io
+                  - verification
+                  - security_review
+                  - convergence
+                  - human_review
+                description: Optional capability expected from the step.
+              input_kind:
+                type: string
+                enum:
+                  - task_card
+                  - source_record
+                  - run_record
+                  - artifact
+                  - prior_step_output
+                  - user_input
+                description: Optional primary input kind.
+              output_kind:
+                type: string
+                enum:
+                  - artifact
+                  - run_record
+                  - approval_request
+                  - side_note
+                  - digestion_item
+                  - convergence_decision
+                description: Optional primary output kind.
+              gate_policy:
+                type: string
+                enum:
+                  - none
+                  - dual_review
+                  - multi_review
+                  - human_required
+                default: none
+                description: Gate behavior for this workflow step.
+        related_routes:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            pattern: "^route_[A-Za-z0-9_]+$"
+          description: Optional ModelRoute references related to this workflow.
+        related_runs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: "^run_[A-Za-z0-9_]+$"
+          description: Optional RunRecord run references related to this workflow.
+        status:
+          type: string
+          enum:
+            - draft
+            - active
+            - deprecated
+            - candidate
+          description: Workflow lifecycle status.
+    ModelRoute:
+      type: object
+      additionalProperties: false
+      required:
+        - route_id
+        - task_id
+        - route_type
+        - trigger
+        - risk_level
+        - required_capabilities
+        - selected_models
+        - rejected_models
+        - run_refs
+        - artifact_refs
+        - source_refs
+        - status
+        - rationale
+      properties:
+        route_id:
+          type: string
+          pattern: "^route_[A-Za-z0-9_]+$"
+          maxLength: 128
+        task_id:
+          type: string
+          pattern: "^task_[A-Za-z0-9_]+$"
+          maxLength: 128
+        workflow_id:
+          type: string
+          pattern: "^workflow_[A-Za-z0-9_]+$"
+          maxLength: 128
+          nullable: true
+          default: null
+          description: Optional link to a Workflow; null or absent for ad-hoc routes.
+        route_type:
+          type: string
+          enum:
+            - single_model
+            - producer_reviewer
+            - dual_review
+            - multi_review
+            - manual_convergence
+        trigger:
+          type: string
+          enum:
+            - user_request
+            - task_card
+            - workflow_step
+            - review_gate
+            - failure_recovery
+        risk_level:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - disputed
+        required_capabilities:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            enum:
+              - planning
+              - research
+              - writing
+              - coding
+              - code_review
+              - adversary
+              - source_audit
+              - browser
+              - file_io
+              - verification
+              - security_review
+              - convergence
+        selected_models:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - model_ref
+              - role
+              - invocation
+              - reason
+            properties:
+              model_ref:
+                type: string
+                pattern: "^model_[A-Za-z0-9_]+$"
+                maxLength: 128
+              role:
+                type: string
+                enum:
+                  - orchestrator
+                  - planner
+                  - researcher
+                  - producer
+                  - writer
+                  - coder
+                  - reviewer
+                  - adversary
+                  - source_auditor
+                  - verifier
+                  - convergence_editor
+                  - human_decision
+              invocation:
+                type: string
+                enum:
+                  - local_session
+                  - codex_cli
+                  - chatgpt_web
+                  - subagent
+                  - manual
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 2048
+        rejected_models:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - model_ref
+              - reason
+            properties:
+              model_ref:
+                type: string
+                pattern: "^model_[A-Za-z0-9_]+$"
+                maxLength: 128
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 2048
+        run_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: "^run_[A-Za-z0-9_]+$"
+            maxLength: 128
+        artifact_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: "^artifact_[A-Za-z0-9_]+$"
+            maxLength: 128
+        source_refs:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: "^source_[A-Za-z0-9_]+$"
+            maxLength: 128
+        status:
+          type: string
+          enum:
+            - draft
+            - selected
+            - invoked
+            - superseded
+            - failed
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 4096
+      description: "OpenAPI component embedded for contract 1.2.0; source: tools/multimodel_alliance/schemas/model_route.schema.json"
+    VaultLayoutMinimum:
+      type: object
+      additionalProperties: false
+      required:
+        - layout_id
+        - namespace_default
+        - root_dirs
+        - path_policy
+        - max_depth
+        - traversal_check
+      properties:
+        layout_id:
+          type: string
+          pattern: "^layout_[A-Za-z0-9_]+$"
+          maxLength: 128
+        namespace_default:
+          type: string
+          pattern: ^[A-Za-z][A-Za-z0-9_]*/$
+          description: Default namespace prefix; canonical NoeticBraid value is 'NoeticBraid/'.
+        root_dirs:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - role
+            properties:
+              path:
+                type: string
+                pattern: ^[0-9]{2}_[a-z_]+/$
+              role:
+                type: string
+                enum:
+                  - dashboard_workbench
+                  - program_memory
+                  - episodic_memory
+                  - run_ledger_mirror
+                  - templates
+                  - bases
+                  - inbox
+                  - system_metadata
+        path_policy:
+          type: object
+          additionalProperties: false
+          required:
+            - allow_write_kinds
+            - deny_write_kinds
+          properties:
+            allow_write_kinds:
+              type: array
+              items:
+                type: string
+                enum:
+                  - generated_dashboard
+                  - stable_record_create_only
+                  - inbox_staging
+                  - candidate_proposal
+                  - sync_log_append_only
+            deny_write_kinds:
+              type: array
+              items:
+                type: string
+                enum:
+                  - protected_user_raw
+                  - plugin_or_config
+                  - git_metadata
+                  - outside_namespace
+                  - path_traversal
+        max_depth:
+          type: integer
+          minimum: 4
+          maximum: 12
+          default: 8
+        traversal_check:
+          type: string
+          enum:
+            - strict_no_parent
+          description: Fail-closed; only strict_no_parent is permitted per step 2 arbitration.
+        test_cases_ref:
+          type: string
+          const: noeticbraid/docs/contracts/fixtures/path_policy_cases.json
+    RunRecordAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - run_id
+        - task_id
+        - event_count
+      properties:
+        run_id:
+          type: string
+          pattern: "^run_[A-Za-z0-9_]+$"
+          maxLength: 128
+          description: Run identifier requested by the aggregate endpoint.
+        task_id:
+          type: string
+          pattern: "^task_[A-Za-z0-9_]+$"
+          maxLength: 128
+          nullable: true
+          description: Task identifier linked to the aggregate; nullable for empty streams.
+        event_count:
+          type: integer
+          minimum: 0
+          description: Computed count of RunRecord events in the aggregate input.
+        first_event_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the first RunRecord event in the aggregate input.
+        last_event_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last RunRecord event in the aggregate input.
+        models_used:
+          type: array
+          nullable: true
+          description: Union (dedup) of all model_refs across the run's events.
+          items:
+            type: string
+            pattern: "^model_[A-Za-z0-9_]+$"
+            maxLength: 128
+        artifacts:
+          type: array
+          nullable: true
+          description: Artifact references collected from artifact_created events.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - event_id
+              - artifact_ref
+            properties:
+              event_id:
+                type: string
+              artifact_ref:
+                type: string
+        errors:
+          type: array
+          nullable: true
+          description: Failure entries from task_failed and security_violation events; text fields follow nested NO-LEAK rules.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - event_id
+            properties:
+              event_id:
+                type: string
+              error_kind:
+                type: string
+                description: Best-effort classifier; unknown is allowed when the event payload lacks a kind.
+              message:
+                type: string
+                description: "NO-LEAK: Derived only from RunRecord event payload and artifact_refs join; never from stdout, exception repr, environment, browser paths, or credential material."
+        lessons_summary:
+          type: array
+          nullable: true
+          description: Lesson entries from lesson_candidate_created events; text fields follow nested NO-LEAK rules.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - event_id
+            properties:
+              event_id:
+                type: string
+              lesson_candidate_text:
+                type: string
+                description: "NO-LEAK: Derived only from RunRecord event payload and artifact_refs join; never from stdout, exception repr, environment, browser paths, or credential material."

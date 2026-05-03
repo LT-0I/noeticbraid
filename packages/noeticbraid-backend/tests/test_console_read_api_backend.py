@@ -26,7 +26,7 @@ from noeticbraid_backend.settings import Settings
 from noeticbraid_core.ledger import RunLedger
 from noeticbraid_core.schemas import ApprovalRequest, RunRecord
 
-EXPECTED_HEALTH = {"status": "ok", "contract_version": "1.1.0", "authoritative": True}
+EXPECTED_HEALTH = {"status": "ok", "contract_version": "1.2.0", "authoritative": True}
 FORBIDDEN_PUBLIC_MARKERS = (
     "account_id",
     "token_id",

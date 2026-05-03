@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Static helpers for the frozen Phase 1.2 v1.1.0 API contract."""
+"""Static helpers for the frozen Phase 1.2 v1.2.0 API contract."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = "1.1.0"
+CONTRACT_VERSION = "1.2.0"
 CONTRACT_AUTHORITATIVE = True
 OPENAPI_TITLE = "NoeticBraid Phase 1.2 API"
 
@@ -54,6 +54,12 @@ FROZEN_ROUTE_SPECS: tuple[dict[str, str], ...] = (
         "path": "/api/ledger/runs",
         "summary": "List run records",
         "response_schema": "RunLedgerRuns",
+    },
+    {
+        "method": "GET",
+        "path": "/api/ledger/runs/aggregate",
+        "summary": "Aggregate run record",
+        "response_schema": "RunRecordAggregate",
     },
 )
 
@@ -123,6 +129,10 @@ try:  # Import where available; keep the backend skeleton runnable in isolation.
     ApprovalRequest = _schemas.ApprovalRequest
     SideNote = _schemas.SideNote
     DigestionItem = _schemas.DigestionItem
+    Workflow = _schemas.Workflow
+    ModelRoute = _schemas.ModelRoute
+    VaultLayoutMinimum = _schemas.VaultLayoutMinimum
+    RunRecordAggregate = _schemas.RunRecordAggregate
 except Exception:  # pragma: no cover - exercised only without the workspace dependency
 
     class Task(_FallbackCoreModel):
@@ -143,6 +153,18 @@ except Exception:  # pragma: no cover - exercised only without the workspace dep
     class DigestionItem(_FallbackCoreModel):
         pass
 
+    class Workflow(_FallbackCoreModel):
+        pass
+
+    class ModelRoute(_FallbackCoreModel):
+        pass
+
+    class VaultLayoutMinimum(_FallbackCoreModel):
+        pass
+
+    class RunRecordAggregate(_FallbackCoreModel):
+        pass
+
 
 CORE_SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     Task,
@@ -151,6 +173,10 @@ CORE_SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     ApprovalRequest,
     SideNote,
     DigestionItem,
+    Workflow,
+    ModelRoute,
+    VaultLayoutMinimum,
+    RunRecordAggregate,
 )
 
 
@@ -168,6 +194,10 @@ ALL_SCHEMA_NAMES: tuple[str, ...] = (
     "ApprovalRequest",
     "SideNote",
     "DigestionItem",
+    "Workflow",
+    "ModelRoute",
+    "VaultLayoutMinimum",
+    "RunRecordAggregate",
 )
 
 __all__ = [
@@ -190,4 +220,8 @@ __all__ = [
     "ApprovalRequest",
     "SideNote",
     "DigestionItem",
+    "Workflow",
+    "ModelRoute",
+    "VaultLayoutMinimum",
+    "RunRecordAggregate",
 ]
