@@ -6,9 +6,9 @@ Storage:
     state/ledger/run_ledger.jsonl  (one RunRecord per line, model_dump_json)
 
 Locking:
-    portalocker (PSF-2.0) provides cross-platform exclusive locks around
-    write operations, so multiple processes can append safely. Readers acquire
-    a shared lock before reading so they do not observe a writer's partially
+    filelock (MIT) provides cross-platform read/write locks around ledger file
+    access. Writers acquire an exclusive write lock, and readers acquire a
+    shared read lock before reading so they do not observe a writer's partially
     appended JSONL line.
 
 Decoupling note (Phase 1.1 baseline):
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
-import portalocker
+from filelock import ReadWriteLock
 
 from noeticbraid_core.schemas import RunRecord
 
@@ -34,6 +34,8 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STATE_ENV = "NOETICBRAID_STATE_ROOT"
 DEFAULT_RELATIVE_PATH = Path("state") / "ledger" / "run_ledger.jsonl"
+LOCK_FILE_NAME = "run_ledger.lock.db"
+LOCK_TIMEOUT_SECONDS = 60
 SMALL_LEDGER_SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024
 
 
@@ -55,6 +57,10 @@ class RunLedger:
         self._root = Path(root).resolve()
         self._path = self._root / DEFAULT_RELATIVE_PATH
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = ReadWriteLock(
+            self._path.parent / LOCK_FILE_NAME,
+            timeout=LOCK_TIMEOUT_SECONDS,
+        )
 
     @property
     def path(self) -> Path:
@@ -65,34 +71,31 @@ class RunLedger:
     def append(self, record: RunRecord) -> None:
         """Serialize a RunRecord and append a single line to the JSONL file.
 
-        Concurrency: a portalocker exclusive lock guards the file handle for
+        Concurrency: a filelock exclusive write lock guards the file handle for
         the duration of the write. Multiple processes calling ``append`` in
         parallel are safe; lines are written one at a time, never interleaved.
         """
 
         line = record.model_dump_json()
-        with open(self._path, "a", encoding="utf-8") as fh:
-            portalocker.lock(fh, portalocker.LOCK_EX)
-            try:
+        with self._lock.write_lock():
+            with open(self._path, "a", encoding="utf-8") as fh:
                 fh.write(line)
                 fh.write("\n")
                 fh.flush()
                 os.fsync(fh.fileno())
-            finally:
-                portalocker.unlock(fh)
 
     def iter_all(self) -> Iterator[RunRecord]:
         """Yield each parsed RunRecord; corrupted lines are logged and skipped.
 
-        Files smaller than 50 MiB are snapshotted while holding a
-        ``portalocker.LOCK_SH`` shared reader lock; the file handle is released
-        before records are parsed or yielded. This keeps normal local-state
-        iteration safe for Windows-style rename/delete even if the caller does
-        not exhaust the returned iterator.
+        Files smaller than 50 MiB are snapshotted while holding a filelock
+        shared read lock; the file handle is released before records are parsed
+        or yielded. This keeps normal local-state iteration safe for
+        Windows-style rename/delete even if the caller does not exhaust the
+        returned iterator.
 
-        Files at or above 50 MiB are streamed while holding ``LOCK_SH``. For
-        that large-file path, the file handle remains open until the iterator
-        is exhausted or explicitly closed by the caller.
+        Files at or above 50 MiB are streamed while holding a shared read lock.
+        For that large-file path, the file handle remains open until the
+        iterator is exhausted or explicitly closed by the caller.
         """
 
         try:
@@ -132,12 +135,9 @@ class RunLedger:
         """Return ledger lines captured under a shared lock, then close the file."""
 
         try:
-            with open(self._path, "r", encoding="utf-8") as fh:
-                portalocker.lock(fh, portalocker.LOCK_SH)
-                try:
+            with self._lock.read_lock():
+                with open(self._path, "r", encoding="utf-8") as fh:
                     return fh.read().splitlines()
-                finally:
-                    portalocker.unlock(fh)
         except FileNotFoundError:
             return []
 
@@ -145,12 +145,9 @@ class RunLedger:
         """Stream a large ledger file under a shared lock."""
 
         try:
-            with open(self._path, "r", encoding="utf-8") as fh:
-                portalocker.lock(fh, portalocker.LOCK_SH)
-                try:
+            with self._lock.read_lock():
+                with open(self._path, "r", encoding="utf-8") as fh:
                     yield from self._iter_parsed_lines(fh)
-                finally:
-                    portalocker.unlock(fh)
         except FileNotFoundError:
             return
 

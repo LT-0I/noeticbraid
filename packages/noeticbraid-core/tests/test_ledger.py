@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import multiprocessing
+import json
 import os
-import queue
+import subprocess
+import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import portalocker
+from filelock import ReadWriteLock
 import pytest
 
 import noeticbraid_core.ledger.run_ledger as run_ledger_module
@@ -63,24 +65,85 @@ def _worker_append(args: tuple[str, str]) -> None:
         )
 
 
-def _reader_collect_run_ids(root_str: str, started_queue, result_queue) -> None:
-    """Spawned in subprocess: collect ledger run IDs after signalling readiness."""
+APPEND_WORKER_CODE = """
+from datetime import datetime, timezone
+from pathlib import Path
+import sys
 
-    started_queue.put("started")
-    try:
-        ledger = RunLedger(root=Path(root_str))
-        result_queue.put(("ok", [record.run_id for record in ledger.iter_all()]))
-    except Exception as exc:  # pragma: no cover - defensive child-process reporting
-        result_queue.put(("error", repr(exc)))
+from noeticbraid_core.ledger import RunLedger
+from noeticbraid_core.schemas import RunRecord
+
+root = Path(sys.argv[1])
+prefix = sys.argv[2]
+ledger = RunLedger(root=root)
+for i in range(100):
+    ledger.append(
+        RunRecord(
+            run_id=f"run_{prefix}_{i:03d}",
+            task_id=f"task_{prefix}_{i:03d}",
+            event_type="task_created",
+            created_at=datetime.now(timezone.utc),
+            actor="system",
+            status="recorded",
+        )
+    )
+"""
+
+
+READER_WORKER_CODE = """
+import json
+from pathlib import Path
+import sys
+
+from noeticbraid_core.ledger import RunLedger
+
+root = Path(sys.argv[1])
+started_path = Path(sys.argv[2])
+result_path = Path(sys.argv[3])
+
+started_path.write_text("started", encoding="utf-8")
+try:
+    ledger = RunLedger(root=root)
+    payload = ["ok", [record.run_id for record in ledger.iter_all()]]
+except Exception as exc:
+    payload = ["error", repr(exc)]
+result_path.write_text(json.dumps(payload), encoding="utf-8")
+"""
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    src_path = str(Path(__file__).resolve().parents[1] / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = src_path if not existing else os.pathsep.join([src_path, existing])
+    return env
+
+
+def _wait_for_path(path: Path, timeout_seconds: float) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if path.exists():
+            return True
+        time.sleep(0.05)
+    return path.exists()
 
 
 class TestRunLedgerConcurrency:
     def test_4_processes_400_records_no_corruption(self, tmp_path: Path) -> None:
         prefixes = ["a", "b", "c", "d"]
-        args = [(str(tmp_path), prefix) for prefix in prefixes]
-
-        with multiprocessing.Pool(processes=4) as pool:
-            pool.map(_worker_append, args)
+        processes = [
+            subprocess.Popen(
+                [sys.executable, "-c", APPEND_WORKER_CODE, str(tmp_path), prefix],
+                env=_subprocess_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for prefix in prefixes
+        ]
+        for process in processes:
+            stdout, stderr = process.communicate(timeout=30)
+            assert process.returncode == 0, f"stdout={stdout!r} stderr={stderr!r}"
 
         ledger = RunLedger(root=tmp_path)
         records = list(ledger.iter_all())
@@ -96,43 +159,51 @@ class TestRunLedgerConcurrency:
         ).model_dump_json()
         split_at = len(locked_record_json) // 2
 
-        started_queue = multiprocessing.Queue()
-        result_queue = multiprocessing.Queue()
-        process = multiprocessing.Process(
-            target=_reader_collect_run_ids,
-            args=(str(tmp_path), started_queue, result_queue),
+        started_path = tmp_path / "reader.started"
+        result_path = tmp_path / "reader.result.json"
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                READER_WORKER_CODE,
+                str(tmp_path),
+                str(started_path),
+                str(result_path),
+            ],
+            env=_subprocess_env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
         early_result = None
-        with open(ledger.path, "a", encoding="utf-8") as fh:
-            portalocker.lock(fh, portalocker.LOCK_EX)
-            try:
+        lock = ReadWriteLock(
+            ledger.path.parent / run_ledger_module.LOCK_FILE_NAME,
+            timeout=60,
+        )
+        with lock.write_lock():
+            with open(ledger.path, "a", encoding="utf-8") as fh:
                 fh.write(locked_record_json[:split_at])
                 fh.flush()
                 os.fsync(fh.fileno())
 
-                process.start()
-                assert started_queue.get(timeout=5) == "started"
-                try:
-                    early_result = result_queue.get(timeout=0.5)
-                except queue.Empty:
-                    early_result = None
+                assert _wait_for_path(started_path, timeout_seconds=5)
+                early_result = result_path.read_text(encoding="utf-8") if result_path.exists() else None
 
                 fh.write(locked_record_json[split_at:])
                 fh.write("\n")
                 fh.flush()
                 os.fsync(fh.fileno())
-            finally:
-                portalocker.unlock(fh)
 
-        process.join(timeout=5)
-        if process.is_alive():  # pragma: no cover - protects the test runner on lock regressions
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:  # pragma: no cover - protects the test runner on lock regressions
             process.terminate()
-            process.join(timeout=5)
+            stdout, stderr = process.communicate(timeout=5)
 
         assert early_result is None, f"reader returned before writer lock release: {early_result!r}"
-        assert not process.is_alive()
-        status, payload = result_queue.get(timeout=1)
+        assert process.returncode == 0, f"stdout={stdout!r} stderr={stderr!r}"
+        status, payload = json.loads(result_path.read_text(encoding="utf-8"))
         assert status == "ok"
         assert payload == ["run_before_lock", "run_after_lock"]
 
@@ -251,23 +322,25 @@ class TestRunLedgerReaderHandleLifetime:
     def test_iter_all_docstring_documents_fifty_mib_streaming_threshold(self) -> None:
         doc = RunLedger.iter_all.__doc__ or ""
         assert "50 MiB" in doc
-        assert "LOCK_SH" in doc
+        assert "shared read lock" in doc
         assert "file handle remains open" in doc
 
-    def test_at_or_above_threshold_stream_path_uses_shared_lock(self, tmp_path: Path, monkeypatch) -> None:
+    def test_at_or_above_threshold_stream_path_uses_filelock_read_lock(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
         ledger = RunLedger(root=tmp_path)
         ledger.append(make_record(run_id="run_streamed"))
-        lock_calls: list[int] = []
-        original_lock = run_ledger_module.portalocker.lock
+        lock_calls: list[Path] = []
+        original_read_lock = run_ledger_module.ReadWriteLock.read_lock
 
-        def recording_lock(fh, flags):
-            lock_calls.append(flags)
-            return original_lock(fh, flags)
+        def recording_read_lock(self, *args, **kwargs):
+            lock_calls.append(Path(self.lock_file))
+            return original_read_lock(self, *args, **kwargs)
 
         monkeypatch.setattr(run_ledger_module, "SMALL_LEDGER_SNAPSHOT_MAX_BYTES", 1)
-        monkeypatch.setattr(run_ledger_module.portalocker, "lock", recording_lock)
+        monkeypatch.setattr(run_ledger_module.ReadWriteLock, "read_lock", recording_read_lock)
 
         records = list(ledger.iter_all())
 
         assert [record.run_id for record in records] == ["run_streamed"]
-        assert run_ledger_module.portalocker.LOCK_SH in lock_calls
+        assert ledger.path.parent / run_ledger_module.LOCK_FILE_NAME in lock_calls

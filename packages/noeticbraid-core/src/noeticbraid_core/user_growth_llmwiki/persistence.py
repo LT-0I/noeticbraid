@@ -42,8 +42,9 @@ class LLMWikiSQLiteStore:
     """Narrow sqlite3 store for hashes, metadata, and activity records only.
 
     Raw private note content is intentionally not persisted here. The store uses
-    SQLite transaction semantics and does not add portalocker; callers that need
-    cross-process coordination can wrap this class at the application boundary.
+    SQLite transaction semantics and does not add a separate file lock; callers
+    that need cross-process coordination can wrap this class at the application
+    boundary (e.g. with ``filelock.ReadWriteLock``).
     """
 
     def __init__(self, path: Path | str) -> None:
