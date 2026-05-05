@@ -47,3 +47,24 @@ edited or removed.
 - gates: license_check_gate 27 PASS / 3 FAIL covered by EXCEPTION-4 (pywin32 PSF transitive of portalocker, T073 fix planned) + EXCEPTION-5 (certifi MPL transitive of httpx, industry-accepted) + EXCEPTION-6 (typing_extensions PSF-2.0, Python core team backport); private_leak_scan PASS 221 scanned; phase1_2_contract_gate PASS sidecar=96CE4BAC...; pytest core 424 (was 414 in 1.2.0, +10 for 1.3.0); pytest backend 74
 - license_check_gate.py upgraded to PEP 639 License-Expression + Classifier fallback + UTF-8 subprocess (24 false-positive empty fields collapsed to 3 real PSF/MPL violations covered by EXCEPTIONS)
 - source response: GPT-A chat URL https://chatgpt.com/c/69f9dc41-3668-83e8-b1c5-b9f3653ce2bb (response.zip sha256 EA963020475BBDE3BD9E1034BD5705EB4D1A95EFEA60A2BD8F67AD1CA0275D63)
+
+## T073 portalocker -> filelock (2026-05-05, lightweight v3.3 cycle, no GPT-A)
+
+- integration commit `8926a13`, tag `T073-portalocker-filelock`, pushed origin main + tag
+- decision authority: GPT5_Workflow/tools/reports/T073_final_decision.md (codex audit + 2 independent reviews PROCEED filelock path A)
+- reviewer A: claudecode sonnet code-reviewer subagent PASS 0/0/0/1 LOW (persistence.py:45 docstring, fixed in same commit); review at GPT5_Workflow/active/T073-portalocker-filelock/reviewer_A.md
+- skipped step 2 prompt review / step 3 bundle / step 4 GPT-A / step 5 reply review: justified by (a) plan = T073_final_decision.md already double-reviewed; (b) replacement is mechanical mapping with verifiable invariants (4 files, ~70 LOC); (c) red-line surface limited to license whitelist + lock semantics, both verifiable by gates
+- changes:
+  - `packages/noeticbraid-core/pyproject.toml`: `portalocker>=2.0,<3` -> `filelock>=3,<4`
+  - `packages/noeticbraid-core/src/noeticbraid_core/ledger/run_ledger.py`: import + 6 lock call sites migrated to `filelock.ReadWriteLock` write_lock()/read_lock(); lock at `state/ledger/run_ledger.lock.db` (sqlite-backed cross-process); lock acquired before file open (Windows TOCTOU eliminated)
+  - `packages/noeticbraid-core/tests/test_ledger.py`: monkeypatch refactored to ReadWriteLock.read_lock + lock_file path; multiprocess tests migrated from multiprocessing to subprocess.Popen + file IPC
+  - `packages/noeticbraid-core/src/noeticbraid_core/user_growth_llmwiki/persistence.py:45`: stale portalocker docstring updated
+- gates:
+  - license_check_gate: 27 PASS / 2 FAIL (pywin32 disappeared from transitive tree; only certifi MPL + typing_extensions PSF-2.0 remain, both EXCEPTION-5/6 covered); EXCEPTION-4 CLOSED
+  - private_leak_scan: PASS 240 scanned
+  - phase1_2_contract_gate: PASS sidecar=96CE4BAC... (frozen byte-equal preserved)
+  - pytest core: 424 passed (= 1.3.0 baseline, no regression)
+  - pytest backend: 74 passed
+  - github_ci: pending verification (run 25384493042)
+- side benefit: lock semantics upgraded from advisory fcntl/LockFileEx to SQLite WAL ReadWriteLock; explicit 60s timeout replaces unbounded blocking
+- frozen baseline preserved: phase1_2_openapi.yaml + vault_layout.yaml + path_policy_cases.json byte-equal vs 1.2.0 freeze
