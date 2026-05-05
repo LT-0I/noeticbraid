@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info:
+  title: NoeticBraid Contract 1.3.0 Obsidian Hub Components
+  version: 1.3.0
+  x-contract-version: 1.3.0
+  x-status: INCREMENTAL_FREEZE
+  x-extends-contract-version: 1.2.0
+  x-phase: '1.2'
+  x-stage: contract-1.3.0
+paths: {}
+components:
+  schemas:
+    ObsidianHubDashboard:
+      $ref: ./obsidian-hub-1.3.0/dashboard.schema.json
+    ObsidianHubTaskNote:
+      $ref: ./obsidian-hub-1.3.0/task_note.schema.json
+    ObsidianHubRunRecordNote:
+      $ref: ./obsidian-hub-1.3.0/run_record_note.schema.json
+    ObsidianHubSourceRecordNote:
+      $ref: ./obsidian-hub-1.3.0/source_record_note.schema.json
+    ObsidianHubSideNote:
+      $ref: ./obsidian-hub-1.3.0/side_note.schema.json
+    ObsidianHubDigestionItem:
+      $ref: ./obsidian-hub-1.3.0/digestion_item.schema.json
+    ObsidianHubWritePolicy:
+      $ref: ./obsidian-hub-1.3.0/write_policy.schema.json
