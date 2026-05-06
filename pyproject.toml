@@ -10,7 +10,8 @@ members = [
   "packages/noeticbraid-core",
   "packages/noeticbraid-obsidian",
   "packages/noeticbraid-runtime",
-  "packages/noeticbraid-backend"
+  "packages/noeticbraid-backend",
+  "packages/noeticbraid-notebooklm-bridge"
 ]
 
 [tool.pytest.ini_options]
@@ -18,5 +19,6 @@ pythonpath = [
   "packages/noeticbraid-core/src",
   "packages/noeticbraid-obsidian/src",
   "packages/noeticbraid-runtime/src",
-  "packages/noeticbraid-backend/src"
+  "packages/noeticbraid-backend/src",
+  "packages/noeticbraid-notebooklm-bridge/src"
 ]

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noeticbraid-notebooklm-bridge"
+version = "0.3.0"
+description = "NoeticBraid SP-H NotebookLM Bridge using an injected SP-C2 BrowserSession boundary."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{name = "NoeticBraid Contributors"}]
+keywords = ["noeticbraid", "notebooklm", "browser-automation", "source-record"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "PyYAML>=6.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["noeticbraid*"]
+
+[tool.setuptools.package-data]
+"noeticbraid.tools.notebooklm_bridge" = ["selectors.json", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
