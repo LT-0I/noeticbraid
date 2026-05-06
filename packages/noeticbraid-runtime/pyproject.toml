@@ -1,9 +1,14 @@
 [project]
 name = "noeticbraid-runtime"
-version = "0.1.0-stage0"
-description = "Host runtime interfaces, local server boundary, workers, profiles, and IM adapters."
+version = "1.0.0"
+description = "Browser & CLI Runtime primitives for NoeticBraid (SP-C2)."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.optional-dependencies]
+browser = ["playwright>=1.44", "websocket-client>=1.6"]
+test = ["pytest>=8"]
 
 [build-system]
 requires = ["hatchling"]
@@ -11,3 +16,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/noeticbraid_runtime"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
