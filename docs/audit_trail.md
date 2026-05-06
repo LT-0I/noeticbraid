@@ -68,3 +68,36 @@ edited or removed.
   - github_ci: pending verification (run 25384493042)
 - side benefit: lock semantics upgraded from advisory fcntl/LockFileEx to SQLite WAL ReadWriteLock; explicit 60s timeout replaces unbounded blocking
 - frozen baseline preserved: phase1_2_openapi.yaml + vault_layout.yaml + path_policy_cases.json byte-equal vs 1.2.0 freeze
+
+## SP-C2 Browser & CLI Runtime integration (2026-05-05, full v3.3 dual-review × 2 rounds)
+
+- integration commit `5faef09` (initial) → `8933bd1` (HEAD with private_leak_scan allowlist update), tag `phase-1.2-SP-C2-runtime-1.0.0` → `8933bd18`, pushed origin main + tag
+- source: standalone repo `LT-0I/noeticbraid-sp-C2-runtime` commit `bcbec6b` @ tag `sp-c2-runtime-1.0.0` (sp-repos working tree at `C:/Users/13080/Desktop/HBA/sp-repos/noeticbraid-sp-C2-runtime/`)
+- module: SP-C2 = `noeticbraid-runtime` placeholder package replaced with full implementation (~921 LOC = 11 src + 6 tests + 4 docs); unlocks downstream SP-D / SP-H / SP-B / SP-E
+- public surface:
+  - `BrowserSession` Protocol (navigate/eval/click/type_text/screenshot per-call timeout + synchronous close)
+  - `launch_browser` / `BrowserProcess` Playwright persistent-context launcher (filtered args eliminates user-data-dir 双传; injectable launcher for tests)
+  - `get_session` attach-only mode (`tab_id=None` → first page or `about:blank` via `/json/new`; explicit tab_id lookup; C1-backed new-session path **deferred** until SP-C1 integration, documented in IMPLEMENTATION_NOTES.md)
+  - `CdpSession` CDP 直连实装 (websocket-client transport optional; FakeTransport injected for tests)
+  - `CLISandbox` 三道闸 (command basename allowlist + cwd root guard + Popen 进程组 + `_kill_tree` via `taskkill /F /T` Windows / `os.killpg(SIGKILL)` POSIX; deny-by-default env_overlay)
+  - `SelectorStore` hot-reloadable selectors.json + 不可变副本语义
+  - `_proxy.py` HelixMind TUN bypass (`198.18.0.0/15` → `198.18.*.*` Chrome wildcard; unsupported CIDR `raise ValueError`, no raw passthrough)
+  - `run_record.py` frozen RunRecord-compatible artifact_refs helpers (`_FROZEN_EVENT_TYPES` runtime guard + ValueError on non-frozen event_type, not just Literal type hint)
+- v3.3 dual-review × 2 rounds:
+  - **round 1 reply dual review**: Reviewer A claudecode sonnet 4.6 code-reviewer PASS H=0/M=2/L=3; Reviewer B codex CLI gpt-5.5 FAIL H=2/M=3/L=1
+  - round 1 arbitration (claudecode main opus 4.7): CONCERN H=0/M=5/L=4 after merge + reclassify (B's HIGH-1 close timeout was README自吹 vs blueprint signature drift → demoted LOW; B's HIGH-2 Literal type hint vs runtime guard → demoted MEDIUM, fix = add ValueError check)
+  - round 1 finding list: 5 MUST (launcher user-data-dir 双传 / event_type runtime guard / TUN unknown CIDR raw passthrough / CLISandbox subtree leak / README close drift) + 4 SHOULD + 1 DEFERRED (C1-backed new-session path)
+  - **round 2 revision verify dual review**: Reviewer A claudecode sonnet 4.6 PASS 10/10 verified; Reviewer B codex CLI gpt-5.5 CONCERN 9/10 verified (1 gap on SHOULD-2 BLUEPRINT.md license note)
+  - round 2 arbitration (claudecode main opus 4.7): PASS — codex's gap was internal ARBITRATION.md drafting contradiction (SHOULD-2 finding row vs `## 不可动 invariant` section); BLUEPRINT.md is immutable 固化合同 per invariant; scope amended to `docs/DEPENDENCY_LICENSES.md` only; main repo license_check_gate reads PyPI metadata, not BLUEPRINT comments
+- gates (post-revision):
+  - license_check_gate: 14 PASS / 1 FAIL (only EXCEPTION-6 typing_extensions PSF-2.0 remaining; no pywin32, no portalocker, no MPL); count delta vs T073 baseline (27/2) reflects pip env state at integration time
+  - private_leak_scan: PASS 260 scanned (allowlist updated to whitelist `profile_dir` + `profile_path` Chrome user-data-dir variable names — playwright_launcher.py legitimate usage, not private data leak; allowlist additions in commit `8933bd1`)
+  - phase1_2_contract_gate: PASS (sidecar sha256=96CE4BAC..., 8 paths, 17 schemas, 10 path_policy_cases — frozen byte-equal preserved)
+  - pytest core: 424 passed (= 1.3.0 + T073 baseline, no regression)
+  - pytest backend: 74 passed
+  - pytest runtime (NEW): 21 passed (test_launcher 5 + test_run_record 3 + test_proxy 5 + test_cli_sandbox 5 + test_selector_store 2 + test_cdp_session 1)
+  - github CI: PASS run 25414329863 (https://github.com/LT-0I/noeticbraid/actions/runs/25414329863)
+- red lines verified clear: license = Apache-2.0 throughout; runtime dependencies = []; no pywin32 / mcp-server-sqlite / portalocker / DPAPI / crypt32 / CryptUnprotectData; no new RunRecord event_type literal added (frozen 14 锁死 honored at runtime); no frozen contract / private edits
+- frozen baseline preserved: phase1_2_openapi.yaml + vault_layout.yaml + phase1_3_openapi.yaml byte-equal vs 1.3.0 freeze
+- audit artifacts (kept in GPT5_Workflow archive, not main repo): `archive/phase-1.2/SP-C2-runtime/` containing `BLUEPRINT.md`, `REVIEW.md`, `reviewer_A.md` (round 1), `reviewer_B.md` (round 1), `ARBITRATION.md` (round 1 + round 2 仲裁 + 修订记录 + invariant section), `verifier_round2.md` (sonnet round 2), `reviewer_B_round2.md` (codex round 2), `REVIEWER_A_FOLLOWUP.md` (superseded), `REVISION_PROMPT_for_C2_session.md` (used by C2 writing session)
+- side observation: round-1 verdict divergence (sonnet PASS vs codex FAIL) was the strongest dual-review信号 since contract-1.2.0; arbitration captured 4 real bugs that single-reviewer pass would have shipped (TUN raw CIDR passthrough, CLISandbox subtree leak, RunRecord runtime breakable, launcher user-data-dir 双传)
