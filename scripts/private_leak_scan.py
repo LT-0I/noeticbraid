@@ -157,6 +157,16 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         frozenset({"account_id", "raw_token", "token_hash", "dpapi_blob", "profile_path", "profile_dir"}),
         "Console read-surface tests seed synthetic forbidden marker names for sanitizer assertions",
     ),
+    AllowlistRule(
+        "packages/noeticbraid-runtime/src/noeticbraid_runtime/browser/playwright_launcher.py",
+        frozenset({"profile_dir", "profile_path"}),
+        "SP-C2 launcher uses profile_dir/profile_path as Chrome user-data-dir variable names; no private data",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-runtime/tests/test_launcher.py",
+        frozenset({"profile_dir"}),
+        "SP-C2 launcher tests use profile_dir as a captured kwarg name in fake launcher callbacks",
+    ),
 )
 
 LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
