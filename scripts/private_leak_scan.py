@@ -236,8 +236,17 @@ LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
         (
             (94, "profile_path"),
             (94, "profile_dir"),
+            (107, "profile_path"),
+            (107, "profile_dir"),
+            (107, "account_id"),
+            (116, "account_id"),
+            (127, "profile_path"),
+            (127, "profile_dir"),
+            (127, "account_id"),
+            (137, "profile_path"),
+            (137, "profile_dir"),
         ),
-        "SP-C2 integration audit prose references profile_path/profile_dir as marker names in retrospective documentation, not private data leak",
+        "SP-C1 + SP-C2 integration audit prose references profile_path/profile_dir/account_id as marker names in retrospective documentation, not private data leak (SP-C1 prose 在 commit 0a946c9 加入但当时漏 allowlist; SP-D integration 时一并补齐)",
     ),
 )
 
