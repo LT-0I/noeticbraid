@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://noeticbraid.local/schemas/contract-1.3.0/write_policy.schema.json",
+  "title": "NoeticBraid Obsidian hub write policy settings",
+  "description": "Contract 1.3.0 write policy settings schema. This settings object is not a vault note and intentionally has no nb_type or contract_version property.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_root_env",
+    "namespace",
+    "allowlist_relative_roots",
+    "denylist_relative_globs",
+    "default_write_mode",
+    "generated_overwrite_allowed",
+    "non_generated_overwrite_allowed",
+    "stable_record_write_mode",
+    "atomic_write_intent"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "obsidian-hub-settings-0.1",
+      "description": "Obsidian hub settings schema family version."
+    },
+    "vault_root_env": {
+      "type": "string",
+      "const": "OBSIDIAN_HUB_VAULT_ROOT",
+      "description": "Environment variable placeholder for the private vault root."
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Vault namespace label, not a path. Must not be an absolute path or credential. Must not contain secrets, tokens, cookies, API keys, or DPAPI blobs."
+    },
+    "allowlist_relative_roots": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*/$"
+      },
+      "minItems": 1,
+      "description": "Allowed relative vault roots. Items must be POSIX-style relative directories, must end with /, and must reject parent traversal and absolute paths."
+    },
+    "denylist_relative_globs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_./*?\\[\\]{}!-]+$"
+      },
+      "minItems": 1,
+      "description": "Denied relative vault glob patterns. Items must reject parent traversal and absolute paths."
+    },
+    "default_write_mode": {
+      "type": "string",
+      "const": "dry_run",
+      "description": "Default write mode is fail-closed dry_run."
+    },
+    "generated_overwrite_allowed": {
+      "type": "boolean",
+      "const": true,
+      "description": "Generated files may be overwritten when all policy gates pass."
+    },
+    "non_generated_overwrite_allowed": {
+      "type": "boolean",
+      "const": false,
+      "description": "Non-generated stable records must not be overwritten."
+    },
+    "stable_record_write_mode": {
+      "type": "string",
+      "const": "create_only",
+      "description": "Stable records use create-only writes."
+    },
+    "atomic_write_intent": {
+      "type": "boolean",
+      "const": true,
+      "description": "Writers must intend atomic write semantics."
+    },
+    "user_dropzone_read_relative_root": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*/$",
+      "description": "Optional user dropzone relative read root. Must end with / and must reject parent traversal and absolute paths."
+    },
+    "append_only_heading_policy": {
+      "type": "string",
+      "const": "status_and_decision_notes_only",
+      "description": "Append-only updates are limited to status and decision note headings."
+    },
+    "sync_log_relative_path": {
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$",
+      "description": "Optional sync-log relative path. Must reject parent traversal and absolute paths. Must not be an absolute path or credential. Must not contain secrets, tokens, cookies, API keys, or DPAPI blobs."
+    },
+    "generated_surface_requires_frontmatter": {
+      "type": "boolean",
+      "const": true,
+      "description": "Generated surfaces must carry frontmatter."
+    },
+    "optional_integrations": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional integration settings; no secret reader or credential material is defined by this contract."
+    }
+  }
+}

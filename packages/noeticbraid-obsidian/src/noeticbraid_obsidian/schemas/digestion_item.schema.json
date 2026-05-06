@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://noeticbraid.local/schemas/contract-1.3.0/digestion_item.schema.json",
+  "title": "NoeticBraid Obsidian hub digestion item frontmatter",
+  "description": "Contract 1.3.0 digestion item frontmatter wrapper aligned to frozen DigestionItem 1.0.0 enums.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "nb_type",
+    "schema_version",
+    "contract_version",
+    "digestion_id",
+    "side_note_id",
+    "created_at",
+    "c_status",
+    "status",
+    "tags"
+  ],
+  "properties": {
+    "nb_type": {
+      "type": "string",
+      "const": "digestion_item",
+      "description": "Vault note type marker."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "obsidian-hub-0.1",
+      "description": "Obsidian hub schema family version."
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "1.3.0",
+      "description": "Contract freeze version for this vault note wrapper."
+    },
+    "digestion_id": {
+      "type": "string",
+      "pattern": "^digestion_[A-Za-z0-9_]+$",
+      "maxLength": 128,
+      "description": "Stable digestion identifier prefixed with digestion_."
+    },
+    "side_note_id": {
+      "type": "string",
+      "pattern": "^note_[A-Za-z0-9_]+$",
+      "maxLength": 128,
+      "description": "Side note identifier from which this digestion item was created."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC-normalized digestion item creation timestamp."
+    },
+    "c_status": {
+      "type": "string",
+      "enum": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "cX"
+      ],
+      "description": "Frozen DigestionItem.c_status value."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "rejected",
+        "snoozed"
+      ],
+      "description": "Frozen DigestionItem.status value."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^noeticbraid/"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "description": "Obsidian tags for NoeticBraid-generated or mirrored notes."
+    },
+    "user_response_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128,
+      "description": "Optional reference string to the user response that updated this item; it must not contain sensitive body content. Must not contain secrets, tokens, cookies, API keys, or DPAPI blobs."
+    },
+    "next_review_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Optional next review timestamp normalized to UTC."
+    }
+  }
+}

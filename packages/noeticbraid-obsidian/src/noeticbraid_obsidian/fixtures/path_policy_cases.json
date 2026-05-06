@@ -1,0 +1,72 @@
+[
+  {
+    "case_id": "allowed_generated_dashboard",
+    "target_path": "NoeticBraid/00_dashboard/today.md",
+    "expected_allowed": true,
+    "write_kind": "generated_dashboard",
+    "reason": "Allowlisted dashboard surface with generated frontmatter requirement."
+  },
+  {
+    "case_id": "allowed_run_record_create_only",
+    "target_path": "NoeticBraid/30_run_ledger/10_runs/2026/05/run_20260502_001.md",
+    "expected_allowed": true,
+    "write_kind": "stable_record_create_only",
+    "reason": "Run ledger mirror path under allowlisted namespace."
+  },
+  {
+    "case_id": "allowed_side_note_create_only",
+    "target_path": "NoeticBraid/20_episodic_memory/20_ai_observations/side_notes/2026/05/note_20260502_001.md",
+    "expected_allowed": true,
+    "write_kind": "stable_record_create_only",
+    "reason": "AI observation path is allowlisted and not user raw."
+  },
+  {
+    "case_id": "allowed_digestion_create_only",
+    "target_path": "NoeticBraid/20_episodic_memory/50_digestion/active/digestion_20260502_001.md",
+    "expected_allowed": true,
+    "write_kind": "stable_record_create_only",
+    "reason": "Digestion item path is allowlisted."
+  },
+  {
+    "case_id": "denied_user_raw",
+    "target_path": "NoeticBraid/20_episodic_memory/10_user_raw/daily_notes/2026-05-02.md",
+    "expected_allowed": false,
+    "write_kind": "protected_user_raw",
+    "reason": "User raw zone is read-only and denied by default."
+  },
+  {
+    "case_id": "denied_obsidian_config",
+    "target_path": "NoeticBraid/.obsidian/plugins/noeticbraid/main.js",
+    "expected_allowed": false,
+    "write_kind": "plugin_or_config",
+    "reason": "Obsidian plugin/config paths are outside module scope."
+  },
+  {
+    "case_id": "denied_git_metadata",
+    "target_path": "NoeticBraid/project/.git/config",
+    "expected_allowed": false,
+    "write_kind": "git_metadata",
+    "reason": "Git metadata paths are denied."
+  },
+  {
+    "case_id": "denied_outside_namespace",
+    "target_path": "OtherNamespace/00_dashboard/today.md",
+    "expected_allowed": false,
+    "write_kind": "outside_namespace",
+    "reason": "Path does not start with the configured namespace."
+  },
+  {
+    "case_id": "denied_parent_traversal_prefix",
+    "target_path": "../NoeticBraid/00_dashboard/today.md",
+    "expected_allowed": false,
+    "write_kind": "path_traversal",
+    "reason": "Parent traversal is denied before allowlist evaluation."
+  },
+  {
+    "case_id": "denied_parent_traversal_inside",
+    "target_path": "NoeticBraid/00_dashboard/../../outside.md",
+    "expected_allowed": false,
+    "write_kind": "path_traversal",
+    "reason": "Traversal inside an otherwise allowlisted path is denied."
+  }
+]

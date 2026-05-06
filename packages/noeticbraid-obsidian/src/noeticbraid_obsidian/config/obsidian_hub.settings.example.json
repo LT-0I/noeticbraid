@@ -1,0 +1,43 @@
+{
+  "schema_version": "obsidian-hub-settings-0.1",
+  "vault_root_env": "OBSIDIAN_HUB_VAULT_ROOT",
+  "namespace": "NoeticBraid",
+  "allowlist_relative_roots": [
+    "NoeticBraid/00_dashboard/",
+    "NoeticBraid/10_program_memory/90_candidates/",
+    "NoeticBraid/20_episodic_memory/20_ai_observations/",
+    "NoeticBraid/20_episodic_memory/30_reports/",
+    "NoeticBraid/20_episodic_memory/40_projects/",
+    "NoeticBraid/20_episodic_memory/50_digestion/",
+    "NoeticBraid/20_episodic_memory/60_artifacts/",
+    "NoeticBraid/30_run_ledger/",
+    "NoeticBraid/60_templates/",
+    "NoeticBraid/70_bases/",
+    "NoeticBraid/80_inbox/ai_staging/",
+    "NoeticBraid/80_inbox/needs_review/",
+    "NoeticBraid/90_system/"
+  ],
+  "user_dropzone_read_relative_root": "NoeticBraid/80_inbox/user_dropzone/",
+  "denylist_relative_globs": [
+    "NoeticBraid/20_episodic_memory/10_user_raw/**",
+    "NoeticBraid/**/.obsidian/**",
+    "NoeticBraid/**/.git/**",
+    "**/../**"
+  ],
+  "default_write_mode": "dry_run",
+  "generated_overwrite_allowed": true,
+  "non_generated_overwrite_allowed": false,
+  "stable_record_write_mode": "create_only",
+  "append_only_heading_policy": "status_and_decision_notes_only",
+  "atomic_write_intent": true,
+  "sync_log_relative_path": "NoeticBraid/90_system/sync_log.md",
+  "generated_surface_requires_frontmatter": true,
+  "optional_integrations": {
+    "obsidian_bases": "optional_display_only",
+    "dataview": "optional_display_only",
+    "local_rest_api": "future_optional_bridge",
+    "obsidian_git": "user_managed_sync",
+    "obsidian_livesync": "user_managed_sync",
+    "custom_plugin": "deferred_optional_surface"
+  }
+}

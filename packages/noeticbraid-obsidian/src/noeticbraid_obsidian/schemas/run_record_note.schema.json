@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://noeticbraid.local/schemas/contract-1.3.0/run_record_note.schema.json",
+  "title": "NoeticBraid Obsidian hub run record note frontmatter",
+  "description": "Contract 1.3.0 run record note frontmatter wrapper aligned to frozen RunRecord 1.0.0 enums. routing_advice body content is not exposed as frontmatter in this schema. If a future contract exposes routing_advice, Must not contain secrets, tokens, cookies, API keys, or DPAPI blobs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "nb_type",
+    "schema_version",
+    "contract_version",
+    "run_id",
+    "task_id",
+    "event_type",
+    "actor",
+    "status",
+    "created_at",
+    "tags"
+  ],
+  "properties": {
+    "nb_type": {
+      "type": "string",
+      "const": "run_record",
+      "description": "Vault note type marker."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "obsidian-hub-0.1",
+      "description": "Obsidian hub schema family version."
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "1.3.0",
+      "description": "Contract freeze version for this vault note wrapper."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run_[A-Za-z0-9_]+$",
+      "maxLength": 128,
+      "description": "Stable run identifier prefixed with run_."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task_[A-Za-z0-9_]+$",
+      "maxLength": 128,
+      "description": "Task identifier linked to this run event."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "task_created",
+        "task_completed",
+        "artifact_created",
+        "source_record_linked",
+        "approval_requested",
+        "security_violation",
+        "routing_advice_recorded",
+        "lesson_candidate_created",
+        "task_failed"
+      ],
+      "description": "Vault display subset of frozen RunRecord.event_type; all values are from the frozen 14-value backend enum."
+    },
+    "actor": {
+      "type": "string",
+      "enum": [
+        "user",
+        "system",
+        "model",
+        "local_review"
+      ],
+      "description": "Frozen RunRecord.actor value."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "recorded",
+        "failed"
+      ],
+      "description": "Frozen RunRecord.status value."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC-normalized run event timestamp."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^noeticbraid/"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "description": "Obsidian tags for NoeticBraid-generated or mirrored notes."
+    },
+    "model_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^model_[A-Za-z0-9_]+$"
+      },
+      "maxItems": 16,
+      "description": "Model references involved in the run event."
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^source_[A-Za-z0-9_]+$"
+      },
+      "maxItems": 64,
+      "description": "Source record references linked to the run event."
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^artifact_[A-Za-z0-9_]+$"
+      },
+      "maxItems": 64,
+      "description": "Artifact references linked to the run event."
+    }
+  }
+}

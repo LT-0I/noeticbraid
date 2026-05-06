@@ -1,13 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "noeticbraid-obsidian"
-version = "0.1.0-stage0"
-description = "Obsidian bridge interfaces, vault boundary scanner, and template surfaces."
+version = "0.1.0"
+description = "SP-D Obsidian vault hub: policy-checked Markdown rendering and local vault writing."
+readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+dependencies = []
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/noeticbraid_obsidian"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+noeticbraid_obsidian = [
+  "schemas/*.schema.json",
+  "fixtures/*.json",
+  "config/*.json",
+  "templates/*.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
