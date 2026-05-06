@@ -101,3 +101,37 @@ edited or removed.
 - frozen baseline preserved: phase1_2_openapi.yaml + vault_layout.yaml + phase1_3_openapi.yaml byte-equal vs 1.3.0 freeze
 - audit artifacts (kept in GPT5_Workflow archive, not main repo): `archive/phase-1.2/SP-C2-runtime/` containing `BLUEPRINT.md`, `REVIEW.md`, `reviewer_A.md` (round 1), `reviewer_B.md` (round 1), `ARBITRATION.md` (round 1 + round 2 仲裁 + 修订记录 + invariant section), `verifier_round2.md` (sonnet round 2), `reviewer_B_round2.md` (codex round 2), `REVIEWER_A_FOLLOWUP.md` (superseded), `REVISION_PROMPT_for_C2_session.md` (used by C2 writing session)
 - side observation: round-1 verdict divergence (sonnet PASS vs codex FAIL) was the strongest dual-review信号 since contract-1.2.0; arbitration captured 4 real bugs that single-reviewer pass would have shipped (TUN raw CIDR passthrough, CLISandbox subtree leak, RunRecord runtime breakable, launcher user-data-dir 双传)
+
+## SP-C1 Account Pool & Quota integration (2026-05-05, full v3.3 dual-review × 2 rounds)
+
+- integration commit `b11f203` (HEAD before this audit prose), preceded by allowlist commit `6590491` (private_leak_scan rules: SP-C1 `account_id` schema field + SP-C2 audit_trail prose `profile_path`/`profile_dir` markers — both legitimate non-leak references), tag `phase-1.2-SP-C1-account-quota-1.0.0` → `b11f203`, pushed origin main + tag
+- source: standalone repo `LT-0I/noeticbraid-sp-C1-account-quota` commit `551ff15` @ tag `sp-c1-account-quota-1.0.0` (sp-repos working tree at `C:/Users/13080/Desktop/HBA/sp-repos/noeticbraid-sp-C1-account-quota/`)
+- module: SP-C1 = `noeticbraid_core.account` 子包 **首次** 并入 `packages/noeticbraid-core/src/noeticbraid_core/account/` (~1048+ LOC = 5 src + `__init__.py`); 旧 stage-1.5 module-account-quota-v0 (integration commit `e45c1694`) 仅 archived 在 `archive/modules/`, 从未并 packages, SP-C1 是真正首次 src 落地
+- public surface:
+  - `AccountRegistryRecord` / `QuotaStateRecord` / `QuotaEventRecord` / `PublicProfileSummary` / `SessionHealthRecord` Pydantic v2 模型 (全部 `frozen=True` + `extra="forbid"`)
+  - `AccountQuotaStore.load_registry()` / `update_state(updater)` / `append_event(event)` 单进程 `threading.Lock` 并发安全 (跨进程 advisory lock = DEFERRED 1.3.x backlog)
+  - `select_account()` quota-aware 选择器 (空池 / 全 cooldown 失败模式 fail-closed)
+  - `record_usage(...)` quota signal + secret redaction (sanitize_reason + observed_text_hash 持久化)
+  - `SessionHealthProbe` Protocol + `check_session_health(now_fn=...)` + `record_session_health()` (probe 返 dict 时 `payload.setdefault("checked_at", now_fn())` 让 fake clock 注入真生效)
+  - `to_account_pool_profiles()` / `build_account_pool_payload()` frozen `{"profiles": [...]}` adapter (AccountPoolDraft 1.2.0 contract 严守, 顶层不增 `quota_state` / `session_health` / `account_id`)
+  - `_atomic_write_json` 异常 chaining (`from exc`, 区分 `(TypeError, ValueError, JSONDecodeError)` malformed vs `(PermissionError, OSError)` 基础设施错穿透)
+  - 红线: 不读 cookie / 不启 browser / 不做 OAuth rotation / 不读 tokens.sqlite / 不引 pywin32 / mcp-server-sqlite / portalocker / DPAPI
+- v3.3 dual-review × 2 rounds:
+  - **round 1 reply dual review**: Reviewer A claudecode sonnet 4.6 code-reviewer PASS H=0/M=4/L=3; Reviewer B codex CLI gpt-5.5 CONCERN H=0/M=2/L=2
+  - round 1 arbitration (claudecode main opus 4.7): CONCERN H=0/M=5/L=5+D1 after merge + reclassify (B#3 now_fn LOW→MED 注入失效是 testability + 时序 contract 漂移; B#4 test 缺口 LOW→MED 合一为 MUST-5; A#1 `_as_aware_utc` DRY MED→LOW byte-identical 重复非真伤; B#2 frozen 范围争议折中 — `PublicProfileSummary` MUST 共识 / 其他 records SHOULD defense-in-depth)
+  - round 1 finding list: 5 MUST (single-process `threading.Lock` + store API 化 / `now_fn` 注入修复 / `PublicProfileSummary` `frozen=True` / `_atomic_write_json` 异常 chaining / 7 new tests) + 5 SHOULD (`_as_aware_utc` DRY / 其他 records `frozen=True` + `SessionHealthRecord._hash_observed_text` `model_validator(mode="before")` 改造 / `_selection_key` `-priority` 注释 / `_SECRET_WORD_RE` bare session intentional 注释 / unused `timedelta` import 删除) + 1 DEFERRED (跨进程 advisory file lock + 多进程压测 → contract 1.3.x backlog)
+  - **round 2 revision verify dual review**: Verifier A claudecode sonnet 4.6 PASS verified=11/11 gaps=0 new_findings=0; Reviewer B codex CLI gpt-5.5 PASS verified=11 gaps=0 regressions=0 — 双审一致, 无 divergence, 无 round-1 漏审
+  - round 2 arbitration (claudecode main opus 4.7): PASS — 5 MUST + 5 SHOULD 全 LANDED (实装 8 new tests 比原 7 多 1 now_fn regression cov), 1 DEFERRED 已记录 `docs/IMPLEMENTATION_NOTES.md:31-33` + `store.py:43-45` docstring + ARBITRATION.md, 红线零违规, 蓝图零漂移, 零 incidental change
+- gates (post-integration):
+  - license_check_gate: N/A — 脚本在 main repo 不存在 (SP-C2 README 提及的脚本可能在 sp-repo 或已重构, 本周期未跑); SP-C1 sp-repo `docs/DEPENDENCY_LICENSES.md` 已 round-2 review 审过, Apache-2.0 (主) + MIT (依赖) only, 无 PSF/GPL/MPL/EPL/AGPL
+  - private_leak_scan: PASS 274 scanned (allowlist 由 commit `6590491` 增量 — SP-C1 `account_id` 是 `AccountRegistryRecord.account_id: str` 合法 schema 字段名 + SP-C2 audit prose `profile_path`/`profile_dir` 字面引用 marker 名为追溯文档非真私数据)
+  - phase1_2_contract_gate: PASS (sidecar sha256=96CE4BAC, 8 paths, 17 schemas, 10 path_policy_cases — frozen byte-equal preserved)
+  - pytest core: 442 passed (= 424 baseline + 18 SP-C1 NEW: test_account_pool_bridge 2 + test_enforcer 4 + test_session_health 4 + test_store 8)
+  - pytest backend: 74 passed (no regression)
+  - pytest runtime: 21 passed (no regression vs SP-C2 baseline)
+  - github CI: PASS run 25417202696 (26s) https://github.com/LT-0I/noeticbraid/actions/runs/25417202696
+- red lines verified clear: license = Apache-2.0 throughout; main repo `noeticbraid-core/pyproject.toml` pydantic dep already declared (核心包既有); no pywin32 / mcp-server-sqlite / portalocker / DPAPI / crypt32 / CryptUnprotectData; no cookie I/O / browser launch / OAuth rotation / tokens.sqlite read in src; no frozen contract / private edits; bridge `{"profiles": [...]}` 顶层 shape preserved
+- frozen baseline preserved: `phase1_2_openapi.yaml` + `vault_layout.yaml` + `phase1_3_openapi.yaml` byte-equal vs 1.3.0 freeze
+- audit artifacts (kept in GPT5_Workflow archive, not main repo): `archive/phase-1.2/SP-C1-account-quota/` containing `BLUEPRINT.md`, `REVIEW.md`, `ARBITRATION.md` (round 1 + round 2 仲裁 + 修订记录 + invariant section), `REVISION_PROMPT_for_C1_session.md`, `round-1/{reviewer_A.md, reviewer_B.md}`, `round-2/{verifier_round2.md, reviewer_B_round2.md}`, `README.md` (cycle summary)
+- side observation 1: round-1 verdict divergence (sonnet PASS vs codex CONCERN) 持续证明 contract-1.2.0 之后双审制度价值 — 仲裁层捕获 5 项单审会 ship 的真伤 (B#3 `now_fn` 注入失效 testability + 时序漂移, B#4 test 覆盖缺口 7 项, B#1 并发锁缺失 read-modify-write race, A#2 异常吞噬丢诊断, A#4 `PublicProfileSummary` mutation 风险). 类比 SP-C2 round-1 PASS vs FAIL 的 4 真伤记录, SP-C1 这次是 PASS vs CONCERN 但仍捕获 5 项, 双审制度二次验证.
+- side observation 2: SP-C2 commit `5a6776e` 写入 audit prose 含 marker 字面名 (`profile_path` / `profile_dir`), 但当时漏加对应 LINE_ALLOWLIST_RULES — 导致本地 `private_leak_scan.py` 在 `5a6776e` 之后持续 FAIL, CI run 25414329863 因 CI 跑 Ubuntu 独立环境 + pip install 覆盖能 PASS, 本地脚本不 PASS. 本周期 commit `6590491` 一并修复. 此发现说明 CI 与本地 gate 行为存在 drift, 长期评估 — 选项: (a) CI 加 leak scan step 强制 sync, (b) 本地 pre-commit hook 强制本地 leak scan PASS 才允许 commit, (c) leak scan tool 自身做 docs/audit_trail.md 类自描述文档的智能识别 — 不在本周期决策, 列入 backlog
