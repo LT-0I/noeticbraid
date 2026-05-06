@@ -167,6 +167,11 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         frozenset({"profile_dir"}),
         "SP-C2 launcher tests use profile_dir as a captured kwarg name in fake launcher callbacks",
     ),
+    AllowlistRule(
+        "packages/noeticbraid-core/tests/account/test_store.py",
+        frozenset({"account_id"}),
+        "SP-C1 account store tests use account_id as a legitimate schema field name (AccountRegistryRecord.account_id: str); no private data",
+    ),
 )
 
 LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
@@ -225,6 +230,14 @@ LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
             (54, "quota_window"),
         ),
         "Stage 2.4 smoke public-payload forbidden marker tuple",
+    ),
+    *_line_rules(
+        "docs/audit_trail.md",
+        (
+            (94, "profile_path"),
+            (94, "profile_dir"),
+        ),
+        "SP-C2 integration audit prose references profile_path/profile_dir as marker names in retrospective documentation, not private data leak",
     ),
 )
 
