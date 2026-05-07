@@ -266,6 +266,16 @@ LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
         ),
         "SP-C1 + SP-C2 + SP-D integration audit prose references profile_path/profile_dir/account_id as marker names in retrospective documentation, not private data leak (SP-C1 prose 在 commit 0a946c9 加入但当时漏 allowlist; SP-D integration 时一并补齐, 含 SP-D prose 自身也引用了这些 marker 名作为追溯叙述)",
     ),
+    *_line_rules(
+        "packages/noeticbraid-workflow-scheduler/REVISION_RECORD.md",
+        (
+            (23, "raw_token"),
+            (23, "dpapi_blob"),
+            (63, "raw_token"),
+            (63, "dpapi_blob"),
+        ),
+        "SP-E round-2 revision record references raw_token/dpapi_blob as marker names when describing redact_value key denylist, not private data leak",
+    ),
 )
 
 
