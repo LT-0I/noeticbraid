@@ -1,0 +1,31 @@
+# 强制 LF 行尾 (Linux 主开发, Windows 适配, 跨平台 byte-equal contract gates 关键)
+* text=auto eol=lf
+
+# 二进制
+*.zip binary
+*.tar binary
+*.gz binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.sqlite binary
+*.db binary
+
+# 显式 LF 文本 (frozen contract / OpenAPI / sidecar / manifest 都依赖 byte-equal)
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.sh text eol=lf
+
+# Windows 特定保留 CRLF (兼容 Linux 上 pwsh)
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

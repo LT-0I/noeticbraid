@@ -5,6 +5,9 @@ state/
 *.secret
 *.key
 *.pem
+tokens.sqlite
+*.dpapi*
+*.encrypted
 
 # Private subtree: keep placeholder READMEs (public-safe boundary docs),
 # exclude actual private code/data that lands later
