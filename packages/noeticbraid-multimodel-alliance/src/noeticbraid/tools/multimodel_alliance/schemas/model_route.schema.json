@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://noeticbraid.local/schemas/module-multimodel-alliance/model_route.schema.json",
+  "title": "ModelRoute",
+  "description": "Module-local draft record for deciding which model alliance route is appropriate for a task.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "route_id",
+    "task_id",
+    "route_type",
+    "trigger",
+    "risk_level",
+    "required_capabilities",
+    "selected_models",
+    "rejected_models",
+    "run_refs",
+    "artifact_refs",
+    "source_refs",
+    "status",
+    "rationale"
+  ],
+  "properties": {
+    "route_id": {
+      "type": "string",
+      "pattern": "^route_[A-Za-z0-9_]+$",
+      "maxLength": 128
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task_[A-Za-z0-9_]+$",
+      "maxLength": 128
+    },
+    "workflow_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^workflow_[A-Za-z0-9_]+$",
+      "maxLength": 128,
+      "default": null,
+      "description": "Optional link to a Workflow; null or absent for ad-hoc routes."
+    },
+    "route_type": {
+      "type": "string",
+      "enum": [
+        "single_model",
+        "producer_reviewer",
+        "dual_review",
+        "multi_review",
+        "manual_convergence"
+      ]
+    },
+    "trigger": {
+      "type": "string",
+      "enum": [
+        "user_request",
+        "task_card",
+        "workflow_step",
+        "review_gate",
+        "failure_recovery"
+      ]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "disputed"
+      ]
+    },
+    "required_capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "enum": [
+          "planning",
+          "research",
+          "writing",
+          "coding",
+          "code_review",
+          "adversary",
+          "source_audit",
+          "browser",
+          "file_io",
+          "verification",
+          "security_review",
+          "convergence"
+        ]
+      }
+    },
+    "selected_models": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model_ref",
+          "role",
+          "invocation",
+          "reason"
+        ],
+        "properties": {
+          "model_ref": {
+            "type": "string",
+            "pattern": "^model_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "orchestrator",
+              "planner",
+              "researcher",
+              "producer",
+              "writer",
+              "coder",
+              "reviewer",
+              "adversary",
+              "source_auditor",
+              "verifier",
+              "convergence_editor",
+              "human_decision"
+            ]
+          },
+          "invocation": {
+            "type": "string",
+            "enum": [
+              "local_session",
+              "codex_cli",
+              "chatgpt_web",
+              "subagent",
+              "manual"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        }
+      }
+    },
+    "rejected_models": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model_ref",
+          "reason"
+        ],
+        "properties": {
+          "model_ref": {
+            "type": "string",
+            "pattern": "^model_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        }
+      }
+    },
+    "run_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9_]+$",
+        "maxLength": 128
+      }
+    },
+    "artifact_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "pattern": "^artifact_[A-Za-z0-9_]+$",
+        "maxLength": 128
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "pattern": "^source_[A-Za-z0-9_]+$",
+        "maxLength": 128
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "selected",
+        "invoked",
+        "superseded",
+        "failed"
+      ]
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    }
+  }
+}

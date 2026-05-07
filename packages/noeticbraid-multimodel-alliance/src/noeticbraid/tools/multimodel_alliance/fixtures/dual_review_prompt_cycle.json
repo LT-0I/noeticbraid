@@ -1,0 +1,257 @@
+{
+  "fixture_id": "fixture_dual_review_prompt_cycle",
+  "description": "A medium-risk prompt drafting cycle where one producer artifact is reviewed independently by two reviewers and converged after all critical objections are handled.",
+  "model_route": {
+    "route_id": "route_prompt_dual_review",
+    "task_id": "task_prompt_cycle",
+    "route_type": "dual_review",
+    "trigger": "workflow_step",
+    "risk_level": "medium",
+    "required_capabilities": [
+      "planning",
+      "writing",
+      "code_review",
+      "source_audit",
+      "convergence"
+    ],
+    "selected_models": [
+      {
+        "model_ref": "model_claude_main",
+        "role": "producer",
+        "invocation": "local_session",
+        "reason": "Drafts the prompt boundary and keeps the module scoped to bundle evidence."
+      },
+      {
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "invocation": "subagent",
+        "reason": "Reviews logic, acceptance coverage, and prompt contradictions."
+      },
+      {
+        "model_ref": "model_codex_cli",
+        "role": "reviewer",
+        "invocation": "codex_cli",
+        "reason": "Performs independent local source audit and checks verifier handoff details."
+      },
+      {
+        "model_ref": "model_claude_main",
+        "role": "convergence_editor",
+        "invocation": "local_session",
+        "reason": "Merges reviewer objections into accepted fixes, rejected concerns, and next actions."
+      }
+    ],
+    "rejected_models": [
+      {
+        "model_ref": "model_browser_runtime",
+        "reason": "No browser automation is needed for a file-scoped module prompt review."
+      }
+    ],
+    "run_refs": [
+      "run_prompt_route",
+      "run_prompt_reviews",
+      "run_prompt_convergence"
+    ],
+    "artifact_refs": [
+      "artifact_prompt_draft",
+      "artifact_review_a",
+      "artifact_review_b",
+      "artifact_arbitration"
+    ],
+    "source_refs": [
+      "source_t011_design",
+      "source_stage2_style_prompt"
+    ],
+    "status": "selected",
+    "rationale": "The task is higher than a simple single-model rewrite because bundle boundaries, manifest honesty, and verifier gates must be checked by two independent reviewers before convergence."
+  },
+  "debate": {
+    "debate_id": "debate_prompt_dual_review",
+    "task_id": "task_prompt_cycle",
+    "route_id": "route_prompt_dual_review",
+    "participants": [
+      {
+        "participant_id": "participant_prompt_producer",
+        "model_ref": "model_claude_main",
+        "role": "producer",
+        "expected_output": "plan"
+      },
+      {
+        "participant_id": "participant_prompt_reviewer_a",
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "expected_output": "verdict"
+      },
+      {
+        "participant_id": "participant_prompt_reviewer_b",
+        "model_ref": "model_codex_cli",
+        "role": "reviewer",
+        "expected_output": "verdict"
+      }
+    ],
+    "rounds": [
+      {
+        "round_id": "round_prompt_draft",
+        "participant_id": "participant_prompt_producer",
+        "artifact_ref": "artifact_prompt_draft",
+        "round_type": "production",
+        "verdict": "informational",
+        "severity_summary": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0
+        },
+        "objections": []
+      },
+      {
+        "round_id": "round_prompt_review_a",
+        "participant_id": "participant_prompt_reviewer_a",
+        "artifact_ref": "artifact_review_a",
+        "round_type": "review",
+        "verdict": "concern",
+        "severity_summary": {
+          "critical": 0,
+          "high": 1,
+          "medium": 1,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_prompt_inventory_missing",
+            "severity": "high",
+            "status": "accepted",
+            "summary": "The response package must include a mechanical inventory with digests for every non-manifest entry.",
+            "evidence_refs": [
+              "artifact_review_a"
+            ]
+          },
+          {
+            "objection_id": "obj_model_registry_premature",
+            "severity": "medium",
+            "status": "rejected",
+            "summary": "A separate model registry might be cleaner, but it would add an abstraction not required by the current module.",
+            "evidence_refs": [
+              "artifact_review_a"
+            ]
+          }
+        ]
+      },
+      {
+        "round_id": "round_prompt_review_b",
+        "participant_id": "participant_prompt_reviewer_b",
+        "artifact_ref": "artifact_review_b",
+        "round_type": "review",
+        "verdict": "concern",
+        "severity_summary": {
+          "critical": 1,
+          "high": 0,
+          "medium": 0,
+          "low": 1
+        },
+        "objections": [
+          {
+            "objection_id": "obj_github_commit_pinning",
+            "severity": "critical",
+            "status": "accepted",
+            "summary": "External multi-agent research must be pinned to full commit identifiers before it can inform module decisions.",
+            "evidence_refs": [
+              "artifact_review_b"
+            ]
+          },
+          {
+            "objection_id": "obj_fixture_names_verbose",
+            "severity": "low",
+            "status": "rejected",
+            "summary": "Fixture ids are verbose but improve auditability and deterministic review.",
+            "evidence_refs": [
+              "artifact_review_b"
+            ]
+          }
+        ]
+      }
+    ],
+    "verdicts": [
+      {
+        "participant_id": "participant_prompt_producer",
+        "verdict": "informational",
+        "summary": "Prompt draft produced for reviewer inspection."
+      },
+      {
+        "participant_id": "participant_prompt_reviewer_a",
+        "verdict": "concern",
+        "summary": "Package inventory and abstraction boundaries needed explicit treatment."
+      },
+      {
+        "participant_id": "participant_prompt_reviewer_b",
+        "verdict": "concern",
+        "summary": "Research citations needed full commit pinning before acceptance."
+      }
+    ],
+    "severity_summary": {
+      "critical": 1,
+      "high": 1,
+      "medium": 1,
+      "low": 1
+    },
+    "unresolved_objections": [],
+    "status": "converged"
+  },
+  "convergence": {
+    "convergence_id": "convergence_prompt_dual_review",
+    "task_id": "task_prompt_cycle",
+    "debate_id": "debate_prompt_dual_review",
+    "recommendation": "Accept the dual-review prompt cycle after adding digest inventory requirements, full commit pinning for research citations, and a clear statement that no model registry is introduced in this module round.",
+    "accepted_objections": [
+      {
+        "objection_id": "obj_prompt_inventory_missing",
+        "resolution": "The manifest output contract requires SHA-256 inventory rows for every non-manifest zip entry.",
+        "evidence_refs": [
+          "artifact_arbitration"
+        ]
+      },
+      {
+        "objection_id": "obj_github_commit_pinning",
+        "resolution": "GitHub citations require repository URL, license, inspected paths, full commit identifier, access date, adopted pattern, and a no-copy statement.",
+        "evidence_refs": [
+          "artifact_arbitration"
+        ]
+      }
+    ],
+    "rejected_objections": [
+      {
+        "objection_id": "obj_model_registry_premature",
+        "rejection_reason": "Plain model_ref strings are sufficient because T011 leaves ModelProfile as an open question and the module is file-based.",
+        "evidence_refs": [
+          "artifact_arbitration"
+        ]
+      },
+      {
+        "objection_id": "obj_fixture_names_verbose",
+        "rejection_reason": "Long fixture ids are acceptable because deterministic auditability is more important than brevity here.",
+        "evidence_refs": [
+          "artifact_arbitration"
+        ]
+      }
+    ],
+    "unresolved_disagreements": [],
+    "user_decision_requirements": [],
+    "next_actions": [
+      {
+        "action_id": "action_build_module_bundle",
+        "owner": "local_integrator",
+        "action": "Use the accepted prompt to build module-local schemas, fixtures, validator, tests, and manifest package.",
+        "status": "planned"
+      }
+    ],
+    "memory_candidates": [
+      {
+        "candidate_id": "memory_prompt_dual_review_policy",
+        "summary": "Medium-risk module prompt cycles should use independent dual review before convergence.",
+        "source_refs": [
+          "source_t011_design"
+        ]
+      }
+    ],
+    "decision_status": "accepted"
+  }
+}

@@ -1,0 +1,316 @@
+{
+  "fixture_id": "fixture_multi_review_high_risk_gate",
+  "description": "A high-risk contract-boundary task requiring producer, reviewer, adversary, source auditor, and verifier evidence before acceptance.",
+  "model_route": {
+    "route_id": "route_high_risk_contract_gate",
+    "task_id": "task_high_risk_contract_gate",
+    "route_type": "multi_review",
+    "trigger": "review_gate",
+    "risk_level": "high",
+    "required_capabilities": [
+      "coding",
+      "code_review",
+      "adversary",
+      "source_audit",
+      "verification",
+      "security_review",
+      "convergence"
+    ],
+    "selected_models": [
+      {
+        "model_ref": "model_gpta_web",
+        "role": "producer",
+        "invocation": "chatgpt_web",
+        "reason": "Produces the module patch from a bounded context bundle."
+      },
+      {
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "invocation": "subagent",
+        "reason": "Checks logic, schema shape, and frozen-boundary compliance."
+      },
+      {
+        "model_ref": "model_codex_cli",
+        "role": "adversary",
+        "invocation": "codex_cli",
+        "reason": "Performs local source audit and searches for private-data or contract-boundary risks."
+      },
+      {
+        "model_ref": "model_local_verifier",
+        "role": "verifier",
+        "invocation": "local_session",
+        "reason": "Runs local commands after GPT-A delivery and records command evidence outside this response."
+      },
+      {
+        "model_ref": "model_claude_main",
+        "role": "convergence_editor",
+        "invocation": "local_session",
+        "reason": "Accepts, rejects, or carries objections without relying on majority vote."
+      }
+    ],
+    "rejected_models": [
+      {
+        "model_ref": "model_agent_framework_runtime",
+        "reason": "Adding an orchestration dependency would violate the lightweight module boundary."
+      }
+    ],
+    "run_refs": [
+      "run_contract_route",
+      "run_contract_debate",
+      "run_contract_convergence"
+    ],
+    "artifact_refs": [
+      "artifact_response_zip",
+      "artifact_review_contract",
+      "artifact_review_adversary",
+      "artifact_verifier_plan",
+      "artifact_arbitration_high_risk"
+    ],
+    "source_refs": [
+      "source_t011_design",
+      "source_phase12_openapi",
+      "source_runrecord_py",
+      "source_stage24_archive"
+    ],
+    "status": "invoked",
+    "rationale": "Contract, security, and verifier boundaries require multi-review plus evidence gating; a single producer or simple dual review is insufficient."
+  },
+  "debate": {
+    "debate_id": "debate_high_risk_contract_gate",
+    "task_id": "task_high_risk_contract_gate",
+    "route_id": "route_high_risk_contract_gate",
+    "participants": [
+      {
+        "participant_id": "participant_high_risk_producer",
+        "model_ref": "model_gpta_web",
+        "role": "producer",
+        "expected_output": "patch"
+      },
+      {
+        "participant_id": "participant_high_risk_reviewer",
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "expected_output": "verdict"
+      },
+      {
+        "participant_id": "participant_high_risk_adversary",
+        "model_ref": "model_codex_cli",
+        "role": "adversary",
+        "expected_output": "risk_list"
+      },
+      {
+        "participant_id": "participant_high_risk_verifier",
+        "model_ref": "model_local_verifier",
+        "role": "verifier",
+        "expected_output": "validation_result"
+      }
+    ],
+    "rounds": [
+      {
+        "round_id": "round_high_risk_patch",
+        "participant_id": "participant_high_risk_producer",
+        "artifact_ref": "artifact_response_zip",
+        "round_type": "production",
+        "verdict": "informational",
+        "severity_summary": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0
+        },
+        "objections": []
+      },
+      {
+        "round_id": "round_high_risk_reviewer",
+        "participant_id": "participant_high_risk_reviewer",
+        "artifact_ref": "artifact_review_contract",
+        "round_type": "review",
+        "verdict": "concern",
+        "severity_summary": {
+          "critical": 1,
+          "high": 1,
+          "medium": 0,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_frozen_contract_boundary",
+            "severity": "critical",
+            "status": "accepted",
+            "summary": "The module must not modify or include frozen OpenAPI contract files as patch artifacts.",
+            "evidence_refs": [
+              "artifact_review_contract"
+            ]
+          },
+          {
+            "objection_id": "obj_runrecord_mutation",
+            "severity": "high",
+            "status": "accepted",
+            "summary": "RunRecord mapping must remain documentation-only until a separate contract change is approved.",
+            "evidence_refs": [
+              "artifact_review_contract"
+            ]
+          }
+        ]
+      },
+      {
+        "round_id": "round_high_risk_adversary",
+        "participant_id": "participant_high_risk_adversary",
+        "artifact_ref": "artifact_review_adversary",
+        "round_type": "adversarial_review",
+        "verdict": "concern",
+        "severity_summary": {
+          "critical": 1,
+          "high": 0,
+          "medium": 1,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_sensitive_marker_risk",
+            "severity": "critical",
+            "status": "accepted",
+            "summary": "Fixtures and manifest text must avoid sensitive material and machine-local details while the validator checks for marker-shaped leaks.",
+            "evidence_refs": [
+              "artifact_review_adversary"
+            ]
+          },
+          {
+            "objection_id": "obj_dependency_scope",
+            "severity": "medium",
+            "status": "accepted",
+            "summary": "The validator must stay stdlib-only and must not install agent frameworks used during research.",
+            "evidence_refs": [
+              "artifact_review_adversary"
+            ]
+          }
+        ]
+      },
+      {
+        "round_id": "round_high_risk_verifier",
+        "participant_id": "participant_high_risk_verifier",
+        "artifact_ref": "artifact_verifier_plan",
+        "round_type": "verification",
+        "verdict": "partial",
+        "severity_summary": {
+          "critical": 0,
+          "high": 1,
+          "medium": 0,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_local_gates_not_run_by_gpta",
+            "severity": "high",
+            "status": "accepted",
+            "summary": "Local pytest and validator command results must not be claimed by GPT-A unless credible command evidence is included.",
+            "evidence_refs": [
+              "artifact_verifier_plan"
+            ]
+          }
+        ]
+      }
+    ],
+    "verdicts": [
+      {
+        "participant_id": "participant_high_risk_producer",
+        "verdict": "informational",
+        "summary": "Producer artifact is subject to high-risk review and local gates."
+      },
+      {
+        "participant_id": "participant_high_risk_reviewer",
+        "verdict": "concern",
+        "summary": "Frozen contract and RunRecord boundaries require explicit documentation-only treatment."
+      },
+      {
+        "participant_id": "participant_high_risk_adversary",
+        "verdict": "concern",
+        "summary": "Sensitive-material and dependency risks must be enforced by fixtures and validator."
+      },
+      {
+        "participant_id": "participant_high_risk_verifier",
+        "verdict": "partial",
+        "summary": "Local command gates remain outside GPT-A claims and must be run by the verifier."
+      }
+    ],
+    "severity_summary": {
+      "critical": 2,
+      "high": 2,
+      "medium": 1,
+      "low": 0
+    },
+    "unresolved_objections": [],
+    "status": "converged"
+  },
+  "convergence": {
+    "convergence_id": "convergence_high_risk_contract_gate",
+    "task_id": "task_high_risk_contract_gate",
+    "debate_id": "debate_high_risk_contract_gate",
+    "recommendation": "Accept the module package only as a file-scoped draft after confirming that frozen contracts and RunRecord implementation are not patched, sensitive-material checks are enforced, and local verifier gates remain explicitly not claimed by GPT-A.",
+    "accepted_objections": [
+      {
+        "objection_id": "obj_frozen_contract_boundary",
+        "resolution": "The OpenAPI work is represented only as an advisory module-local change request and no frozen contract file is included as a patch path.",
+        "evidence_refs": [
+          "artifact_arbitration_high_risk"
+        ]
+      },
+      {
+        "objection_id": "obj_runrecord_mutation",
+        "resolution": "RunRecord mapping is documentation-only and proposes future event types without modifying the frozen model.",
+        "evidence_refs": [
+          "artifact_arbitration_high_risk"
+        ]
+      },
+      {
+        "objection_id": "obj_sensitive_marker_risk",
+        "resolution": "Fixtures contain no sensitive material; the validator recursively scans fixture content for marker-shaped leaks.",
+        "evidence_refs": [
+          "artifact_arbitration_high_risk"
+        ]
+      },
+      {
+        "objection_id": "obj_dependency_scope",
+        "resolution": "The validator uses only pathlib, json, re, sys, and copy-like stdlib behavior; external frameworks are research inputs only.",
+        "evidence_refs": [
+          "artifact_arbitration_high_risk"
+        ]
+      },
+      {
+        "objection_id": "obj_local_gates_not_run_by_gpta",
+        "resolution": "Manifest acceptance criteria mark local pytest and validator commands as NOT-RUN for the verifier to execute.",
+        "evidence_refs": [
+          "artifact_arbitration_high_risk"
+        ]
+      }
+    ],
+    "rejected_objections": [],
+    "unresolved_disagreements": [],
+    "user_decision_requirements": [],
+    "next_actions": [
+      {
+        "action_id": "action_local_pytest_gate",
+        "owner": "verifier",
+        "action": "Run pytest for the module tests after unpacking the response zip.",
+        "status": "planned"
+      },
+      {
+        "action_id": "action_local_validator_gate",
+        "owner": "verifier",
+        "action": "Run the stdlib validator command after unpacking the response zip.",
+        "status": "planned"
+      }
+    ],
+    "memory_candidates": [
+      {
+        "candidate_id": "memory_high_risk_evidence_gate",
+        "summary": "High-risk contract or security tasks require multi-review plus a local evidence gate before integration claims are accepted.",
+        "source_refs": [
+          "source_t011_design",
+          "source_stage24_archive"
+        ]
+      }
+    ],
+    "decision_status": "accepted"
+  }
+}

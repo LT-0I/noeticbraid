@@ -1,0 +1,15 @@
+{
+  "task_id": "task_write_note",
+  "task_type": "writing",
+  "risk_hint": "low",
+  "required_capabilities": ["writing"],
+  "available_models": [
+    {
+      "model_ref": "model_writer",
+      "role": "writer",
+      "roles": ["writer"],
+      "capabilities": ["writing"],
+      "invocation": "local_session"
+    }
+  ]
+}

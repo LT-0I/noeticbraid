@@ -1,0 +1,260 @@
+{
+  "fixture_id": "fixture_manual_convergence_disputed",
+  "description": "A disputed route where reviewers disagree and the convergence editor carries a critical objection to an explicit user decision instead of accepting by majority.",
+  "model_route": {
+    "route_id": "route_disputed_manual_convergence",
+    "task_id": "task_disputed_convergence",
+    "route_type": "manual_convergence",
+    "trigger": "review_gate",
+    "risk_level": "disputed",
+    "required_capabilities": [
+      "planning",
+      "code_review",
+      "adversary",
+      "verification",
+      "convergence"
+    ],
+    "selected_models": [
+      {
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "invocation": "subagent",
+        "reason": "Argues the module is acceptable with minor follow-up actions."
+      },
+      {
+        "model_ref": "model_codex_cli",
+        "role": "adversary",
+        "invocation": "codex_cli",
+        "reason": "Raises an incompatible conclusion about whether the route may be accepted."
+      },
+      {
+        "model_ref": "model_claude_main",
+        "role": "convergence_editor",
+        "invocation": "local_session",
+        "reason": "Frames the unresolved disagreement as a user decision requirement."
+      },
+      {
+        "model_ref": "model_user",
+        "role": "orchestrator",
+        "invocation": "manual",
+        "reason": "Final authority for disputed scope or risk acceptance."
+      }
+    ],
+    "rejected_models": [
+      {
+        "model_ref": "model_extra_reviewer_pool",
+        "reason": "Adding more reviewers would not resolve the policy conflict without a user decision."
+      }
+    ],
+    "run_refs": [
+      "run_disputed_route",
+      "run_disputed_reviews",
+      "run_disputed_convergence"
+    ],
+    "artifact_refs": [
+      "artifact_review_accept",
+      "artifact_review_block",
+      "artifact_manual_convergence"
+    ],
+    "source_refs": [
+      "source_t011_design",
+      "source_stage2_style_prompt"
+    ],
+    "status": "selected",
+    "rationale": "Disagreement is about acceptance policy, not missing reviewer count; the route must carry the dispute to a user decision rather than using model majority vote."
+  },
+  "debate": {
+    "debate_id": "debate_disputed_manual_convergence",
+    "task_id": "task_disputed_convergence",
+    "route_id": "route_disputed_manual_convergence",
+    "participants": [
+      {
+        "participant_id": "participant_disputed_reviewer_a",
+        "model_ref": "model_claude_reviewer_a",
+        "role": "reviewer",
+        "expected_output": "verdict"
+      },
+      {
+        "participant_id": "participant_disputed_reviewer_b",
+        "model_ref": "model_codex_cli",
+        "role": "adversary",
+        "expected_output": "minority_opinion"
+      },
+      {
+        "participant_id": "participant_disputed_convergence",
+        "model_ref": "model_claude_main",
+        "role": "convergence_editor",
+        "expected_output": "report"
+      }
+    ],
+    "rounds": [
+      {
+        "round_id": "round_disputed_reviewer_a",
+        "participant_id": "participant_disputed_reviewer_a",
+        "artifact_ref": "artifact_review_accept",
+        "round_type": "review",
+        "verdict": "pass",
+        "severity_summary": {
+          "critical": 0,
+          "high": 0,
+          "medium": 1,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_user_decision_optional",
+            "severity": "medium",
+            "status": "rejected",
+            "summary": "Reviewer A believes the user decision can be skipped because the remaining issue is procedural.",
+            "evidence_refs": [
+              "artifact_review_accept"
+            ]
+          }
+        ]
+      },
+      {
+        "round_id": "round_disputed_reviewer_b",
+        "participant_id": "participant_disputed_reviewer_b",
+        "artifact_ref": "artifact_review_block",
+        "round_type": "adversarial_review",
+        "verdict": "fail",
+        "severity_summary": {
+          "critical": 1,
+          "high": 1,
+          "medium": 0,
+          "low": 0
+        },
+        "objections": [
+          {
+            "objection_id": "obj_acceptance_without_user_decision",
+            "severity": "critical",
+            "status": "needs_user_decision",
+            "summary": "Accepting the route would hide a policy disagreement that only the user can resolve.",
+            "evidence_refs": [
+              "artifact_review_block"
+            ]
+          },
+          {
+            "objection_id": "obj_more_evidence_needed",
+            "severity": "high",
+            "status": "unresolved",
+            "summary": "The verifier has not yet produced command evidence, so integration should not proceed as accepted.",
+            "evidence_refs": [
+              "artifact_review_block"
+            ]
+          }
+        ]
+      },
+      {
+        "round_id": "round_disputed_convergence",
+        "participant_id": "participant_disputed_convergence",
+        "artifact_ref": "artifact_manual_convergence",
+        "round_type": "arbitration",
+        "verdict": "partial",
+        "severity_summary": {
+          "critical": 1,
+          "high": 1,
+          "medium": 1,
+          "low": 0
+        },
+        "objections": []
+      }
+    ],
+    "verdicts": [
+      {
+        "participant_id": "participant_disputed_reviewer_a",
+        "verdict": "pass",
+        "summary": "Reviewer A would accept with a follow-up."
+      },
+      {
+        "participant_id": "participant_disputed_reviewer_b",
+        "verdict": "fail",
+        "summary": "Reviewer B blocks acceptance until the policy disagreement is surfaced."
+      },
+      {
+        "participant_id": "participant_disputed_convergence",
+        "verdict": "partial",
+        "summary": "Convergence carries the critical objection to a blocking user decision."
+      }
+    ],
+    "severity_summary": {
+      "critical": 1,
+      "high": 1,
+      "medium": 1,
+      "low": 0
+    },
+    "unresolved_objections": [
+      "obj_acceptance_without_user_decision",
+      "obj_more_evidence_needed"
+    ],
+    "status": "waiting_for_user"
+  },
+  "convergence": {
+    "convergence_id": "convergence_disputed_manual_convergence",
+    "task_id": "task_disputed_convergence",
+    "debate_id": "debate_disputed_manual_convergence",
+    "recommendation": "Do not accept the disputed route yet. Present the blocking policy choice to the user and keep verifier evidence as a next action before any integration claim.",
+    "accepted_objections": [],
+    "rejected_objections": [
+      {
+        "objection_id": "obj_user_decision_optional",
+        "rejection_reason": "The disagreement is not merely procedural because it changes whether a critical objection remains handled.",
+        "evidence_refs": [
+          "artifact_manual_convergence"
+        ]
+      }
+    ],
+    "unresolved_disagreements": [
+      {
+        "objection_id": "obj_acceptance_without_user_decision",
+        "severity": "critical",
+        "summary": "Acceptance requires user confirmation because reviewers disagree about a blocking policy boundary.",
+        "carried_to": "user_decision",
+        "evidence_refs": [
+          "artifact_manual_convergence"
+        ]
+      },
+      {
+        "objection_id": "obj_more_evidence_needed",
+        "severity": "high",
+        "summary": "Verifier command evidence is pending and must remain an explicit next action.",
+        "carried_to": "next_action",
+        "evidence_refs": [
+          "artifact_manual_convergence"
+        ]
+      }
+    ],
+    "user_decision_requirements": [
+      {
+        "decision_id": "decision_accept_disputed_scope",
+        "question": "Should the disputed route be accepted with the remaining verifier action pending, or should it be blocked until local evidence is produced?",
+        "options": [
+          "block_until_verifier_evidence",
+          "accept_with_explicit_follow_up"
+        ],
+        "blocking": true,
+        "related_objection_refs": [
+          "obj_acceptance_without_user_decision"
+        ]
+      }
+    ],
+    "next_actions": [
+      {
+        "action_id": "action_collect_verifier_evidence",
+        "owner": "verifier",
+        "action": "Produce command evidence before any accepted integration status is recorded.",
+        "status": "planned"
+      }
+    ],
+    "memory_candidates": [
+      {
+        "candidate_id": "memory_no_majority_vote",
+        "summary": "When reviewers disagree about a critical boundary, convergence must carry the issue to user decision instead of relying on model majority.",
+        "source_refs": [
+          "source_t011_design"
+        ]
+      }
+    ],
+    "decision_status": "needs_user_decision"
+  }
+}

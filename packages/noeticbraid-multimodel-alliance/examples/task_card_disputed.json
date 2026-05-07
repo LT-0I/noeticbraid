@@ -1,0 +1,7 @@
+{
+  "task_id": "task_disputed_convergence",
+  "task_type": "review_arbitration",
+  "risk_hint": "disputed",
+  "trigger": "review_gate",
+  "required_capabilities": ["planning", "code_review", "adversary", "verification", "convergence"]
+}

@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://noeticbraid.local/schemas/module-multimodel-alliance/debate.schema.json",
+  "title": "Debate",
+  "description": "Module-local draft record for structured production, review, adversarial checks, and verifier evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "debate_id",
+    "task_id",
+    "route_id",
+    "participants",
+    "rounds",
+    "verdicts",
+    "severity_summary",
+    "unresolved_objections",
+    "status"
+  ],
+  "properties": {
+    "debate_id": {
+      "type": "string",
+      "pattern": "^debate_[A-Za-z0-9_]+$",
+      "maxLength": 128
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task_[A-Za-z0-9_]+$",
+      "maxLength": 128
+    },
+    "route_id": {
+      "type": "string",
+      "pattern": "^route_[A-Za-z0-9_]+$",
+      "maxLength": 128
+    },
+    "participants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "participant_id",
+          "model_ref",
+          "role",
+          "expected_output"
+        ],
+        "properties": {
+          "participant_id": {
+            "type": "string",
+            "pattern": "^participant_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "model_ref": {
+            "type": "string",
+            "pattern": "^model_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "producer",
+              "reviewer",
+              "adversary",
+              "source_auditor",
+              "logic_reviewer",
+              "verifier",
+              "convergence_editor"
+            ]
+          },
+          "expected_output": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "patch",
+              "report",
+              "verdict",
+              "risk_list",
+              "evidence",
+              "minority_opinion",
+              "validation_result"
+            ]
+          }
+        }
+      }
+    },
+    "rounds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "round_id",
+          "participant_id",
+          "artifact_ref",
+          "round_type",
+          "verdict",
+          "severity_summary",
+          "objections"
+        ],
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "pattern": "^round_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "participant_id": {
+            "type": "string",
+            "pattern": "^participant_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "artifact_ref": {
+            "type": "string",
+            "pattern": "^artifact_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "round_type": {
+            "type": "string",
+            "enum": [
+              "production",
+              "review",
+              "adversarial_review",
+              "verification",
+              "arbitration"
+            ]
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "partial",
+              "fail",
+              "concern",
+              "informational"
+            ]
+          },
+          "severity_summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "properties": {
+              "critical": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "high": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "medium": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "low": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          },
+          "objections": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "objection_id",
+                "severity",
+                "status",
+                "summary",
+                "evidence_refs"
+              ],
+              "properties": {
+                "objection_id": {
+                  "type": "string",
+                  "pattern": "^obj_[A-Za-z0-9_]+$",
+                  "maxLength": 128
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "critical",
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "raised",
+                    "accepted",
+                    "rejected",
+                    "unresolved",
+                    "needs_user_decision"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "maxItems": 16,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^artifact_[A-Za-z0-9_]+$",
+                    "maxLength": 128
+                  }
+                },
+                "raised_by": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "participant_id who raised this objection, or 'manual'/'human' for non-participant actor"
+                },
+                "addressed_by": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "participant_id who addressed this objection, or 'manual'/'human' for non-participant actor"
+                },
+                "addresses_objection_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "If set, references a prior objection_id and records this objection as its handling record. status should be accepted, rejected, or needs_user_decision."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "verdicts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "participant_id",
+          "verdict",
+          "summary"
+        ],
+        "properties": {
+          "participant_id": {
+            "type": "string",
+            "pattern": "^participant_[A-Za-z0-9_]+$",
+            "maxLength": 128
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "partial",
+              "fail",
+              "concern",
+              "informational"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      }
+    },
+    "severity_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "properties": {
+        "critical": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "high": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "medium": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "low": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "unresolved_objections": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "pattern": "^obj_[A-Za-z0-9_]+$",
+        "maxLength": 128
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "running",
+        "waiting_for_user",
+        "converged",
+        "failed"
+      ]
+    }
+  }
+}

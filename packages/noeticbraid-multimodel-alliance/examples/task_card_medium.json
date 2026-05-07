@@ -1,0 +1,7 @@
+{
+  "task_id": "task_prompt_cycle",
+  "task_type": "prompt_review",
+  "risk_hint": "medium",
+  "trigger": "workflow_step",
+  "required_capabilities": ["planning", "writing", "code_review", "source_audit", "convergence"]
+}

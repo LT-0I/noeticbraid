@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noeticbraid-multimodel-alliance"
+version = "0.2.0"
+description = "NoeticBraid SP-B Multimodel Alliance Runtime: route + run_debate + converge with frozen ModelRoute 1.2.0."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{name = "NoeticBraid Contributors"}]
+keywords = ["noeticbraid", "multimodel", "router", "debate", "convergence"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = ["jsonschema>=4,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+multimodel-alliance = "noeticbraid.tools.multimodel_alliance.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["noeticbraid*"]
+
+[tool.setuptools.package-data]
+"noeticbraid.tools.multimodel_alliance" = ["schemas/*.json", "fixtures/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]

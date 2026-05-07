@@ -42,3 +42,9 @@ Thumbs.db
 # Generated package checksums
 *.zip
 *.zip.sha256
+
+# Codex / OMX / pytest temp dirs (per-package or top-level)
+.codex-tmp/
+.omx/
+.tmp/
+**/pytest-tmp/
