@@ -1,0 +1,45 @@
+{
+  "card_id": "card_prompt_review",
+  "task_id": "task_prompt_review",
+  "task_type": "code_review",
+  "approval_level": "light",
+  "workflow_id": "workflow_prompt_review",
+  "title": "Prompt Review",
+  "mode": "reactive",
+  "triggers": [
+    "manual",
+    "cli"
+  ],
+  "execution_policy": {
+    "dry_run_default": false,
+    "approval_required_for_shell": true,
+    "allowed_shell_commands": [
+      [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    ],
+    "allowed_cwd_roots": [
+      "."
+    ],
+    "timeout_seconds": 30
+  },
+  "steps": [
+    {
+      "step_id": "step_read",
+      "role": "planner",
+      "command": "note"
+    },
+    {
+      "step_id": "step_review",
+      "role": "reviewer",
+      "command": "note",
+      "requires_confirmation": true
+    }
+  ],
+  "notification_policy": {
+    "default_level": "normal",
+    "default_channel": "local"
+  }
+}

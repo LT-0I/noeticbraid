@@ -224,3 +224,29 @@ edited or removed.
 
 - side observation 2: codex `-o` overwrite bug did NOT trigger in either round-1 or round-2 of SP-B (vs SP-H/A where both rounds were affected). Snapshot guard at ≥1.5KB threshold continued as defense-in-depth. Method B (codex workspace-write direct revision) first use in SP series — 7 MUST landed in one shot, REVISION_RECORD self-reported with file:line accuracy verified by both reviewers independently. Arbitration layer for the first time **rejected** a reviewer claimed finding (Reviewer A SHOULD-4 chain KeyError) as false positive — finding was assumption-based, not verified by code read; downstream maps already had `logic_reviewer` key at the cited lines. This validates arbitration as a genuine quality gate, not a rubber stamp.
 
+## SP-E Workflow Scheduler integration (2026-05-07, full v3.3 dual-review × 2 rounds, OMX `$code-review` 第五次实战验证)
+
+- integration branch: `feat/sp-e-scheduler` (commit pending main session git ops)
+- source: standalone repo `LT-0I/noeticbraid-sp-E-scheduler` tag `sp-e-scheduler-1.0.0` (sp-repos working tree at `C:/Users/13080/Desktop/HBA/sp-repos/noeticbraid-sp-E-scheduler/`)
+- module: SP-E = `noeticbraid-workflow-scheduler` 独立 package, 嵌套 namespace `noeticbraid.tools.workflow_scheduler` (与 SP-H `noeticbraid.tools.notebooklm_bridge` / SP-B `noeticbraid.tools.multimodel_alliance` 同层级). public API: WorkflowScheduler / StepExecutor / RunLedgerWriter / OutboundNotifier 4 层. CLI entry `workflow-scheduler` (`python -m noeticbraid.tools.workflow_scheduler`). Frozen Task 3+4+7 enums + Workflow 1.2.0 6+12+4 enums + RunRecord 14 event_type 全保 byte-equal vs sp-repo. WorkflowCard schema strict (additionalProperties=false + task_type/approval_level enum).
+- v3.3 8-step cycle:
+  - round-1 dual review: Reviewer A claudecode sonnet 4.6 CONCERN H=2/M=3/L=3; Reviewer B codex CLI + OMX `$code-review` FAIL H=1/M=4/L=2 (B 偏严, pytest 5p+16e Windows tmp ACL 环境)
+  - round-1 arbitration (claudecode main opus 4.7): CONCERN H=3/M=5/L=6; **双审 HIGH 完全互补 0 重叠** — A 抓 shell executor approval gate + allowlist prefix CWE-78, B 抓 redaction private marker leak. 这是 v3.3 最深度互补案例 (前 SP-B 是各 3 项 MED, SP-E 升到各 1+ HIGH 真伤)
+  - round-2 codex workspace-write revision (method B, second use 跟 SP-B): 8 MUST 一击命中, REVISION_RECORD 自报 file:line 与代码一致 (pyproject 0.2.0)
+  - round-2 dual review: Verifier A claudecode sonnet 4.6 PASS verified=8/8; Reviewer B codex CLI + OMX `$code-review` FAIL verified=7/8 (B reported MUST-5 PARTIAL — 默认 OutboundNotifier 未启用 lark/dingtalk channel)
+  - round-2 arbitration: PASS — 8 MUST 全 LANDED. **首次仲裁拒纳 reviewer scope interpretation difference** (B's MUST-5 PARTIAL): 实装选择 secure-by-default (禁止仓内携带 webhook token, 见 §7 红线), 与 BLUEPRINT 字面 "默认飞书+钉钉" 之间是 scope 解读差; 主 session 仲裁认为 secure-by-default 优于 literal default channel. 这是继 SP-B 仲裁拒纳 false positive 后, v3.3 仲裁层第二次主动拒纳 reviewer 维度 (但分类不同: SP-B = factual error, SP-E = scope interpretation)
+- test count: 21 (round-1 baseline) → 29 (+8 round-2 new MUST coverage tests covering: shell approval gate, allowlist exact-match, redaction key 递归 + marker, autonomous approval_level + run_id idempotency, 5 级 outbound mapping + urgent fanout, dead RunRecord mapping cleanup, ledger+notifier fsync, WorkflowCard schema strict enum)
+- red lines clean: dependencies = stdlib only (no jsonschema since SP-E 自实现 schema validate via cards.py FROZEN_TASK_TYPES/FROZEN_APPROVAL_LEVELS). pytest dev-only. 无 PSF-2.0 / GPL / MPL / EPL / AGPL. 无 DPAPI / pywin32 / mcp-server-sqlite / portalocker / file:// leaks. Telegram disabled-by-default (用户硬约束 SESSION_BOOTSTRAP_v33.md:273/281). frozen contracts (phase1_2_openapi.yaml + Task/Workflow/RunRecord enums) byte-equal preserved.
+- gates:
+  - pytest noeticbraid-workflow-scheduler: 29 passed (21 round-1 + 8 round-2 new MUST coverage)
+  - no regression on existing packages (core/backend/runtime/obsidian/notebooklm-bridge/multimodel-alliance)
+  - frozen baseline preserved
+- integration choice: option B fast-track (无独立 PR review wait, 跟 SP-H/SP-B 一致)
+- audit artifacts: `archive/phase-1.2/SP-E-scheduler/` 含 BLUEPRINT.md / REVIEW.md / ARBITRATION.md (round 1 + 2) / REVISION_PROMPT_for_A_session.md / REVISION_RECORD.md / round-1/{reviewer_A.md, reviewer_B.md} / round-2/{verifier_round2.md, reviewer_B_round2.md} / README.md
+
+- side observation 1: **OMX `$code-review` 第五次实战验证 — mode shift 持续深化**. SP-D/H/A: B 独占 HIGH; SP-B: A&B 互补 MED 各 3 项; SP-E: A&B 互补 HIGH 各 1+ 项 0 重叠. A 抓 security gate + CWE-78 注入 (allowlist prefix bypass), B 抓 红线 private marker leak. 双审复盘维度互补到 HIGH severity 是 v3.3 最深度信号.
+
+- side observation 2: codex `-o` overwrite bug 在 SP-B + SP-E 两轮 (round-1+2) 共 4 cycle 无触发. snapshot guard ≥1.5KB threshold + prompt 末尾 "不要覆盖确认消息" 提示稳定. method B (codex workspace-write 直改) 二次使用 (SP-B 后 SP-E), 8 MUST 一击命中模式确认可复用. 主 session 仲裁层在 SP-E 第二次主动拒纳 reviewer 维度 (B's MUST-5 PARTIAL): 性质从 SP-B factual error 升级为 scope interpretation — secure-by-default vs literal default 取舍, 仲裁选择 §7 红线优先 (no token in repo). 这强化了 v3.3 "仲裁不是 rubber stamp" 的定位.
+
+- side observation 3: SP-E 是 SP 系列首个 stdlib-only 模块 (无 jsonschema 依赖) — schema 校验由 cards.py FROZEN_TASK_TYPES + FROZEN_APPROVAL_LEVELS frozen tuple 自校 + workflow_card.schema.json 静态文件保留作 reference. 这是 noeticbraid 项目 dependency surface 最小化的一次实践.
+

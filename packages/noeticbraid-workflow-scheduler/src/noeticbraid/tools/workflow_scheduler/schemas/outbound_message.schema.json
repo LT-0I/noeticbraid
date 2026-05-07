@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutboundMessage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message",
+    "level",
+    "channel"
+  ],
+  "properties": {
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "level": {
+      "enum": [
+        "silent_record",
+        "low_priority",
+        "normal",
+        "requires_confirmation",
+        "urgent_interrupt"
+      ]
+    },
+    "channel": {
+      "type": "string"
+    },
+    "refs": {
+      "type": "object"
+    }
+  }
+}

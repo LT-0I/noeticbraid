@@ -1,0 +1,35 @@
+{
+  "card_id": "card_scheduled_review",
+  "task_id": "task_scheduled_review",
+  "task_type": "project_planning",
+  "approval_level": "light",
+  "workflow_id": "workflow_scheduled_review",
+  "title": "Scheduled Review Dry Run",
+  "mode": "autonomous",
+  "triggers": [
+    "schedule"
+  ],
+  "autonomous": {
+    "enabled": true,
+    "dry_run": true,
+    "approval_level": "light"
+  },
+  "schedule_rules": [
+    {
+      "rule_id": "schedule_minute",
+      "kind": "interval",
+      "every_seconds": 60
+    }
+  ],
+  "steps": [
+    {
+      "step_id": "step_note",
+      "role": "planner",
+      "command": "note"
+    }
+  ],
+  "notification_policy": {
+    "default_level": "low_priority",
+    "default_channel": "local"
+  }
+}

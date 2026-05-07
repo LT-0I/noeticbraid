@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowCard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "card_id",
+    "task_id",
+    "task_type",
+    "approval_level",
+    "workflow_id",
+    "mode",
+    "triggers",
+    "steps"
+  ],
+  "properties": {
+    "card_id": {
+      "type": "string",
+      "pattern": "^card_[A-Za-z0-9_]+$",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task_[A-Za-z0-9_]+$",
+      "minLength": 1
+    },
+    "task_type": {
+      "type": "string",
+      "enum": ["project_planning", "research", "code_review"]
+    },
+    "approval_level": {
+      "type": "string",
+      "enum": ["none", "light", "strong", "forbidden"]
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[A-Za-z0-9_]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["reactive", "autonomous"]
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["manual", "cli", "task_file", "schedule"]
+      }
+    },
+    "execution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dry_run_default": {"type": "boolean"},
+        "approval_required_for_shell": {"type": "boolean"},
+        "allowed_shell_commands": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "allowed_cwd_roots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600}
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "role"],
+        "properties": {
+          "step_id": {"type": "string", "pattern": "^step_[A-Za-z0-9_]+$"},
+          "id": {"type": "string", "pattern": "^step_[A-Za-z0-9_]+$"},
+          "role": {
+            "type": "string",
+            "enum": [
+              "orchestrator",
+              "planner",
+              "researcher",
+              "producer",
+              "writer",
+              "coder",
+              "reviewer",
+              "adversary",
+              "source_auditor",
+              "verifier",
+              "convergence_editor",
+              "human_decision"
+            ]
+          },
+          "command": {"type": "string", "enum": ["note", "shell"]},
+          "argv": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "retry_once": {"type": "boolean"},
+          "requires_confirmation": {"type": "boolean"},
+          "gate_policy": {"type": "string", "enum": ["none", "dual_review", "multi_review", "human_required"]},
+          "note_type": {"type": "string", "enum": ["info", "decision", "challenge", "memory_candidate"]}
+        }
+      }
+    },
+    "notification_policy": {
+      "type": "object"
+    },
+    "autonomous": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "dry_run": {"type": "boolean"},
+        "approval_level": {"type": "string", "enum": ["none", "light", "strong", "forbidden"]},
+        "schedule": {"type": "string"}
+      }
+    },
+    "schedule_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "every_seconds"],
+        "properties": {
+          "rule_id": {"type": "string", "pattern": "^schedule_[A-Za-z0-9_]+$"},
+          "schedule_id": {"type": "string", "pattern": "^schedule_[A-Za-z0-9_]+$"},
+          "kind": {"type": "string", "enum": ["interval"]},
+          "every_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+          "enabled": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

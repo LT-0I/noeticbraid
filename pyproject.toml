@@ -12,7 +12,8 @@ members = [
   "packages/noeticbraid-obsidian",
   "packages/noeticbraid-runtime",
   "packages/noeticbraid-backend",
-  "packages/noeticbraid-notebooklm-bridge"
+  "packages/noeticbraid-notebooklm-bridge",
+  "packages/noeticbraid-workflow-scheduler"
 ]
 
 [tool.pytest.ini_options]
@@ -22,5 +23,6 @@ pythonpath = [
   "packages/noeticbraid-obsidian/src",
   "packages/noeticbraid-runtime/src",
   "packages/noeticbraid-backend/src",
-  "packages/noeticbraid-notebooklm-bridge/src"
+  "packages/noeticbraid-notebooklm-bridge/src",
+  "packages/noeticbraid-workflow-scheduler/src"
 ]
