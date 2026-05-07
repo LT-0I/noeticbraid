@@ -172,6 +172,21 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         frozenset({"account_id"}),
         "SP-C1 account store tests use account_id as a legitimate schema field name (AccountRegistryRecord.account_id: str); no private data",
     ),
+    AllowlistRule(
+        "packages/noeticbraid-workflow-scheduler/src/noeticbraid/tools/workflow_scheduler/redaction.py",
+        frozenset({"raw_token", "token_hash", "dpapi_blob"}),
+        "SP-E redaction module owns the sensitive-key lexicon; markers exist as denylist entries to drive [REDACTED] substitution, not as private data",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-workflow-scheduler/tests/test_ledger_state.py",
+        frozenset({"raw_token", "token_hash", "dpapi_blob"}),
+        "SP-E ledger redaction tests pass synthetic marker keys/text to assert RunLedgerWriter + redact_value strip them from JSONL",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-workflow-scheduler/tests/test_notifier.py",
+        frozenset({"raw_token", "token_hash", "dpapi_blob"}),
+        "SP-E outbound notifier tests pass synthetic marker keys/text to assert OutboundNotifier redacts payload + refs before delivery",
+    ),
 )
 
 LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (
