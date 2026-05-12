@@ -10,6 +10,12 @@ from .errors import RenderError
 from .frontmatter import render_markdown
 from .resources import CONTRACT_VERSION, SCHEMA_VERSION, load_schema
 
+SIDE_NOTE_CONTRACT_VERSION = "2.0.0"
+SIDE_NOTE_TONE_CONSTRAINT = "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal"
+SIDE_NOTE_NOTE_TYPES = ("fact", "hypothesis", "action_suggestion")
+SIDE_NOTE_USER_RESPONSES = ("unread", "accepted", "rejected", "modified")
+SIDE_NOTE_RESPONSE_CHANNELS = ("accept", "rebut", "mark_inaccurate", "disable_this_type")
+
 
 @dataclass(frozen=True)
 class RenderedNote:
@@ -23,7 +29,7 @@ class RenderedNote:
 
 
 def _require(data: dict[str, Any], key: str) -> Any:
-    if key not in data or data[key] in {None, ""}:
+    if key not in data or data[key] is None or data[key] == "":
         raise RenderError(f"missing required field {key}")
     return data[key]
 
@@ -53,6 +59,27 @@ def _validate_enum(value: Any, allowed: tuple[str, ...], field_name: str) -> Any
 
 def _schema_enum_value(schema_name: str, field_name: str, value: Any) -> Any:
     return _validate_enum(value, _schema_enum(schema_name, field_name), field_name)
+
+
+def _require_string_list(data: dict[str, Any], key: str) -> list[str]:
+    value = _require(data, key)
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
+        raise RenderError(f"{key} must be a non-empty list of strings")
+    return value
+
+
+def _require_exact_string(value: Any, expected: str, field_name: str) -> str:
+    if value != expected:
+        raise RenderError(f"{field_name} must exactly match the contract literal")
+    return value
+
+
+def _require_all_response_channels(value: Any) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise RenderError("user_response_channel must be a list of response actions")
+    if len(set(value)) != len(value) or set(value) != set(SIDE_NOTE_RESPONSE_CHANNELS):
+        raise RenderError("user_response_channel must include accept, rebut, mark_inaccurate, disable_this_type")
+    return value
 
 
 class MarkdownRenderer:
@@ -154,21 +181,53 @@ class MarkdownRenderer:
         return RenderedNote(frontmatter, f"# {frontmatter['title']}\n\n{body.strip()}\n")
 
     def render_side_note(self, note: dict[str, Any], *, body: str) -> RenderedNote:
+        linked_source_refs = _require_string_list(note, "linked_source_refs")
+        evidence_source = _require_string_list(note, "evidence_source")
+        if evidence_source != linked_source_refs:
+            raise RenderError("evidence_source must match linked_source_refs")
+        user_response_channel = _require_all_response_channels(
+            _require(note, "user_response_channel")
+        )
         frontmatter = {
             "nb_type": "side_note",
             "schema_version": SCHEMA_VERSION,
-            "contract_version": CONTRACT_VERSION,
+            "contract_version": SIDE_NOTE_CONTRACT_VERSION,
             "note_id": _require(note, "note_id"),
             "created_at": _require(note, "created_at"),
-            "linked_source_refs": note.get("linked_source_refs", []),
-            "note_type": _schema_enum_value("side_note", "note_type", _require(note, "note_type")),
+            "linked_source_refs": linked_source_refs,
+            "evidence_source": evidence_source,
+            "note_type": _validate_enum(_require(note, "note_type"), SIDE_NOTE_NOTE_TYPES, "note_type"),
             "confidence": _schema_enum_value("side_note", "confidence", _require(note, "confidence")),
-            "user_response": _schema_enum_value("side_note", "user_response", _require(note, "user_response")),
+            "tone_constraint": _require_exact_string(
+                _require(note, "tone_constraint"),
+                SIDE_NOTE_TONE_CONSTRAINT,
+                "tone_constraint",
+            ),
+            "user_response_channel": user_response_channel,
+            "user_response": _validate_enum(
+                _require(note, "user_response"), SIDE_NOTE_USER_RESPONSES, "user_response"
+            ),
             "tags": _tags("noeticbraid/side-note", *note.get("tags", [])),
             "follow_up_ref": note.get("follow_up_ref"),
             "project_ref": note.get("project_ref"),
         }
-        return RenderedNote(frontmatter, f"# Side note {frontmatter['note_id']}\n\n{body.strip()}\n\n## Decision Notes\n")
+        metadata_body = (
+            f"# Side note {frontmatter['note_id']}\n\n"
+            f"{body.strip()}\n\n"
+            "## Safety metadata\n"
+            f"- evidence_source: {', '.join(evidence_source)}\n"
+            f"- note_type: {frontmatter['note_type']}\n"
+            f"- confidence: {frontmatter['confidence']}\n"
+            f"- tone_constraint: {SIDE_NOTE_TONE_CONSTRAINT}\n"
+            f"- user_response_channel: {', '.join(user_response_channel)}\n\n"
+            "## User response options\n"
+            "- accept\n"
+            "- rebut\n"
+            "- mark_inaccurate\n"
+            "- 可关闭此类旁注 / disable_this_type\n\n"
+            "## Decision Notes\n"
+        )
+        return RenderedNote(frontmatter, metadata_body)
 
     def render_digestion_item(self, item: dict[str, Any], *, body: str) -> RenderedNote:
         frontmatter = {

@@ -1,14 +1,24 @@
 {
   "$schema_status": "draft_nonbinding",
-  "contract_version": "0.1.0",
+  "contract_version": "2.0.0",
   "note_id": "note_stage1_candidate_001",
   "created_at": "2026-04-28T09:34:00+00:00",
   "linked_source_refs": [
     "source_stage1_candidate_001"
   ],
-  "note_type": "challenge",
-  "claim": "Contract files must remain unchanged until the local freeze commit.",
+  "note_type": "hypothesis",
+  "claim": "Hypothesis: Contract files must remain unchanged until the local freeze commit.",
   "confidence": "high",
   "user_response": "unread",
-  "follow_up_ref": "task_stage1_candidate_001"
+  "follow_up_ref": "task_stage1_candidate_001",
+  "evidence_source": [
+    "source_stage1_candidate_001"
+  ],
+  "tone_constraint": "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal",
+  "user_response_channel": [
+    "accept",
+    "rebut",
+    "mark_inaccurate",
+    "disable_this_type"
+  ]
 }

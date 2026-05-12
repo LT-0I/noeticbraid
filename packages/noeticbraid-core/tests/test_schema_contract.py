@@ -7,6 +7,7 @@ from typing import Literal, Optional, get_args, get_origin
 
 import pytest
 
+from noeticbraid_core.schemas.side_note import TONE_CONSTRAINT_LITERAL
 from noeticbraid_core.schemas import (
     ApprovalRequest,
     DigestionItem,
@@ -72,10 +73,13 @@ EXPECTED_FIELDS = {
         "note_id",
         "created_at",
         "linked_source_refs",
+        "evidence_source",
         "note_type",
         "claim",
         "confidence",
         "user_response",
+        "tone_constraint",
+        "user_response_channel",
         "follow_up_ref",
     },
     DigestionItem: {
@@ -149,8 +153,9 @@ EXPECTED_LITERAL_VALUES = {
     },
     (ApprovalRequest, "approval_level"): {"none", "light", "strong", "forbidden"},
     (ApprovalRequest, "status"): {"pending", "approved", "rejected", "blocked"},
-    (SideNote, "note_type"): {"fact", "hypothesis", "challenge", "action"},
+    (SideNote, "note_type"): {"fact", "hypothesis", "action_suggestion"},
     (SideNote, "confidence"): {"low", "medium", "high"},
+    (SideNote, "tone_constraint"): {TONE_CONSTRAINT_LITERAL},
     (SideNote, "user_response"): {"unread", "accepted", "rejected", "modified"},
     (DigestionItem, "c_status"): {"c0", "c1", "c2", "c3", "c4", "cX"},
     (DigestionItem, "status"): {"open", "closed", "rejected", "snoozed"},
@@ -188,7 +193,9 @@ EXPECTED_NON_LITERAL_TYPES = {
     (SideNote, "note_id"): str,
     (SideNote, "created_at"): datetime,
     (SideNote, "linked_source_refs"): list[str],
+    (SideNote, "evidence_source"): list[str],
     (SideNote, "claim"): str,
+    (SideNote, "user_response_channel"): list[Literal["accept", "rebut", "mark_inaccurate", "disable_this_type"]],
     (SideNote, "follow_up_ref"): Optional[str],
     (DigestionItem, "digestion_id"): str,
     (DigestionItem, "side_note_id"): str,

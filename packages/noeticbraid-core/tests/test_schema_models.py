@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from noeticbraid_core.schemas.side_note import TONE_CONSTRAINT_LITERAL, USER_RESPONSE_CHANNEL_VALUES
 from noeticbraid_core.schemas import (
     ApprovalRequest,
     DigestionItem,
@@ -201,9 +202,13 @@ def test_datetime_default_factories_are_utc(model, datetime_attr):
         ),
         SideNote: dict(
             note_id="note_default_001",
+            linked_source_refs=["source_default_001"],
+            evidence_source=["source_default_001"],
             note_type="fact",
             claim="default timestamp side note",
             confidence="medium",
+            tone_constraint=TONE_CONSTRAINT_LITERAL,
+            user_response_channel=list(USER_RESPONSE_CHANNEL_VALUES),
         ),
         DigestionItem: dict(
             digestion_id="digestion_default_001",
@@ -308,9 +313,12 @@ def test_side_note_defaults_and_business_methods():
     note = SideNote(
         note_id="note_business_001",
         linked_source_refs=["source_business_001"],
-        note_type="challenge",
+        evidence_source=["source_business_001"],
+        note_type="action_suggestion",
         claim="this needs user review",
         confidence="high",
+        tone_constraint=TONE_CONSTRAINT_LITERAL,
+        user_response_channel=list(USER_RESPONSE_CHANNEL_VALUES),
     )
     assert note.user_response == "unread"
     assert note.has_sources() is True
@@ -446,7 +454,7 @@ VALID_LITERAL_CASES = [
     (ApprovalRequest, "status", value)
     for value in ["pending", "approved", "rejected", "blocked"]
 ] + [
-    (SideNote, "note_type", value) for value in ["fact", "hypothesis", "challenge", "action"]
+    (SideNote, "note_type", value) for value in ["fact", "hypothesis", "action_suggestion"]
 ] + [
     (SideNote, "confidence", value) for value in ["low", "medium", "high"]
 ] + [

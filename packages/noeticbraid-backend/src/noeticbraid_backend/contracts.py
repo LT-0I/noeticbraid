@@ -4,13 +4,40 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 CONTRACT_VERSION = "1.2.0"
+CONTRACT_V2_VERSION = "2.0.0"
 CONTRACT_AUTHORITATIVE = True
 OPENAPI_TITLE = "NoeticBraid Phase 1.2 API"
+SIDE_NOTE_V2_TONE_CONSTRAINT = "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal"
+SIDE_NOTE_V2_REQUIRED_METADATA = (
+    "evidence_source",
+    "note_type",
+    "confidence",
+    "tone_constraint",
+    "user_response_channel",
+)
+CONTRACT_V2_SCHEMA_NAMES: tuple[str, ...] = ("SideNote",)
+CONTRACT_V2_SCHEMA_METADATA: dict[str, dict[str, Any]] = {
+    "SideNote": {
+        "contract_version": CONTRACT_V2_VERSION,
+        "required_metadata": SIDE_NOTE_V2_REQUIRED_METADATA,
+        "note_type_enum": ("fact", "hypothesis", "action_suggestion"),
+        "confidence_enum": ("low", "medium", "high"),
+        "tone_constraint": SIDE_NOTE_V2_TONE_CONSTRAINT,
+        "user_response_channel_enum": (
+            "accept",
+            "rebut",
+            "mark_inaccurate",
+            "disable_this_type",
+        ),
+    }
+}
+CONTRACT_V2_ROUTE_SPECS: tuple[dict[str, str], ...] = ()
 
 FROZEN_ROUTE_SPECS: tuple[dict[str, str], ...] = (
     {
@@ -127,7 +154,6 @@ try:  # Import where available; keep the backend skeleton runnable in isolation.
     RunRecord = _schemas.RunRecord
     SourceRecord = _schemas.SourceRecord
     ApprovalRequest = _schemas.ApprovalRequest
-    SideNote = _schemas.SideNote
     DigestionItem = _schemas.DigestionItem
     Workflow = _schemas.Workflow
     ModelRoute = _schemas.ModelRoute
@@ -147,9 +173,6 @@ except Exception:  # pragma: no cover - exercised only without the workspace dep
     class ApprovalRequest(_FallbackCoreModel):
         pass
 
-    class SideNote(_FallbackCoreModel):
-        pass
-
     class DigestionItem(_FallbackCoreModel):
         pass
 
@@ -164,6 +187,47 @@ except Exception:  # pragma: no cover - exercised only without the workspace dep
 
     class RunRecordAggregate(_FallbackCoreModel):
         pass
+
+
+class SideNote(_FrozenBaseModel):
+    """Frozen SideNote schema for backend contract 1.2.0.
+
+    Core ``noeticbraid_core.schemas.SideNote`` now represents the breaking
+    2.0.0 shape. The backend 1.2.0 OpenAPI component keeps this flat local
+    v1 model so existing endpoint serialization remains unchanged.
+    """
+
+    note_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        pattern=r"^note_[A-Za-z0-9_]+$",
+        description="Stable note identifier prefixed with 'note_'.",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Note creation timestamp normalized to UTC.",
+    )
+    linked_source_refs: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+        description="Source references supporting or challenging the note.",
+    )
+    note_type: Literal["fact", "hypothesis", "challenge", "action"] = Field(
+        ..., description="Type of side note."
+    )
+    claim: str = Field(..., min_length=1, max_length=4096, description="Claim or action text.")
+    confidence: Literal["low", "medium", "high"] = Field(
+        ..., description="Confidence in the claim."
+    )
+    user_response: Literal["unread", "accepted", "rejected", "modified"] = Field(
+        default="unread", description="User handling state for the note."
+    )
+    follow_up_ref: Optional[str] = Field(
+        default=None,
+        max_length=128,
+        description="Optional follow-up task, approval, note, or digestion reference.",
+    )
 
 
 CORE_SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
@@ -203,8 +267,12 @@ ALL_SCHEMA_NAMES: tuple[str, ...] = (
 __all__ = [
     "CONTRACT_AUTHORITATIVE",
     "CONTRACT_VERSION",
+    "CONTRACT_V2_VERSION",
     "OPENAPI_TITLE",
     "FROZEN_ROUTE_SPECS",
+    "CONTRACT_V2_SCHEMA_NAMES",
+    "CONTRACT_V2_SCHEMA_METADATA",
+    "CONTRACT_V2_ROUTE_SPECS",
     "ALL_SCHEMA_NAMES",
     "CORE_SCHEMA_MODELS",
     "HealthResponse",

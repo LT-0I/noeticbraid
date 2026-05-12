@@ -73,8 +73,11 @@ def test_renderer_supports_core_note_types() -> None:
                 "note_id": "note_obsidian_001",
                 "created_at": "2026-05-06T12:00:00Z",
                 "linked_source_refs": ["source_obsidian_001"],
+                "evidence_source": ["source_obsidian_001"],
                 "note_type": "fact",
                 "confidence": "medium",
+                "tone_constraint": "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal",
+                "user_response_channel": ["accept", "rebut", "mark_inaccurate", "disable_this_type"],
                 "user_response": "unread",
             },
             body="Potential follow-up.",
@@ -92,7 +95,9 @@ def test_renderer_supports_core_note_types() -> None:
     ]
 
     assert [note.frontmatter["nb_type"] for note in notes] == ["run_record", "side_note", "digestion_item"]
-    assert all(note.frontmatter["contract_version"] == "1.3.0" for note in notes)
+    assert notes[0].frontmatter["contract_version"] == "1.3.0"
+    assert notes[1].frontmatter["contract_version"] == "2.0.0"
+    assert notes[2].frontmatter["contract_version"] == "1.3.0"
 
 
 def test_render_side_note_invalid_enum_raises() -> None:
@@ -104,8 +109,11 @@ def test_render_side_note_invalid_enum_raises() -> None:
                 "note_id": "note_obsidian_001",
                 "created_at": "2026-05-06T12:00:00Z",
                 "linked_source_refs": ["source_obsidian_001"],
+                "evidence_source": ["source_obsidian_001"],
                 "note_type": "observation",
                 "confidence": "medium",
+                "tone_constraint": "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal",
+                "user_response_channel": ["accept", "rebut", "mark_inaccurate", "disable_this_type"],
                 "user_response": "unread",
             },
             body="Invalid enum should not render.",
