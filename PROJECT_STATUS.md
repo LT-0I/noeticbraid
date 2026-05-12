@@ -9,6 +9,8 @@
   §2 表格按 Codex II 审计 Part 3 的 4 模块归属裁决重写（详见 `noeticbraid-workflow/MODULE_VERDICTS.md`）；
   补充 §0.5 命名分歧解决：项目最终名 NoeticBraid（drops HelixMind），驱动来源：`PROJECT_DEFINITION_v3.2.md §0`。
 
+- `2026-05-12` (δ demo day-0): 进入 v3.2 §10.2 14 天 AI sidenote 追踪 demo（day-0=2026-05-12；day-14=2026-05-26）；δ-A 整链路（spec → impl → dual review → commit → P1 verified）已闭环；δ-B 组（D-1 #3-#5）平行启动，不阻塞 demo。
+
 ## 0. 一段话愿景
 
 NoeticBraid (内部代号 HelixMind / HBA) 不重造大模型，而是站在主流 AI 工具
