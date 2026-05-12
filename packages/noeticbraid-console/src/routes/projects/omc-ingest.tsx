@@ -31,9 +31,18 @@ function r6BadgeStyle(status: R6GateStatus): CSSProperties {
   return { color: 'gray' }
 }
 
-function CandidateItem({ candidate }: { candidate: CandidateLesson }) {
+function CandidateItem({
+  candidate,
+  adoptSuccessById,
+  markAdoptSuccess,
+}: {
+  candidate: CandidateLesson
+  adoptSuccessById: Record<string, boolean>
+  markAdoptSuccess: (candidateId: string) => void
+}) {
   const adopt = useAdoptCandidate()
   const alreadyAdopted = candidate.status === 'adopted' || candidate.status === 'confirmed'
+  const adoptSucceeded = adoptSuccessById[candidate.candidate_id] === true
   const gateStatus = r6GateStatus(candidate)
   const reuseCount = candidate.r6_gate?.reuse_count ?? 0
   return (
@@ -54,17 +63,22 @@ function CandidateItem({ candidate }: { candidate: CandidateLesson }) {
         type="button"
         data-testid={`adopt-${candidate.candidate_id}`}
         disabled={alreadyAdopted || adopt.isPending}
-        onClick={() => adopt.mutate(candidate.candidate_id)}
+        onClick={() =>
+          adopt.mutate(candidate.candidate_id, {
+            onSuccess: (_data, candidateId) => markAdoptSuccess(candidateId),
+          })
+        }
       >
         {alreadyAdopted ? 'Adopted' : 'Adopt'}
       </button>
-      {adopt.isSuccess ? <span data-testid={`adopted-${candidate.candidate_id}`}> adopted</span> : null}
+      {adoptSucceeded ? <span data-testid={`adopted-${candidate.candidate_id}`}> adopted</span> : null}
     </li>
   )
 }
 
 function OmcIngestPage() {
   const [prompt, setPrompt] = useState(defaultPrompt)
+  const [adoptSuccessById, setAdoptSuccessById] = useState<Record<string, boolean>>({})
   const candidates = useOmcCandidates()
   const adopted = useOmcAdoptedHistory()
   const capabilities = useCapabilities()
@@ -134,7 +148,14 @@ function OmcIngestPage() {
         <h2>Current candidate lessons</h2>
         <ul>
           {candidates.data.candidates.map((candidate) => (
-            <CandidateItem key={candidate.candidate_id} candidate={candidate} />
+            <CandidateItem
+              key={candidate.candidate_id}
+              candidate={candidate}
+              adoptSuccessById={adoptSuccessById}
+              markAdoptSuccess={(candidateId) =>
+                setAdoptSuccessById((current) => ({ ...current, [candidateId]: true }))
+              }
+            />
           ))}
         </ul>
       </section>

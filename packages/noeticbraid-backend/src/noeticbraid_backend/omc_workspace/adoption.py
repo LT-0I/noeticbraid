@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import datetime, timezone
@@ -36,9 +37,16 @@ def artifact_dir(project_root: Path) -> Path:
     try:
         preferred.mkdir(parents=True, exist_ok=True)
         return preferred
-    except OSError:
+    except OSError as exc:
         fallback = os.getenv("NOETICBRAID_ARTIFACTS_DIR")
         if fallback:
+            logging.warning(
+                "failed to create candidate adoption artifact directory %s; falling back to "
+                "NOETICBRAID_ARTIFACTS_DIR=%s: %s",
+                preferred,
+                fallback,
+                exc,
+            )
             path = Path(fallback)
             path.mkdir(parents=True, exist_ok=True)
             return path
