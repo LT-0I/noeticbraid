@@ -14,6 +14,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 
 from noeticbraid_backend.api.routes import account, approval, auth, dashboard, health, ledger, workspace
+from noeticbraid_backend.api.routes import capabilities as capabilities_router
+from noeticbraid_backend.api.routes import projects as projects_router
 from noeticbraid_backend.contracts import (
     CONTRACT_AUTHORITATIVE,
     CONTRACT_VERSION,
@@ -140,6 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(dashboard.router)
     app.include_router(workspace.router)
+    app.include_router(projects_router.router)
+    app.include_router(capabilities_router.router)
     app.include_router(approval.router)
     app.include_router(account.router)
     app.include_router(ledger.router)

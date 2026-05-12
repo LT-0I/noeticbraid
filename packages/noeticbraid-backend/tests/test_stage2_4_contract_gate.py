@@ -22,11 +22,27 @@ contract_gate = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = contract_gate
 _SPEC.loader.exec_module(contract_gate)
 
-EXPECTED_PATHS = (
+EXPECTED_FROZEN_PATHS = (
     "/api/health",
     "/api/auth/startup_token",
     "/api/dashboard/empty",
     "/api/workspace/threads",
+    "/api/approval/queue",
+    "/api/account/pool",
+    "/api/ledger/runs",
+    "/api/ledger/runs/aggregate",
+)
+EXPECTED_RUNTIME_PATHS = (
+    "/api/health",
+    "/api/auth/startup_token",
+    "/api/dashboard/empty",
+    "/api/workspace/threads",
+    "/api/projects/omc-ingest/tasks",
+    "/api/projects/omc-ingest/candidates",
+    "/api/projects/omc-ingest/adopted-history",
+    "/api/candidates/{id}/adopt",
+    "/api/capabilities",
+    "/api/capabilities/{id}/health-check",
     "/api/approval/queue",
     "/api/account/pool",
     "/api/ledger/runs",
@@ -50,6 +66,17 @@ EXPECTED_SCHEMAS = {
     "ModelRoute",
     "VaultLayoutMinimum",
     "RunRecordAggregate",
+    "WorkspaceProject",
+    "CapabilityRegistryEntry",
+    "CapabilityHealthResult",
+    "CandidateLesson",
+    "OMCProjectTaskRequest",
+    "OMCProjectTaskResponse",
+    "OMCProjectCandidates",
+    "OMCProjectAdoptedHistory",
+    "CandidateAdoptionResponse",
+    "CapabilitiesResponse",
+    "CapabilityHealthCheckResponse",
 }
 
 
@@ -58,8 +85,8 @@ def test_stage2_4_contract_gate_runs_mechanical_sidecar_and_runtime_checks() -> 
 
     assert report.contract_sha256 == report.sidecar_sha256
     assert len(report.contract_sha256) == 64
-    assert report.frozen_paths == EXPECTED_PATHS
-    assert report.runtime_paths == EXPECTED_PATHS
+    assert report.frozen_paths == EXPECTED_FROZEN_PATHS
+    assert report.runtime_paths == EXPECTED_RUNTIME_PATHS
     assert set(report.runtime_schema_names) == EXPECTED_SCHEMAS
     assert report.path_policy_cases == 10
 

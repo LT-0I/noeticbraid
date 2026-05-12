@@ -99,6 +99,59 @@ EXPECTED_ROUTES: tuple[dict[str, object], ...] = (
     },
 )
 
+EXPECTED_RUNTIME_ROUTES: tuple[dict[str, object], ...] = (
+    *EXPECTED_ROUTES[:4],
+    {
+        "path": "/api/projects/omc-ingest/tasks",
+        "method": "post",
+        "tag": "projects",
+        "summary": "Submit OMC ingestion task card",
+        "operation_id": "submit_omc_ingest_task_api_projects_omc_ingest_tasks_post",
+        "response_schema": "OMCProjectTaskResponse",
+    },
+    {
+        "path": "/api/projects/omc-ingest/candidates",
+        "method": "get",
+        "tag": "projects",
+        "summary": "List OMC ingestion candidates",
+        "operation_id": "omc_ingest_candidates_api_projects_omc_ingest_candidates_get",
+        "response_schema": "OMCProjectCandidates",
+    },
+    {
+        "path": "/api/projects/omc-ingest/adopted-history",
+        "method": "get",
+        "tag": "projects",
+        "summary": "List OMC adopted candidates",
+        "operation_id": "omc_ingest_adopted_history_api_projects_omc_ingest_adopted_history_get",
+        "response_schema": "OMCProjectAdoptedHistory",
+    },
+    {
+        "path": "/api/candidates/{id}/adopt",
+        "method": "post",
+        "tag": "projects",
+        "summary": "Adopt OMC candidate explicitly",
+        "operation_id": "adopt_omc_candidate_api_candidates_id_adopt_post",
+        "response_schema": "CandidateAdoptionResponse",
+    },
+    {
+        "path": "/api/capabilities",
+        "method": "get",
+        "tag": "capabilities",
+        "summary": "List first-stage capabilities",
+        "operation_id": "capabilities_api_capabilities_get",
+        "response_schema": "CapabilitiesResponse",
+    },
+    {
+        "path": "/api/capabilities/{id}/health-check",
+        "method": "post",
+        "tag": "capabilities",
+        "summary": "Run capability health check",
+        "operation_id": "capability_health_check_api_capabilities_id_health_check_post",
+        "response_schema": "CapabilityHealthCheckResponse",
+    },
+    *EXPECTED_ROUTES[4:],
+)
+
 EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
     "HealthResponse",
     "AuthResponse",
@@ -118,6 +171,21 @@ EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
     "ModelRoute",
     "VaultLayoutMinimum",
     "RunRecordAggregate",
+)
+
+EXPECTED_RUNTIME_SCHEMA_NAMES: tuple[str, ...] = (
+    *EXPECTED_SCHEMA_NAMES,
+    "WorkspaceProject",
+    "CapabilityRegistryEntry",
+    "CapabilityHealthResult",
+    "CandidateLesson",
+    "OMCProjectTaskRequest",
+    "OMCProjectTaskResponse",
+    "OMCProjectCandidates",
+    "OMCProjectAdoptedHistory",
+    "CandidateAdoptionResponse",
+    "CapabilitiesResponse",
+    "CapabilityHealthCheckResponse",
 )
 
 EXPECTED_WRAPPER_FIELDS: dict[str, tuple[str, ...]] = {
@@ -484,12 +552,12 @@ def _assert_runtime_contract(schema: dict[str, Any], repo_root: Path) -> tuple[s
         if info.get(key) != expected:
             _fail(f"runtime info.{key} mismatch: actual={info.get(key)!r}, expected={expected!r}")
 
-    expected_paths = tuple(str(route["path"]) for route in EXPECTED_ROUTES)
+    expected_paths = tuple(str(route["path"]) for route in EXPECTED_RUNTIME_ROUTES)
     runtime_paths = tuple(schema.get("paths", {}).keys())
     if runtime_paths != expected_paths:
         _fail(f"runtime path order/set mismatch: actual={runtime_paths!r}, expected={expected_paths!r}")
 
-    for route in EXPECTED_ROUTES:
+    for route in EXPECTED_RUNTIME_ROUTES:
         path = str(route["path"])
         method = str(route["method"])
         operation = schema["paths"][path][method]
@@ -511,13 +579,13 @@ def _assert_runtime_contract(schema: dict[str, Any], repo_root: Path) -> tuple[s
 
     _assert_no_public_security_metadata_in_runtime(schema)
 
-    if tuple(ALL_SCHEMA_NAMES) != EXPECTED_SCHEMA_NAMES:
+    if tuple(ALL_SCHEMA_NAMES) != EXPECTED_RUNTIME_SCHEMA_NAMES:
         _fail(f"contract helper schema-name order mismatch: {tuple(ALL_SCHEMA_NAMES)!r}")
     components = schema.get("components", {}).get("schemas", {})
     runtime_schema_names = tuple(components.keys())
-    if set(runtime_schema_names) != set(EXPECTED_SCHEMA_NAMES):
-        missing = set(EXPECTED_SCHEMA_NAMES) - set(runtime_schema_names)
-        extra = set(runtime_schema_names) - set(EXPECTED_SCHEMA_NAMES)
+    if set(runtime_schema_names) != set(EXPECTED_RUNTIME_SCHEMA_NAMES):
+        missing = set(EXPECTED_RUNTIME_SCHEMA_NAMES) - set(runtime_schema_names)
+        extra = set(runtime_schema_names) - set(EXPECTED_RUNTIME_SCHEMA_NAMES)
         _fail(f"runtime schema-name set mismatch: missing={sorted(missing)}, extra={sorted(extra)}")
 
     for schema_name, expected_fields in EXPECTED_WRAPPER_FIELDS.items():

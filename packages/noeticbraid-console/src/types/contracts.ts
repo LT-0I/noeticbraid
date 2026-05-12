@@ -1,25 +1,7 @@
 /**
- * NoeticBraid Phase 1.1 Contract Types (TypeScript mirror)
- *
- * NOTE:
- *   contract_version: 1.0.0
- *   contract_status: AUTHORITATIVE
- *   contract_frozen: true
- *   stage1_implementation_commit: b8d7152
- *   contract_source_of_truth: docs/contracts/phase1_1_pydantic_schemas.py
- *                            + docs/contracts/phase1_1_openapi.yaml
- *                            + docs/contracts/phase1_1_api_contract.md
- *
- * This file is a hand-written TS mirror of the 6 frozen Pydantic schemas
- * and the 5 endpoint response shapes used by Phase 1.1 console.
- *
- * Constraint information (min_length, max_length, pattern, default) is
- * referenced from CONTRACT_NOTE block in the python stub; only field
- * name + bare type signature + Literal enum values are mirrored here
- * (contract diff equivalence rules per Step 6 v2 §3.3.10).
- *
- * DO NOT modify this file unless contract_version bumps. Phase 1.2 may
- * extend with additional types but must not narrow Phase 1.1 surface.
+ * NoeticBraid contract types used by the console.
+ * Frozen Phase 1.1/1.2 shapes remain intact; SDD-D2-02 adds contract 1.3.0
+ * OMC workspace and capability registry surfaces.
  */
 
 // ============================================================
@@ -166,19 +148,19 @@ export interface DigestionItem {
 }
 
 // ============================================================
-// 5 endpoint response shapes (Phase 1.1 console used)
+// Endpoint response shapes
 // ============================================================
 
 export interface HealthResponse {
   status: 'ok'
-  contract_version: string // "1.0.0"
-  authoritative: boolean // true
+  contract_version: string
+  authoritative: boolean
 }
 
 export interface EmptyDashboard {
   tasks: Task[]
   approvals: ApprovalRequest[]
-  accounts: unknown[] // AccountProfile not exposed in Phase 1.1 console
+  accounts: unknown[]
 }
 
 export interface WorkspaceThreads {
@@ -191,4 +173,121 @@ export interface RunLedgerRuns {
 
 export interface ApprovalQueue {
   approvals: ApprovalRequest[]
+}
+
+// ============================================================
+// SDD-D2-02 contract 1.3.0 additions
+// ============================================================
+
+export type CandidateStatus = 'candidate' | 'adopted' | 'confirmed' | 'archived'
+export type CapabilityEndType = 'cli' | 'web'
+export type CapabilityStatus = 'unknown' | 'available' | 'degraded' | 'unavailable'
+export type CapabilityHealthMode = 'mock' | 'live_opt_in'
+
+export interface CandidateLesson {
+  candidate_id: string
+  project_id: 'omc-ingest'
+  source_sdd_ids: string[]
+  summary: string
+  status: CandidateStatus
+  upgrade_rule: string
+  adopted_at: string | null
+  adopted_by: string | null
+  run_record_ref: string | null
+  reuse_evidence_refs: string[]
+  artifact_refs: string[]
+  source_refs: string[]
+}
+
+export interface OMCExternalReference {
+  source_ref: string
+  title: string
+  url: string
+  mode: 'link-only'
+}
+
+export interface OMCProjectFixture {
+  project: {
+    project_id: 'omc-ingest'
+    title: '吸收 OMC'
+    project_type: 'ingestion'
+    owner: 'user'
+    status: string
+  }
+  task_card: OMCProjectTaskRequest
+  external_references: OMCExternalReference[]
+  candidates: CandidateLesson[]
+  adopted_history: CandidateLesson[]
+  run_records: RunRecord[]
+}
+
+export interface OMCProjectTaskRequest {
+  task_id?: string
+  title?: string
+  prompt: string
+  source_refs?: string[]
+}
+
+export interface OMCProjectTaskResponse {
+  project_id: 'omc-ingest'
+  task_id: string
+  candidate_id: string
+  convergence_markdown_ref: string
+  run_record_ref: string
+  artifact_refs: string[]
+  candidate: CandidateLesson
+  run_records: RunRecord[]
+}
+
+export interface OMCProjectCandidates {
+  project_id: 'omc-ingest'
+  candidates: CandidateLesson[]
+}
+
+export interface OMCProjectAdoptedHistory {
+  project_id: 'omc-ingest'
+  adopted_candidates: CandidateLesson[]
+}
+
+export interface CandidateAdoptionResponse {
+  project_id: 'omc-ingest'
+  candidate_id: string
+  status: CandidateStatus
+  adopted_at: string
+  adopted_by: string
+  run_record_ref: string
+  adoption_artifact_ref: string
+  ledger_refs: string[]
+  candidate: CandidateLesson
+}
+
+export interface CapabilityHealthResult {
+  capability_id: string
+  mode: CapabilityHealthMode
+  status: CapabilityStatus
+  checked_at: string
+  summary: string
+  artifact_ref: string | null
+}
+
+export interface CapabilityRegistryEntry {
+  capability_id: string
+  display_name: string
+  provider: string
+  end_type: CapabilityEndType
+  status: CapabilityStatus
+  health_mode: CapabilityHealthMode
+  last_checked_at: string | null
+  last_result: CapabilityHealthResult | null
+  source_ref: string
+  first_stage: boolean
+}
+
+export interface CapabilitiesResponse {
+  capabilities: CapabilityRegistryEntry[]
+}
+
+export interface CapabilityHealthCheckResponse {
+  capability: CapabilityRegistryEntry
+  result: CapabilityHealthResult
 }

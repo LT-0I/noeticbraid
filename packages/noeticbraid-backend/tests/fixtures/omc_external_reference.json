@@ -1,0 +1,7 @@
+{
+  "source_ref": "source_omc_repo",
+  "title": "oh-my-codex OMC repository/docs",
+  "url": "https://github.com/auggie/oh-my-codex",
+  "mode": "link-only",
+  "crawler_enabled": false
+}

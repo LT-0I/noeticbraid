@@ -1,0 +1,75 @@
+{
+  "project": {
+    "project_id": "omc-ingest",
+    "title": "吸收 OMC",
+    "project_type": "ingestion",
+    "owner": "user",
+    "status": "active"
+  },
+  "task_card": {
+    "task_id": "task_omc_ingest",
+    "title": "吸收 OMC `omc help` slash 命令列表",
+    "prompt": "吸收 OMC `omc help` slash 命令列表，整理成 NoeticBraid candidate lesson。",
+    "source_refs": ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"]
+  },
+  "external_references": [
+    {
+      "source_ref": "source_omc_repo",
+      "title": "oh-my-codex repository",
+      "url": "https://github.com/auggie/oh-my-codex",
+      "mode": "link-only"
+    },
+    {
+      "source_ref": "source_omc_debate_loop_docs",
+      "title": "OMC_DEBATE_LOOP.md",
+      "url": "docs/OMC_DEBATE_LOOP.md",
+      "mode": "link-only"
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "memory_omc_ingest_debate_loop",
+      "project_id": "omc-ingest",
+      "source_sdd_ids": ["SDD-D2-01", "SDD-D2-02"],
+      "summary": "OMC ingestion debate produced a program-memory candidate for the manual demo slice.",
+      "status": "candidate",
+      "upgrade_rule": "explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient",
+      "adopted_at": null,
+      "adopted_by": null,
+      "run_record_ref": "run_omc_ingest_debate_loop",
+      "reuse_evidence_refs": [],
+      "artifact_refs": ["artifact_convergence_omc_ingest_debate_loop_markdown"],
+      "source_refs": ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"]
+    }
+  ],
+  "adopted_history": [
+    {
+      "candidate_id": "memory_omc_help_lesson",
+      "project_id": "omc-ingest",
+      "source_sdd_ids": ["SDD-D2-01", "SDD-D2-02"],
+      "summary": "Prior explicit adoption example for OMC help slash-command lesson reuse evidence.",
+      "status": "adopted",
+      "upgrade_rule": "explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient",
+      "adopted_at": "2026-05-12T12:00:00Z",
+      "adopted_by": "user",
+      "run_record_ref": "run_omc_help_lesson",
+      "reuse_evidence_refs": ["artifact_candidate_adoption_memory_omc_help_lesson_20260512T120000Z"],
+      "artifact_refs": [".omx/artifacts/candidate-adoption-memory_omc_help_lesson-20260512T120000Z.md"],
+      "source_refs": ["source_omc_metadata"]
+    }
+  ],
+  "run_records": [
+    {
+      "run_id": "run_omc_ingest_debate_loop",
+      "task_id": "task_omc_ingest",
+      "event_type": "lesson_candidate_created",
+      "created_at": "2026-05-12T12:00:00Z",
+      "actor": "system",
+      "model_refs": ["model_claude", "model_codex", "model_gemini"],
+      "source_refs": ["source_omc_metadata"],
+      "artifact_refs": ["artifact_convergence_omc_ingest_debate_loop_markdown"],
+      "routing_advice": "SDD-D2-01 lesson candidate created",
+      "status": "recorded"
+    }
+  ]
+}

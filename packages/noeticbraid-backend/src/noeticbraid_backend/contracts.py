@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Static helpers for the frozen Phase 1.2 v1.2.0 API contract."""
+"""Static helpers for the Phase 1.2 API contract plus SDD-D2-02 v1.3.0 additions."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = "1.2.0"
+CONTRACT_VERSION = "1.3.0"
 CONTRACT_V2_VERSION = "2.0.0"
 CONTRACT_AUTHORITATIVE = True
 OPENAPI_TITLE = "NoeticBraid Phase 1.2 API"
@@ -91,6 +91,49 @@ FROZEN_ROUTE_SPECS: tuple[dict[str, str], ...] = (
 )
 
 
+OMC_WORKSPACE_ROUTE_SPECS: tuple[dict[str, str], ...] = (
+    {
+        "method": "POST",
+        "path": "/api/projects/omc-ingest/tasks",
+        "summary": "Submit OMC ingestion task card",
+        "response_schema": "OMCProjectTaskResponse",
+    },
+    {
+        "method": "GET",
+        "path": "/api/projects/omc-ingest/candidates",
+        "summary": "List OMC ingestion candidates",
+        "response_schema": "OMCProjectCandidates",
+    },
+    {
+        "method": "GET",
+        "path": "/api/projects/omc-ingest/adopted-history",
+        "summary": "List OMC adopted candidates",
+        "response_schema": "OMCProjectAdoptedHistory",
+    },
+    {
+        "method": "POST",
+        "path": "/api/candidates/{id}/adopt",
+        "summary": "Adopt OMC candidate explicitly",
+        "response_schema": "CandidateAdoptionResponse",
+    },
+    {
+        "method": "GET",
+        "path": "/api/capabilities",
+        "summary": "List first-stage capabilities",
+        "response_schema": "CapabilitiesResponse",
+    },
+    {
+        "method": "POST",
+        "path": "/api/capabilities/{id}/health-check",
+        "summary": "Run capability health check",
+        "response_schema": "CapabilityHealthCheckResponse",
+    },
+)
+
+CONTRACT_1_3_ROUTE_SPECS: tuple[dict[str, str], ...] = (
+    FROZEN_ROUTE_SPECS[:4] + OMC_WORKSPACE_ROUTE_SPECS + FROZEN_ROUTE_SPECS[4:]
+)
+
 class _FrozenBaseModel(BaseModel):
     """Base model that rejects additive fields in frozen route wrappers."""
 
@@ -144,6 +187,69 @@ class RunLedgerRuns(_FrozenBaseModel):
     runs: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class OMCProjectTaskRequest(_FrozenBaseModel):
+    """Task-card request for the OMC ingestion workspace."""
+
+    task_id: str = Field(default="task_omc_ingest", min_length=1, max_length=128)
+    title: str = Field(default="吸收 OMC `omc help` slash 命令列表", min_length=1, max_length=512)
+    prompt: str = Field(..., min_length=1, max_length=4096)
+    source_refs: list[str] = Field(default_factory=list)
+
+
+class OMCProjectTaskResponse(_FrozenBaseModel):
+    """Response from running the OMC task card through the D2-01 adapter."""
+
+    project_id: str
+    task_id: str
+    candidate_id: str
+    convergence_markdown_ref: str
+    run_record_ref: str
+    artifact_refs: list[str] = Field(default_factory=list)
+    candidate: dict[str, Any]
+    run_records: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class OMCProjectCandidates(_FrozenBaseModel):
+    """Project-scoped candidate lesson list."""
+
+    project_id: str
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class OMCProjectAdoptedHistory(_FrozenBaseModel):
+    """Explicitly adopted candidate history for the OMC project."""
+
+    project_id: str
+    adopted_candidates: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CandidateAdoptionResponse(_FrozenBaseModel):
+    """Result of user-triggered candidate adoption."""
+
+    project_id: str
+    candidate_id: str
+    status: str
+    adopted_at: str
+    adopted_by: str
+    run_record_ref: str
+    adoption_artifact_ref: str
+    ledger_refs: list[str] = Field(default_factory=list)
+    candidate: dict[str, Any]
+
+
+class CapabilitiesResponse(_FrozenBaseModel):
+    """First-stage capability registry list."""
+
+    capabilities: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CapabilityHealthCheckResponse(_FrozenBaseModel):
+    """Capability health-check result wrapper."""
+
+    capability: dict[str, Any]
+    result: dict[str, Any]
+
+
 class _FallbackCoreModel(_FrozenBaseModel):
     """Fallback for local skeleton tests when noeticbraid-core is unavailable."""
 
@@ -159,6 +265,10 @@ try:  # Import where available; keep the backend skeleton runnable in isolation.
     ModelRoute = _schemas.ModelRoute
     VaultLayoutMinimum = _schemas.VaultLayoutMinimum
     RunRecordAggregate = _schemas.RunRecordAggregate
+    WorkspaceProject = _schemas.WorkspaceProject
+    CapabilityRegistryEntry = _schemas.CapabilityRegistryEntry
+    CapabilityHealthResult = _schemas.CapabilityHealthResult
+    CandidateLesson = _schemas.CandidateLesson
 except Exception:  # pragma: no cover - exercised only without the workspace dependency
 
     class Task(_FallbackCoreModel):
@@ -186,6 +296,18 @@ except Exception:  # pragma: no cover - exercised only without the workspace dep
         pass
 
     class RunRecordAggregate(_FallbackCoreModel):
+        pass
+
+    class WorkspaceProject(_FallbackCoreModel):
+        pass
+
+    class CapabilityRegistryEntry(_FallbackCoreModel):
+        pass
+
+    class CapabilityHealthResult(_FallbackCoreModel):
+        pass
+
+    class CandidateLesson(_FallbackCoreModel):
         pass
 
 
@@ -241,6 +363,10 @@ CORE_SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     ModelRoute,
     VaultLayoutMinimum,
     RunRecordAggregate,
+    WorkspaceProject,
+    CapabilityRegistryEntry,
+    CapabilityHealthResult,
+    CandidateLesson,
 )
 
 
@@ -262,6 +388,17 @@ ALL_SCHEMA_NAMES: tuple[str, ...] = (
     "ModelRoute",
     "VaultLayoutMinimum",
     "RunRecordAggregate",
+    "WorkspaceProject",
+    "CapabilityRegistryEntry",
+    "CapabilityHealthResult",
+    "CandidateLesson",
+    "OMCProjectTaskRequest",
+    "OMCProjectTaskResponse",
+    "OMCProjectCandidates",
+    "OMCProjectAdoptedHistory",
+    "CandidateAdoptionResponse",
+    "CapabilitiesResponse",
+    "CapabilityHealthCheckResponse",
 )
 
 __all__ = [
@@ -270,6 +407,8 @@ __all__ = [
     "CONTRACT_V2_VERSION",
     "OPENAPI_TITLE",
     "FROZEN_ROUTE_SPECS",
+    "OMC_WORKSPACE_ROUTE_SPECS",
+    "CONTRACT_1_3_ROUTE_SPECS",
     "CONTRACT_V2_SCHEMA_NAMES",
     "CONTRACT_V2_SCHEMA_METADATA",
     "CONTRACT_V2_ROUTE_SPECS",
@@ -282,6 +421,13 @@ __all__ = [
     "ApprovalQueue",
     "AccountPoolDraft",
     "RunLedgerRuns",
+    "OMCProjectTaskRequest",
+    "OMCProjectTaskResponse",
+    "OMCProjectCandidates",
+    "OMCProjectAdoptedHistory",
+    "CandidateAdoptionResponse",
+    "CapabilitiesResponse",
+    "CapabilityHealthCheckResponse",
     "Task",
     "RunRecord",
     "SourceRecord",
@@ -292,4 +438,8 @@ __all__ = [
     "ModelRoute",
     "VaultLayoutMinimum",
     "RunRecordAggregate",
+    "WorkspaceProject",
+    "CapabilityRegistryEntry",
+    "CapabilityHealthResult",
+    "CandidateLesson",
 ]

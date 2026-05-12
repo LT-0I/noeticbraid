@@ -1,0 +1,52 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "cap_claude_code_cli",
+      "display_name": "Claude Code CLI",
+      "provider": "anthropic",
+      "end_type": "cli",
+      "status": "unknown",
+      "health_mode": "mock",
+      "last_checked_at": null,
+      "last_result": null,
+      "source_ref": "source_ai_invocation_reference",
+      "first_stage": true
+    },
+    {
+      "capability_id": "cap_codex_cli",
+      "display_name": "Codex CLI",
+      "provider": "openai",
+      "end_type": "cli",
+      "status": "unknown",
+      "health_mode": "mock",
+      "last_checked_at": null,
+      "last_result": null,
+      "source_ref": "source_ai_invocation_reference",
+      "first_stage": true
+    },
+    {
+      "capability_id": "cap_gemini_cli",
+      "display_name": "Gemini CLI",
+      "provider": "google",
+      "end_type": "cli",
+      "status": "unknown",
+      "health_mode": "mock",
+      "last_checked_at": null,
+      "last_result": null,
+      "source_ref": "source_ai_invocation_reference",
+      "first_stage": true
+    },
+    {
+      "capability_id": "cap_gemini_web",
+      "display_name": "Gemini Web",
+      "provider": "google",
+      "end_type": "web",
+      "status": "unknown",
+      "health_mode": "mock",
+      "last_checked_at": null,
+      "last_result": null,
+      "source_ref": "source_ai_invocation_reference",
+      "first_stage": true
+    }
+  ]
+}

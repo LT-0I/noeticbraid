@@ -1,0 +1,6 @@
+{
+  "task_id": "task_omc_ingest",
+  "title": "吸收 OMC `omc help` slash 命令列表 → 写成 NoeticBraid lesson",
+  "prompt": "吸收 OMC `omc help` slash 命令列表，整理成 NoeticBraid program-memory candidate lesson。",
+  "source_refs": ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"]
+}

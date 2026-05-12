@@ -8,6 +8,8 @@ export const rootRoute = createRootRoute({
         <Link to="/workspace" data-testid="nav-workspace">Workspace</Link>
         <Link to="/runs" data-testid="nav-runs">Runs</Link>
         <Link to="/approvals" data-testid="nav-approvals">Approvals</Link>
+        <Link to="/projects/omc-ingest" data-testid="nav-projects">Projects</Link>
+        <Link to="/capabilities" data-testid="nav-capabilities">Capabilities</Link>
       </nav>
       <main style={{ padding: 16 }}>
         <Outlet />

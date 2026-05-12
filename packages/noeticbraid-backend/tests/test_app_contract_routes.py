@@ -21,13 +21,33 @@ from fastapi.testclient import TestClient
 
 from noeticbraid_backend.app import create_app
 from noeticbraid_backend.auth.token_store import TokenStore, utc_now
-from noeticbraid_backend.contracts import ALL_SCHEMA_NAMES, CONTRACT_VERSION, FROZEN_ROUTE_SPECS
+from noeticbraid_backend.contracts import ALL_SCHEMA_NAMES, CONTRACT_1_3_ROUTE_SPECS, CONTRACT_VERSION, FROZEN_ROUTE_SPECS, OMC_WORKSPACE_ROUTE_SPECS
 from noeticbraid_backend.settings import Settings
 from noeticbraid_core.ledger import RunLedger
 from noeticbraid_core.schemas import RunRecord
 
 FROZEN_OPENAPI_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml"
 FROZEN_OPENAPI_SHA256_PATH = REPO_ROOT / "docs" / "contracts" / "phase1_2_openapi.yaml.sha256"
+FROZEN_1_2_SCHEMA_NAMES = (
+    "HealthResponse",
+    "AuthResponse",
+    "EmptyDashboard",
+    "WorkspaceThreads",
+    "ApprovalQueue",
+    "AccountPoolDraft",
+    "RunLedgerRuns",
+    "Task",
+    "RunRecord",
+    "SourceRecord",
+    "ApprovalRequest",
+    "SideNote",
+    "DigestionItem",
+    "Workflow",
+    "ModelRoute",
+    "VaultLayoutMinimum",
+    "RunRecordAggregate",
+)
+
 EXPECTED_RUN_RECORD_FIELDS = (
     "run_id",
     "task_id",
@@ -79,12 +99,54 @@ EXPECTED_TARGET_OPERATIONS = {
         "approval_queue_api_approval_queue_get",
         "ApprovalQueue",
     ),
+    "/api/projects/omc-ingest/tasks": (
+        "post",
+        ["projects"],
+        "Submit OMC ingestion task card",
+        "submit_omc_ingest_task_api_projects_omc_ingest_tasks_post",
+        "OMCProjectTaskResponse",
+    ),
+    "/api/projects/omc-ingest/candidates": (
+        "get",
+        ["projects"],
+        "List OMC ingestion candidates",
+        "omc_ingest_candidates_api_projects_omc_ingest_candidates_get",
+        "OMCProjectCandidates",
+    ),
+    "/api/projects/omc-ingest/adopted-history": (
+        "get",
+        ["projects"],
+        "List OMC adopted candidates",
+        "omc_ingest_adopted_history_api_projects_omc_ingest_adopted_history_get",
+        "OMCProjectAdoptedHistory",
+    ),
+    "/api/candidates/{id}/adopt": (
+        "post",
+        ["projects"],
+        "Adopt OMC candidate explicitly",
+        "adopt_omc_candidate_api_candidates_id_adopt_post",
+        "CandidateAdoptionResponse",
+    ),
+    "/api/capabilities": (
+        "get",
+        ["capabilities"],
+        "List first-stage capabilities",
+        "capabilities_api_capabilities_get",
+        "CapabilitiesResponse",
+    ),
+    "/api/capabilities/{id}/health-check": (
+        "post",
+        ["capabilities"],
+        "Run capability health check",
+        "capability_health_check_api_capabilities_id_health_check_post",
+        "CapabilityHealthCheckResponse",
+    ),
 }
 
 EXPECTED_FIXTURES = {
     ("GET", "/api/health"): {
         "status": "ok",
-        "contract_version": "1.2.0",
+        "contract_version": "1.3.0",
         "authoritative": True,
     },
     ("POST", "/api/auth/startup_token"): {
@@ -275,25 +337,43 @@ def test_ledger_route_skips_corrupted_jsonl_without_500(tmp_path: Path) -> None:
         RunRecord.model_validate(record)
 
 
-def test_openapi_has_seven_paths_and_expected_response_schemas(tmp_path: Path) -> None:
+def test_openapi_has_contract_paths_and_expected_response_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
-    assert set(schema["paths"].keys()) == {spec["path"] for spec in FROZEN_ROUTE_SPECS}
-    for spec in FROZEN_ROUTE_SPECS:
+    assert set(schema["paths"].keys()) == {spec["path"] for spec in CONTRACT_1_3_ROUTE_SPECS}
+    for spec in CONTRACT_1_3_ROUTE_SPECS:
         operation = schema["paths"][spec["path"]][spec["method"].lower()]
         assert operation["summary"] == spec["summary"]
         ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
         assert ref == f"#/components/schemas/{spec['response_schema']}"
 
 
+
+def test_openapi_contains_omc_workspace_and_capability_routes_only(tmp_path: Path) -> None:
+    schema = _client(tmp_path).app.openapi()
+    d2_paths = {spec["path"] for spec in OMC_WORKSPACE_ROUTE_SPECS}
+
+    assert d2_paths == {
+        "/api/projects/omc-ingest/tasks",
+        "/api/projects/omc-ingest/candidates",
+        "/api/projects/omc-ingest/adopted-history",
+        "/api/candidates/{id}/adopt",
+        "/api/capabilities",
+        "/api/capabilities/{id}/health-check",
+    }
+    assert d2_paths.issubset(schema["paths"].keys())
+    assert "/api/external-references" not in schema["paths"]
+    assert "/api/sidenote-tracking" not in schema["paths"]
+
+
 def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     assert schema["openapi"] == "3.1.0"
     assert schema["info"]["title"] == "NoeticBraid Phase 1.2 API"
-    assert schema["info"]["version"] == "1.2.0"
-    assert schema["info"]["x-contract-version"] == "1.2.0"
+    assert schema["info"]["version"] == "1.3.0"
+    assert schema["info"]["x-contract-version"] == "1.3.0"
     assert schema["info"]["x-status"] == "AUTHORITATIVE"
     assert schema["info"]["x-frozen"] is True
-    assert CONTRACT_VERSION == "1.2.0"
+    assert CONTRACT_VERSION == "1.3.0"
 
     for path, (method, tags, summary, operation_id, response_schema) in EXPECTED_TARGET_OPERATIONS.items():
         operation = schema["paths"][path][method]
@@ -306,7 +386,7 @@ def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path
         )
 
 
-def test_seventeen_schema_names_are_referenced_by_contract_helpers() -> None:
+def test_contract_schema_names_include_frozen_and_d2_02_additions() -> None:
     assert ALL_SCHEMA_NAMES == (
         "HealthResponse",
         "AuthResponse",
@@ -325,10 +405,21 @@ def test_seventeen_schema_names_are_referenced_by_contract_helpers() -> None:
         "ModelRoute",
         "VaultLayoutMinimum",
         "RunRecordAggregate",
+        "WorkspaceProject",
+        "CapabilityRegistryEntry",
+        "CapabilityHealthResult",
+        "CandidateLesson",
+        "OMCProjectTaskRequest",
+        "OMCProjectTaskResponse",
+        "OMCProjectCandidates",
+        "OMCProjectAdoptedHistory",
+        "CandidateAdoptionResponse",
+        "CapabilitiesResponse",
+        "CapabilityHealthCheckResponse",
     )
 
 
-def test_openapi_components_contain_all_seventeen_schemas(tmp_path: Path) -> None:
+def test_openapi_components_contain_all_contract_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
     components = schema["components"]["schemas"]
     missing = set(ALL_SCHEMA_NAMES) - set(components.keys())
@@ -385,5 +476,5 @@ def test_frozen_openapi_1_2_0_yaml_anchors_and_sha_are_unchanged() -> None:
     assert "requestBody" not in startup_section
     assert "securitySchemes" not in contract
     assert "security:" not in contract
-    for schema_name in ALL_SCHEMA_NAMES:
+    for schema_name in FROZEN_1_2_SCHEMA_NAMES:
         assert f"    {schema_name}:" in contract

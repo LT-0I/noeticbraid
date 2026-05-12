@@ -1,0 +1,9 @@
+{
+  "capability_id": "cap_codex_cli",
+  "display_name": "Codex CLI",
+  "mode": "live_opt_in",
+  "status": "available",
+  "checked_at": "2026-05-12T12:00:00Z",
+  "summary": "codex 5.x",
+  "artifact_ref": ".omx/artifacts/capability-health-cap_codex_cli-20260512T120000Z.json"
+}

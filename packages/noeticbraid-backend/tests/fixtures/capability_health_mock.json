@@ -1,0 +1,8 @@
+{
+  "capabilities": [
+    {"capability_id": "cap_claude_code_cli", "display_name": "Claude Code CLI", "mode": "mock", "status": "available"},
+    {"capability_id": "cap_codex_cli", "display_name": "Codex CLI", "mode": "mock", "status": "available"},
+    {"capability_id": "cap_gemini_cli", "display_name": "Gemini CLI", "mode": "mock", "status": "available"},
+    {"capability_id": "cap_gemini_web", "display_name": "Gemini Web", "mode": "mock", "status": "available"}
+  ]
+}

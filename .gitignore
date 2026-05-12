@@ -51,3 +51,7 @@ Thumbs.db
 .omx/
 .tmp/
 **/pytest-tmp/
+
+# Console test artifacts
+packages/noeticbraid-console/playwright-report/
+packages/noeticbraid-console/test-results/

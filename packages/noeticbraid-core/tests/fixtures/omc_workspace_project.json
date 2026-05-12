@@ -1,0 +1,19 @@
+{
+  "$schema_status": "candidate",
+  "contract_version": "1.3.0",
+  "project_id": "omc-ingest",
+  "title": "吸收 OMC",
+  "project_type": "ingestion",
+  "owner": "user",
+  "status": "active",
+  "chat_entry": {
+    "mode": "task_card",
+    "label": "吸收 OMC task card",
+    "endpoint": "/api/projects/omc-ingest/tasks"
+  },
+  "external_reference_refs": ["source_omc_repo", "source_omc_debate_loop_docs"],
+  "candidate_refs": ["memory_omc_ingest_debate_loop"],
+  "adopted_candidate_refs": ["memory_omc_help_lesson"],
+  "capability_refs": ["cap_claude_code_cli", "cap_codex_cli", "cap_gemini_cli", "cap_gemini_web"],
+  "run_refs": ["run_omc_ingest_demo"]
+}
