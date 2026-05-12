@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from noeticbraid_core.r6_gate import R6_GATE_DEFAULT_TTL_DAYS, R6GateState
 from noeticbraid_core.schemas import CandidateLesson, WorkspaceProject
 
 PROJECT_ID = "omc-ingest"
@@ -187,7 +189,35 @@ def candidate_from_d2_result(result: dict[str, Any]) -> dict[str, Any]:
         "reuse_evidence_refs": [],
         "artifact_refs": artifact_refs,
         "source_refs": d2_candidate.get("source_refs", []),
+        "r6_gate": _new_r6_gate(d2_candidate.get("created_at")).model_dump(mode="json"),
     }
+
+
+def _new_r6_gate(created_at: object | None) -> R6GateState:
+    created = _parse_datetime(created_at) or datetime.now(timezone.utc).replace(microsecond=0)
+    return R6GateState(expires_at=created + timedelta(days=R6_GATE_DEFAULT_TTL_DAYS))
+
+
+def _parse_datetime(value: object | None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _ensure_utc(value).replace(microsecond=0)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return _ensure_utc(datetime.fromisoformat(text)).replace(microsecond=0)
+    except ValueError:
+        return None
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 __all__ = ["DEFAULT_UPGRADE_RULE", "OMCProjectStore", "PROJECT_ID", "PROJECT_TITLE", "candidate_from_d2_result", "public_artifact_ref"]

@@ -13,8 +13,8 @@ for path in (REPO_ROOT / "packages" / "noeticbraid-core" / "src", PACKAGE_ROOT /
 from noeticbraid_backend.contracts import CONTRACT_1_3_ROUTE_SPECS, CONTRACT_VERSION, OMC_WORKSPACE_ROUTE_SPECS
 
 
-def test_contract_version_minor_bump_only_to_1_3_0() -> None:
-    assert CONTRACT_VERSION == "1.3.0"
+def test_contract_version_minor_bump_only_to_1_4_0() -> None:
+    assert CONTRACT_VERSION == "1.4.0"
     assert not CONTRACT_VERSION.startswith("2.")
 
 

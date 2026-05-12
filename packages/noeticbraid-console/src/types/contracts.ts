@@ -1,7 +1,7 @@
 /**
  * NoeticBraid contract types used by the console.
- * Frozen Phase 1.1/1.2 shapes remain intact; SDD-D2-02 adds contract 1.3.0
- * OMC workspace and capability registry surfaces.
+ * Frozen Phase 1.1/1.2 shapes remain intact; SDD-D2-02/D2-03 add contract
+ * 1.3.0 surfaces and SDD-D2-04 adds the R6 candidate gate mirror.
  */
 
 // ============================================================
@@ -180,6 +180,7 @@ export interface ApprovalQueue {
 // ============================================================
 
 export type CandidateStatus = 'candidate' | 'adopted' | 'confirmed' | 'archived'
+export type R6GateStatus = 'candidate' | 'confirmed' | 'expired'
 export type CapabilityEndType = 'cli' | 'web'
 export type CapabilityStatus =
   | 'unknown'
@@ -190,6 +191,14 @@ export type CapabilityStatus =
   | 'unhealthy'
   | 'not_implemented'
 export type CapabilityHealthMode = 'mock' | 'live_opt_in'
+
+export interface R6GateState {
+  reuse_count: number
+  ledger_evidence_refs: string[]
+  adopted_at: string | null
+  expires_at: string | null
+  r6_gate_schema_version: '1.0.0'
+}
 
 export interface CandidateLesson {
   candidate_id: string
@@ -204,6 +213,7 @@ export interface CandidateLesson {
   reuse_evidence_refs: string[]
   artifact_refs: string[]
   source_refs: string[]
+  r6_gate?: R6GateState | null
 }
 
 export interface OMCExternalReference {

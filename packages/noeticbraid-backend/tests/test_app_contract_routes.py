@@ -146,7 +146,7 @@ EXPECTED_TARGET_OPERATIONS = {
 EXPECTED_FIXTURES = {
     ("GET", "/api/health"): {
         "status": "ok",
-        "contract_version": "1.3.0",
+        "contract_version": "1.4.0",
         "authoritative": True,
     },
     ("POST", "/api/auth/startup_token"): {
@@ -369,11 +369,11 @@ def test_runtime_metadata_and_target_operations_match_phase1_2_contract(tmp_path
     schema = _client(tmp_path).app.openapi()
     assert schema["openapi"] == "3.1.0"
     assert schema["info"]["title"] == "NoeticBraid Phase 1.2 API"
-    assert schema["info"]["version"] == "1.3.0"
-    assert schema["info"]["x-contract-version"] == "1.3.0"
+    assert schema["info"]["version"] == "1.4.0"
+    assert schema["info"]["x-contract-version"] == "1.4.0"
     assert schema["info"]["x-status"] == "AUTHORITATIVE"
     assert schema["info"]["x-frozen"] is True
-    assert CONTRACT_VERSION == "1.3.0"
+    assert CONTRACT_VERSION == "1.4.0"
 
     for path, (method, tags, summary, operation_id, response_schema) in EXPECTED_TARGET_OPERATIONS.items():
         operation = schema["paths"][path][method]
@@ -409,6 +409,7 @@ def test_contract_schema_names_include_frozen_and_d2_02_additions() -> None:
         "CapabilityRegistryEntry",
         "CapabilityHealthResult",
         "CandidateLesson",
+        "R6GateState",
         "OMCProjectTaskRequest",
         "OMCProjectTaskResponse",
         "OMCProjectCandidates",

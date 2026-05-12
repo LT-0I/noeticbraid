@@ -10,12 +10,14 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-TrackedProjectStatus = Literal["candidate", "confirmed"]
+from noeticbraid_core.r6_gate import R6_GATE_DEFAULT_TTL_DAYS, R6GateState, evaluate_r6_gate
+
+TrackedProjectStatus = Literal["candidate", "confirmed", "expired"]
 
 REGISTRY_ENV_VAR = "NOETICBRAID_TRACKED_PROJECTS_PATH"
 DEFAULT_REGISTRY_PATH = Path("~/.noeticbraid/tracked_projects.json")
@@ -36,6 +38,7 @@ class ProjectCandidate:
     evidence_source: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: _now_iso())
     updated_at: str = field(default_factory=lambda: _now_iso())
+    r6_gate: R6GateState | None = None
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -48,14 +51,16 @@ class ProjectCandidate:
             "evidence_source": list(dict.fromkeys(self.evidence_source)),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "r6_gate": self.r6_gate.model_dump(mode="json") if self.r6_gate is not None else None,
         }
 
     @classmethod
     def from_record(cls, data: dict[str, Any]) -> "ProjectCandidate":
         status = str(data.get("status", "candidate"))
-        if status not in {"candidate", "confirmed"}:
+        if status not in {"candidate", "confirmed", "expired"}:
             raise ValueError(f"invalid tracked_project status: {status!r}")
         project_ref = normalize_project_ref(str(data["project_ref"]))
+        r6_gate_data = data.get("r6_gate")
         return cls(
             candidate_type="tracked_project",
             project_ref=project_ref,
@@ -66,6 +71,7 @@ class ProjectCandidate:
             evidence_source=[str(item) for item in data.get("evidence_source", []) if str(item).strip()],
             created_at=str(data.get("created_at") or _now_iso()),
             updated_at=str(data.get("updated_at") or _now_iso()),
+            r6_gate=R6GateState.model_validate(r6_gate_data) if r6_gate_data is not None else None,
         )
 
 
@@ -135,14 +141,11 @@ def auto_discover(vault_path: str | Path) -> list[ProjectCandidate]:
         if previous is not None:
             merged_refs = list(dict.fromkeys([*previous.evidence_source, *unique_refs]))
             aliases = _default_aliases(project_ref, previous.project_name, previous.aliases)
-            existing[project_ref] = ProjectCandidate(
-                project_ref=project_ref,
-                project_name=previous.project_name,
+            existing[project_ref] = replace(
+                previous,
                 aliases=aliases,
-                status=previous.status,
                 mention_count=max(previous.mention_count, len(unique_refs)),
                 evidence_source=merged_refs,
-                created_at=previous.created_at,
                 updated_at=now,
             )
             changed = True
@@ -157,6 +160,7 @@ def auto_discover(vault_path: str | Path) -> list[ProjectCandidate]:
             evidence_source=unique_refs,
             created_at=now,
             updated_at=now,
+            r6_gate=_new_r6_gate(created_at=now),
         )
         changed = True
 
@@ -175,6 +179,25 @@ def unconfirm(project_ref: str) -> None:
     """Demote a confirmed tracked project back to candidate without deleting history."""
 
     _set_status(project_ref, "candidate")
+
+
+def cleanup_expired_candidates(
+    path: str | Path | None = None, *, now: datetime | None = None
+) -> list[ProjectCandidate]:
+    """Mark expired tracked-project candidates without deleting registry data."""
+
+    run_at = _ensure_utc(now or datetime.now(timezone.utc))
+    projects = load_registry(path)
+    changed = False
+    updated: list[ProjectCandidate] = []
+    for item in projects:
+        if item.status == "candidate" and evaluate_r6_gate(item.r6_gate, now=run_at) == "expired":
+            item = replace(item, status="expired", updated_at=_iso(run_at))
+            changed = True
+        updated.append(item)
+    if changed:
+        save_registry(updated, path)
+    return [item for item in updated if item.status == "expired"]
 
 
 def confirmed_projects(path: str | Path | None = None) -> list[ProjectCandidate]:
@@ -212,18 +235,25 @@ def default_project_name(project_ref: str) -> str:
 def _set_status(project_ref: str, status: TrackedProjectStatus) -> None:
     ref = normalize_project_ref(project_ref)
     projects = load_registry()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     for index, item in enumerate(projects):
         if item.project_ref == ref:
-            projects[index] = ProjectCandidate(
-                project_ref=item.project_ref,
-                project_name=item.project_name,
-                aliases=item.aliases,
-                status=status,
-                mention_count=item.mention_count,
-                evidence_source=item.evidence_source,
-                created_at=item.created_at,
-                updated_at=_now_iso(),
-            )
+            gate = item.r6_gate or _new_r6_gate(created_at=item.created_at)
+            if status == "confirmed":
+                gate = R6GateState(
+                    reuse_count=gate.reuse_count,
+                    ledger_evidence_refs=gate.ledger_evidence_refs,
+                    adopted_at=now,
+                    expires_at=gate.expires_at,
+                )
+            elif status == "candidate":
+                gate = R6GateState(
+                    reuse_count=gate.reuse_count,
+                    ledger_evidence_refs=gate.ledger_evidence_refs,
+                    adopted_at=None,
+                    expires_at=gate.expires_at,
+                )
+            projects[index] = replace(item, status=status, updated_at=_iso(now), r6_gate=gate)
             save_registry(projects)
             return
     raise KeyError(f"tracked_project not found: {ref}")
@@ -251,5 +281,36 @@ def _default_aliases(project_ref: str, project_name: str, aliases: list[str]) ->
     return result
 
 
+def _new_r6_gate(*, created_at: str | datetime | None = None) -> R6GateState:
+    created = _parse_datetime(created_at) or datetime.now(timezone.utc).replace(microsecond=0)
+    return R6GateState(expires_at=created + timedelta(days=R6_GATE_DEFAULT_TTL_DAYS))
+
+
+def _parse_datetime(value: str | datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _ensure_utc(value).replace(microsecond=0)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return _ensure_utc(datetime.fromisoformat(text)).replace(microsecond=0)
+    except ValueError:
+        return None
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _iso(value: datetime) -> str:
+    return _ensure_utc(value).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return _iso(datetime.now(timezone.utc))

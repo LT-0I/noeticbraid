@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .b1_detector import run_b1_detector_with_report
-from .tracked_project import approve, unconfirm
+from .tracked_project import approve, cleanup_expired_candidates, unconfirm
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     unconfirm_cmd.add_argument("project_ref")
     unconfirm_cmd.set_defaults(func=_cmd_b1_unconfirm)
 
+    cleanup_cmd = sub.add_parser("b1-gate-cleanup", help="Mark expired tracked_project candidates")
+    cleanup_cmd.set_defaults(func=_cmd_b1_gate_cleanup)
+
     return parser
 
 
@@ -36,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_b1_detect(args: argparse.Namespace) -> int:
+    cleanup_expired_candidates()
     report = run_b1_detector_with_report(args.vault_path)
     print(f"b1 candidates: {report.candidate_count}")
     print(f"queue: {report.queue_path}")
@@ -57,6 +61,14 @@ def _cmd_b1_approve(args: argparse.Namespace) -> int:
 def _cmd_b1_unconfirm(args: argparse.Namespace) -> int:
     unconfirm(args.project_ref)
     print(f"candidate: {args.project_ref}")
+    return 0
+
+
+def _cmd_b1_gate_cleanup(args: argparse.Namespace) -> int:
+    expired = cleanup_expired_candidates()
+    print(f"expired tracked_project candidates: {len(expired)}")
+    for item in expired:
+        print(f"- {item.project_ref}")
     return 0
 
 

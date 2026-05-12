@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Static helpers for Phase 1.2 plus additive SDD-D2-02/D2-03 v1.3.0 surfaces."""
+"""Static helpers for Phase 1.2 plus additive SDD-D2-02/D2-03/D2-04 surfaces."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = "1.3.0"
+CONTRACT_VERSION = "1.4.0"
 CONTRACT_V2_VERSION = "2.0.0"
 CONTRACT_AUTHORITATIVE = True
 OPENAPI_TITLE = "NoeticBraid Phase 1.2 API"
@@ -269,6 +269,7 @@ try:  # Import where available; keep the backend skeleton runnable in isolation.
     CapabilityRegistryEntry = _schemas.CapabilityRegistryEntry
     CapabilityHealthResult = _schemas.CapabilityHealthResult
     CandidateLesson = _schemas.CandidateLesson
+    R6GateState = importlib.import_module("noeticbraid_core.r6_gate").R6GateState
 except Exception:  # pragma: no cover - exercised only without the workspace dependency
 
     class Task(_FallbackCoreModel):
@@ -308,6 +309,9 @@ except Exception:  # pragma: no cover - exercised only without the workspace dep
         pass
 
     class CandidateLesson(_FallbackCoreModel):
+        pass
+
+    class R6GateState(_FallbackCoreModel):
         pass
 
 
@@ -367,6 +371,7 @@ CORE_SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     CapabilityRegistryEntry,
     CapabilityHealthResult,
     CandidateLesson,
+    R6GateState,
 )
 
 
@@ -392,6 +397,7 @@ ALL_SCHEMA_NAMES: tuple[str, ...] = (
     "CapabilityRegistryEntry",
     "CapabilityHealthResult",
     "CandidateLesson",
+    "R6GateState",
     "OMCProjectTaskRequest",
     "OMCProjectTaskResponse",
     "OMCProjectCandidates",
@@ -442,4 +448,5 @@ __all__ = [
     "CapabilityRegistryEntry",
     "CapabilityHealthResult",
     "CandidateLesson",
+    "R6GateState",
 ]

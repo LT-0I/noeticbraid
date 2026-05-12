@@ -92,6 +92,85 @@ describe('console routes', () => {
     expect(screen.getByTestId('omc-run-run_omc_ingest_debate_loop-lesson_candidate_created')).toBeInTheDocument()
   })
 
+  test('omc-ingest renders R6 gate badge', async () => {
+    server.use(
+      http.get('/api/projects/omc-ingest/candidates', () =>
+        HttpResponse.json({
+          project_id: 'omc-ingest',
+          candidates: [
+            {
+              candidate_id: 'memory_r6_confirmed',
+              project_id: 'omc-ingest',
+              source_sdd_ids: ['SDD-D2-01', 'SDD-D2-02'],
+              summary: 'confirmed through ledger-backed reuse',
+              status: 'candidate',
+              upgrade_rule:
+                'explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient',
+              adopted_at: null,
+              adopted_by: null,
+              run_record_ref: 'run_r6_confirmed',
+              reuse_evidence_refs: [],
+              artifact_refs: ['artifact_convergence_r6_confirmed'],
+              source_refs: ['source_omc_metadata'],
+              r6_gate: {
+                reuse_count: 3,
+                ledger_evidence_refs: ['run_a', 'run_b', 'run_c'],
+                adopted_at: null,
+                expires_at: null,
+                r6_gate_schema_version: '1.0.0',
+              },
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/projects/omc-ingest')
+
+    await waitFor(() => expect(screen.getByTestId('r6-gate-memory_r6_confirmed')).toBeInTheDocument())
+    expect(screen.getByTestId('r6-gate-memory_r6_confirmed')).toHaveTextContent('R6Gate: confirmed')
+    expect(screen.getByTestId('r6-gate-memory_r6_confirmed').style.color).toBe('green')
+  })
+
+  test('omc-ingest shows reuse count', async () => {
+    server.use(
+      http.get('/api/projects/omc-ingest/candidates', () =>
+        HttpResponse.json({
+          project_id: 'omc-ingest',
+          candidates: [
+            {
+              candidate_id: 'memory_r6_reuse_count',
+              project_id: 'omc-ingest',
+              source_sdd_ids: ['SDD-D2-01', 'SDD-D2-02'],
+              summary: 'candidate with reuse evidence count',
+              status: 'candidate',
+              upgrade_rule:
+                'explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient',
+              adopted_at: null,
+              adopted_by: null,
+              run_record_ref: 'run_r6_reuse_count',
+              reuse_evidence_refs: [],
+              artifact_refs: ['artifact_convergence_r6_reuse_count'],
+              source_refs: ['source_omc_metadata'],
+              r6_gate: {
+                reuse_count: 2,
+                ledger_evidence_refs: ['run_a', 'run_b'],
+                adopted_at: null,
+                expires_at: null,
+                r6_gate_schema_version: '1.0.0',
+              },
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/projects/omc-ingest')
+
+    await waitFor(() => expect(screen.getByTestId('r6-reuse-count-memory_r6_reuse_count')).toBeInTheDocument())
+    expect(screen.getByTestId('r6-reuse-count-memory_r6_reuse_count')).toHaveTextContent('reuse count: 2')
+  })
+
   test('OMC project candidate adopt button calls backend adoption endpoint', async () => {
     let adoptedId = ''
     server.use(

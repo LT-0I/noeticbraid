@@ -14,8 +14,8 @@ from noeticbraid_backend.contracts import (
 )
 
 
-def test_contract_v1_3_0_minor_bump_preserves_frozen_routes() -> None:
-    assert CONTRACT_VERSION == "1.3.0"
+def test_contract_v1_4_0_minor_bump_preserves_frozen_routes() -> None:
+    assert CONTRACT_VERSION == "1.4.0"
     assert tuple(spec["path"] for spec in FROZEN_ROUTE_SPECS) == (
         "/api/health",
         "/api/auth/startup_token",
@@ -48,6 +48,7 @@ def test_contract_v1_3_0_minor_bump_preserves_frozen_routes() -> None:
         "CapabilityRegistryEntry",
         "CapabilityHealthResult",
         "CandidateLesson",
+        "R6GateState",
         "OMCProjectTaskRequest",
         "OMCProjectTaskResponse",
         "OMCProjectCandidates",

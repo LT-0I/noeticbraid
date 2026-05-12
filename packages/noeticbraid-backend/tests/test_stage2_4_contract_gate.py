@@ -70,6 +70,7 @@ EXPECTED_SCHEMAS = {
     "CapabilityRegistryEntry",
     "CapabilityHealthResult",
     "CandidateLesson",
+    "R6GateState",
     "OMCProjectTaskRequest",
     "OMCProjectTaskResponse",
     "OMCProjectCandidates",

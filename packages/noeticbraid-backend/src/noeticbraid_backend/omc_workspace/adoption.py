@@ -10,9 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from noeticbraid_core.ledger import RunLedger
+from noeticbraid_core.r6_gate import R6GateState, evaluate_r6_gate
+from noeticbraid_core.r6_gate import record_reuse as record_r6_reuse
 from noeticbraid_core.schemas import CandidateLesson, RunRecord
 
-from .project_store import DEFAULT_UPGRADE_RULE
+from noeticbraid_backend.settings import Settings
+
+from .project_store import DEFAULT_UPGRADE_RULE, OMCProjectStore
 
 
 def utc_now() -> datetime:
@@ -79,6 +83,13 @@ def adopt_candidate(candidate: dict[str, Any], *, project_root: Path, actor: str
     artifact_value = str(artifact_path)
     if artifact_path.is_relative_to(project_root):
         artifact_value = str(artifact_path.relative_to(project_root))
+    gate = prior.r6_gate or R6GateState()
+    gate = R6GateState(
+        reuse_count=gate.reuse_count,
+        ledger_evidence_refs=gate.ledger_evidence_refs,
+        adopted_at=moment,
+        expires_at=gate.expires_at,
+    )
     adopted = prior.model_copy(
         update={
             "status": "adopted",
@@ -88,6 +99,7 @@ def adopt_candidate(candidate: dict[str, Any], *, project_root: Path, actor: str
             "upgrade_rule": prior.upgrade_rule or DEFAULT_UPGRADE_RULE,
             "artifact_refs": list(dict.fromkeys([*prior.artifact_refs, artifact_value])),
             "reuse_evidence_refs": list(dict.fromkeys([*prior.reuse_evidence_refs, artifact_ref])),
+            "r6_gate": gate,
         }
     )
     return {
@@ -98,4 +110,28 @@ def adopt_candidate(candidate: dict[str, Any], *, project_root: Path, actor: str
     }
 
 
-__all__ = ["adopt_candidate", "artifact_dir"]
+def record_reuse(
+    candidate_id: str,
+    ledger_run_id: str,
+    *,
+    state_dir: Path | None = None,
+    store: OMCProjectStore | None = None,
+) -> dict[str, Any]:
+    """Record ledger-backed reuse evidence for an OMC candidate and write it back."""
+
+    resolved_store = store or OMCProjectStore(state_dir or Settings.from_env().state_dir)
+    candidate = resolved_store.find_candidate(candidate_id)
+    if candidate is None:
+        raise KeyError(f"candidate not found: {candidate_id}")
+    lesson = CandidateLesson.model_validate(candidate)
+    gate = record_r6_reuse(lesson.r6_gate, ledger_run_id)
+    updated = lesson.model_copy(update={"r6_gate": gate}).model_dump(mode="json")
+    stored = resolved_store.upsert_candidate(updated)
+    return {
+        "candidate": stored,
+        "r6_gate": gate.model_dump(mode="json"),
+        "gate_status": evaluate_r6_gate(gate),
+    }
+
+
+__all__ = ["adopt_candidate", "artifact_dir", "record_reuse"]

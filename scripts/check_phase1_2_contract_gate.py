@@ -179,6 +179,7 @@ EXPECTED_RUNTIME_SCHEMA_NAMES: tuple[str, ...] = (
     "CapabilityRegistryEntry",
     "CapabilityHealthResult",
     "CandidateLesson",
+    "R6GateState",
     "OMCProjectTaskRequest",
     "OMCProjectTaskResponse",
     "OMCProjectCandidates",

@@ -1,4 +1,5 @@
 import { createRoute } from '@tanstack/react-router'
+import type { CSSProperties } from 'react'
 import { useState } from 'react'
 
 import {
@@ -9,18 +10,44 @@ import {
   useOmcCandidates,
   useSubmitOmcTask,
 } from '@/api/client'
-import type { CandidateLesson } from '@/types/contracts'
+import type { CandidateLesson, R6GateStatus } from '@/types/contracts'
 
 import { rootRoute } from '../__root'
 
 const defaultPrompt = '吸收 OMC `omc help` slash 命令列表，整理成 NoeticBraid candidate lesson。'
 
+function r6GateStatus(candidate: CandidateLesson): R6GateStatus {
+  const gate = candidate.r6_gate
+  if (!gate) return 'candidate'
+  if (gate.adopted_at) return 'confirmed'
+  if (gate.reuse_count >= 3 && gate.ledger_evidence_refs.length >= 1) return 'confirmed'
+  if (gate.expires_at && Date.now() > Date.parse(gate.expires_at)) return 'expired'
+  return 'candidate'
+}
+
+function r6BadgeStyle(status: R6GateStatus): CSSProperties {
+  if (status === 'confirmed') return { color: 'green' }
+  if (status === 'expired') return { color: 'darkgray', textDecoration: 'line-through' }
+  return { color: 'gray' }
+}
+
 function CandidateItem({ candidate }: { candidate: CandidateLesson }) {
   const adopt = useAdoptCandidate()
   const alreadyAdopted = candidate.status === 'adopted' || candidate.status === 'confirmed'
+  const gateStatus = r6GateStatus(candidate)
+  const reuseCount = candidate.r6_gate?.reuse_count ?? 0
   return (
     <li data-testid={`candidate-item-${candidate.candidate_id}`}>
       <strong>{candidate.candidate_id}</strong> · {candidate.status}
+      <span
+        data-testid={`r6-gate-${candidate.candidate_id}`}
+        style={{ marginLeft: 8, ...r6BadgeStyle(gateStatus) }}
+      >
+        R6Gate: {gateStatus}
+      </span>
+      <span data-testid={`r6-reuse-count-${candidate.candidate_id}`} style={{ marginLeft: 8 }}>
+        reuse count: {reuseCount}
+      </span>
       <p>{candidate.summary}</p>
       <p>run record: {candidate.run_record_ref ?? 'pending'}</p>
       <button

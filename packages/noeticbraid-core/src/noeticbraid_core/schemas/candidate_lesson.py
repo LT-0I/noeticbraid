@@ -7,6 +7,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from noeticbraid_core.r6_gate import R6GateState
+
 from ._common import COMMON_MODEL_CONFIG, empty_str_to_none, ensure_optional_utc_datetime
 
 CandidateStatus = Literal["candidate", "adopted", "confirmed", "archived"]
@@ -30,6 +32,7 @@ class CandidateLesson(BaseModel):
     reuse_evidence_refs: list[str] = Field(default_factory=list, max_length=100)
     artifact_refs: list[str] = Field(default_factory=list, max_length=100)
     source_refs: list[str] = Field(default_factory=list, max_length=100)
+    r6_gate: R6GateState | None = None
 
     @field_validator("adopted_at")
     @classmethod
