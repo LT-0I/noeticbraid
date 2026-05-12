@@ -83,5 +83,38 @@ def test_health_check_real_mode_writes_artifact_trace_when_enabled(tmp_path: Pat
     artifact_path = tmp_path / result["artifact_ref"]
     assert artifact_path.exists()
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-    assert artifact["mode"] == "live_opt_in"
+    assert artifact["mode"] == "live"
     assert artifact["capability_id"] == "cap_codex_cli"
+
+
+def test_capabilities_routes_status_field_unhealthy_when_subprocess_fails(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="", stderr="provider unavailable"),
+    )
+
+    response = _client(tmp_path).post("/api/capabilities/cap_codex_cli/health-check")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"]["status"] == "unhealthy"
+    assert body["capability"]["status"] == "unhealthy"
+    assert body["result"]["error_msg"] == "provider unavailable"
+
+
+def test_capabilities_routes_returns_http_200_even_on_unhealthy(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
+
+    def fake_run(*_args, **_kwargs):
+        raise FileNotFoundError("missing codex")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    response = _client(tmp_path).post("/api/capabilities/cap_codex_cli/health-check")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"]["status"] == "unhealthy"
+    assert body["result"]["version"] is None
+    assert body["result"]["error_msg"] == "codex executable not found"

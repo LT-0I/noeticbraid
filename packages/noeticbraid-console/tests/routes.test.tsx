@@ -137,6 +137,194 @@ describe('console routes', () => {
     )
   })
 
+  test('capabilities route shows status badge for healthy unhealthy and not implemented', async () => {
+    server.use(
+      http.get('/api/capabilities', () =>
+        HttpResponse.json({
+          capabilities: [
+            {
+              capability_id: 'cap_claude_code_cli',
+              display_name: 'Claude Code CLI',
+              provider: 'anthropic',
+              end_type: 'cli',
+              status: 'healthy',
+              health_mode: 'live_opt_in',
+              last_checked_at: '2026-05-12T12:30:00Z',
+              last_result: null,
+              source_ref: 'source_ai_invocation_reference',
+              first_stage: true,
+            },
+            {
+              capability_id: 'cap_codex_cli',
+              display_name: 'Codex CLI',
+              provider: 'openai',
+              end_type: 'cli',
+              status: 'unhealthy',
+              health_mode: 'live_opt_in',
+              last_checked_at: '2026-05-12T12:31:00Z',
+              last_result: null,
+              source_ref: 'source_ai_invocation_reference',
+              first_stage: true,
+            },
+            {
+              capability_id: 'cap_gemini_cli',
+              display_name: 'Gemini CLI',
+              provider: 'google',
+              end_type: 'cli',
+              status: 'unknown',
+              health_mode: 'mock',
+              last_checked_at: null,
+              last_result: null,
+              source_ref: 'source_ai_invocation_reference',
+              first_stage: true,
+            },
+            {
+              capability_id: 'cap_gemini_web',
+              display_name: 'Gemini Web',
+              provider: 'google',
+              end_type: 'web',
+              status: 'not_implemented',
+              health_mode: 'live_opt_in',
+              last_checked_at: '2026-05-12T12:32:00Z',
+              last_result: null,
+              source_ref: 'source_ai_invocation_reference',
+              first_stage: true,
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/capabilities')
+    await waitFor(() => expect(screen.getByTestId('capabilities-root')).toBeInTheDocument())
+
+    expect(screen.getByTestId('status-badge-cap_claude_code_cli')).toHaveTextContent('healthy')
+    expect(screen.getByTestId('status-badge-cap_claude_code_cli').style.color).toBe('green')
+    expect(screen.getByTestId('status-badge-cap_codex_cli')).toHaveTextContent('unhealthy')
+    expect(screen.getByTestId('status-badge-cap_codex_cli').style.color).toBe('red')
+    expect(screen.getByTestId('status-badge-cap_gemini_web')).toHaveTextContent('not_implemented')
+    expect(screen.getByTestId('status-badge-cap_gemini_web').style.color).toBe('gray')
+  })
+
+  test('capabilities route shows version last checked and error message after manual trigger', async () => {
+    let triggered = false
+    const initialCapabilities = [
+      {
+        capability_id: 'cap_claude_code_cli',
+        display_name: 'Claude Code CLI',
+        provider: 'anthropic',
+        end_type: 'cli',
+        status: 'unknown',
+        health_mode: 'mock',
+        last_checked_at: null,
+        last_result: null,
+        source_ref: 'source_ai_invocation_reference',
+        first_stage: true,
+      },
+      {
+        capability_id: 'cap_codex_cli',
+        display_name: 'Codex CLI',
+        provider: 'openai',
+        end_type: 'cli',
+        status: 'unknown',
+        health_mode: 'mock',
+        last_checked_at: null,
+        last_result: null,
+        source_ref: 'source_ai_invocation_reference',
+        first_stage: true,
+      },
+      {
+        capability_id: 'cap_gemini_cli',
+        display_name: 'Gemini CLI',
+        provider: 'google',
+        end_type: 'cli',
+        status: 'unknown',
+        health_mode: 'mock',
+        last_checked_at: null,
+        last_result: null,
+        source_ref: 'source_ai_invocation_reference',
+        first_stage: true,
+      },
+      {
+        capability_id: 'cap_gemini_web',
+        display_name: 'Gemini Web',
+        provider: 'google',
+        end_type: 'web',
+        status: 'unknown',
+        health_mode: 'mock',
+        last_checked_at: null,
+        last_result: null,
+        source_ref: 'source_ai_invocation_reference',
+        first_stage: true,
+      },
+    ]
+    const codexResult = {
+      capability_id: 'cap_codex_cli',
+      mode: 'live_opt_in',
+      status: 'healthy',
+      checked_at: '2026-05-12T12:30:00Z',
+      summary: 'Live health OK for Codex CLI; version parsed.',
+      artifact_ref: '.omx/artifacts/health-check-cap_codex_cli-20260512T123000Z.json',
+      version: 'codex 5.5',
+      last_checked: '2026-05-12T12:30:00Z',
+      error_msg: null,
+    }
+    const triggeredCapabilities = initialCapabilities.map((capability) => {
+      if (capability.capability_id === 'cap_codex_cli') {
+        return {
+          ...capability,
+          status: 'healthy',
+          health_mode: 'live_opt_in',
+          last_checked_at: codexResult.last_checked,
+          last_result: codexResult,
+        }
+      }
+      if (capability.capability_id === 'cap_gemini_web') {
+        return {
+          ...capability,
+          status: 'not_implemented',
+          health_mode: 'live_opt_in',
+          last_checked_at: '2026-05-12T12:31:00Z',
+          last_result: {
+            capability_id: 'cap_gemini_web',
+            mode: 'live_opt_in',
+            status: 'not_implemented',
+            checked_at: '2026-05-12T12:31:00Z',
+            summary: 'real ping deferred to SDD-D2-03-hotfix-01',
+            artifact_ref: null,
+            version: null,
+            last_checked: '2026-05-12T12:31:00Z',
+            error_msg: 'real ping deferred to SDD-D2-03-hotfix-01',
+          },
+        }
+      }
+      return capability
+    })
+    server.use(
+      http.get('/api/capabilities', () =>
+        HttpResponse.json({ capabilities: triggered ? triggeredCapabilities : initialCapabilities }),
+      ),
+      http.post('/api/capabilities/:id/health-check', ({ params }) => {
+        triggered = true
+        const capability = triggeredCapabilities.find((item) => item.capability_id === params.id)
+        return HttpResponse.json({ capability, result: codexResult })
+      }),
+    )
+
+    renderAt('/capabilities')
+    await waitFor(() => expect(screen.getByTestId('health-check-cap_codex_cli')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('health-check-cap_codex_cli'))
+
+    await waitFor(() => expect(screen.getByTestId('result-version-cap_codex_cli')).toHaveTextContent('codex 5.5'))
+    expect(screen.getByTestId('result-last-checked-cap_codex_cli')).toHaveTextContent('2026-05-12T12:30:00Z')
+    await waitFor(() =>
+      expect(screen.getByTestId('error-msg-cap_gemini_web')).toHaveTextContent(
+        'real ping deferred to SDD-D2-03-hotfix-01',
+      ),
+    )
+  })
+
   test('does not register external references or sidenote tracking routes', async () => {
     renderAt('/')
     await waitFor(() => expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument())

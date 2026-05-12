@@ -181,7 +181,14 @@ export interface ApprovalQueue {
 
 export type CandidateStatus = 'candidate' | 'adopted' | 'confirmed' | 'archived'
 export type CapabilityEndType = 'cli' | 'web'
-export type CapabilityStatus = 'unknown' | 'available' | 'degraded' | 'unavailable'
+export type CapabilityStatus =
+  | 'unknown'
+  | 'available'
+  | 'degraded'
+  | 'unavailable'
+  | 'healthy'
+  | 'unhealthy'
+  | 'not_implemented'
 export type CapabilityHealthMode = 'mock' | 'live_opt_in'
 
 export interface CandidateLesson {
@@ -268,6 +275,9 @@ export interface CapabilityHealthResult {
   checked_at: string
   summary: string
   artifact_ref: string | null
+  version?: string | null
+  last_checked?: string | null
+  error_msg?: string | null
 }
 
 export interface CapabilityRegistryEntry {

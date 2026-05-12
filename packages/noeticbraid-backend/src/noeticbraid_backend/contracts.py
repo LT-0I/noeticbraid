@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Static helpers for the Phase 1.2 API contract plus SDD-D2-02 v1.3.0 additions."""
+"""Static helpers for Phase 1.2 plus additive SDD-D2-02/D2-03 v1.3.0 surfaces."""
 
 from __future__ import annotations
 

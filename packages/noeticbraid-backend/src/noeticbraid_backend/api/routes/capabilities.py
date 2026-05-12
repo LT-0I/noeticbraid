@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Capability registry routes for SDD-D2-02."""
+"""Capability registry routes for SDD-D2-02/D2-03."""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ async def capability_health_check(request: Request, id: str) -> CapabilityHealth
         payload = health_check(id, project_root=get_settings(request).state_dir.parent)
     except KeyError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="capability not found") from None
+    # Recognized live execution failures are represented inside the payload by
+    # the registry wrapper (HTTP 200 with unhealthy/not_implemented status).
     return CapabilityHealthCheckResponse(**payload)
 
 

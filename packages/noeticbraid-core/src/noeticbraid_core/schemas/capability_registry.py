@@ -1,4 +1,4 @@
-"""Capability registry schemas for SDD-D2-02 first-stage health checks."""
+"""Capability registry schemas for SDD-D2-02/D2-03 first-stage health checks."""
 
 from __future__ import annotations
 
@@ -10,7 +10,15 @@ from pydantic import BaseModel, Field, field_validator
 from ._common import COMMON_MODEL_CONFIG, empty_str_to_none, ensure_optional_utc_datetime
 
 HealthMode = Literal["mock", "live_opt_in"]
-CapabilityStatus = Literal["unknown", "available", "degraded", "unavailable"]
+CapabilityStatus = Literal[
+    "unknown",
+    "available",
+    "degraded",
+    "unavailable",
+    "healthy",
+    "unhealthy",
+    "not_implemented",
+]
 EndType = Literal["cli", "web"]
 
 
@@ -25,6 +33,9 @@ class CapabilityHealthResult(BaseModel):
     checked_at: datetime
     summary: str = Field(..., min_length=1, max_length=1024)
     artifact_ref: Optional[str] = Field(default=None, max_length=1024)
+    version: Optional[str] = Field(default=None, max_length=256)
+    last_checked: Optional[datetime] = None
+    error_msg: Optional[str] = Field(default=None, max_length=256)
 
     @field_validator("checked_at")
     @classmethod
@@ -33,9 +44,14 @@ class CapabilityHealthResult(BaseModel):
         assert normalized is not None
         return normalized
 
-    @field_validator("artifact_ref", mode="before")
+    @field_validator("last_checked")
     @classmethod
-    def _blank_artifact_to_none(cls, value: object) -> object:
+    def _last_checked_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return ensure_optional_utc_datetime(value)
+
+    @field_validator("artifact_ref", "version", "error_msg", mode="before")
+    @classmethod
+    def _blank_optional_text_to_none(cls, value: object) -> object:
         return empty_str_to_none(value)
 
 

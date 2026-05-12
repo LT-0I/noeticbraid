@@ -1,0 +1,21 @@
+{
+  "cap_claude_code_cli": {
+    "stdout": "claude 4.7.0\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  "cap_codex_cli": {
+    "stdout": "codex 5.5\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  "cap_gemini_cli": {
+    "stdout": "gemini 3.1.0\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  "cap_gemini_web": {
+    "status": "not_implemented",
+    "error_msg": "real ping deferred to SDD-D2-03-hotfix-01"
+  }
+}
