@@ -8,6 +8,7 @@ from .candidates import (
     generate_structure_suggestions,
     vault_profile_source_record,
 )
+from .b1_detector import CandidateB1SideNote, run_b1_detector
 from .models import (
     ActivityLogRecord,
     ContentReusePlan,
@@ -27,11 +28,14 @@ from .models import (
     VaultProfile,
 )
 from .persistence import LLMWikiSQLiteStore
+from .progress_detector import is_stagnant, mtime_unchanged, no_new_done, no_new_response
 from .reuse import build_content_reuse_plan, lint_content_reuse_plan, sha256_content, source_record_from_file, source_record_from_text
 from .scanner import RealVaultIntegrationBoundary, VaultScanConfig, VaultScanner, extract_link_hints, parse_frontmatter
+from .tracked_project import ProjectCandidate, TrackedProjectStatus, approve, auto_discover, unconfirm
 
 __all__ = [
     "ActivityLogRecord",
+    "CandidateB1SideNote",
     "ContentReusePlan",
     "DigestionCandidate",
     "DuplicateTopicName",
@@ -44,13 +48,17 @@ __all__ = [
     "ModuleManifest",
     "NoteSummary",
     "OrphanCluster",
+    "ProjectCandidate",
     "RiskFlag",
     "RealVaultIntegrationBoundary",
     "SideNoteCandidate",
     "StructureSuggestion",
+    "TrackedProjectStatus",
     "VaultProfile",
     "VaultScanConfig",
     "VaultScanner",
+    "approve",
+    "auto_discover",
     "build_content_reuse_plan",
     "build_growth_report_input",
     "build_report_inputs",
@@ -58,10 +66,16 @@ __all__ = [
     "generate_digestion_candidates",
     "generate_side_note_candidates",
     "generate_structure_suggestions",
+    "is_stagnant",
     "lint_content_reuse_plan",
+    "mtime_unchanged",
+    "no_new_done",
+    "no_new_response",
     "parse_frontmatter",
+    "run_b1_detector",
     "sha256_content",
     "source_record_from_file",
     "source_record_from_text",
+    "unconfirm",
     "vault_profile_source_record",
 ]
