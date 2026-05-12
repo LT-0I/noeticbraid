@@ -15,6 +15,7 @@ for path in (REPO_ROOT / "packages" / "noeticbraid-core" / "src", PACKAGE_ROOT /
 from fastapi.testclient import TestClient
 
 from noeticbraid_backend.app import create_app
+from noeticbraid_backend.omc_workspace import capability_registry as target_module
 from noeticbraid_backend.settings import Settings
 
 
@@ -42,7 +43,7 @@ def test_health_check_defaults_to_mock_without_cli_execution(tmp_path: Path, mon
     def explode(*_args, **_kwargs):
         raise AssertionError("mock health check must not execute provider CLI")
 
-    monkeypatch.setattr("subprocess.run", explode)
+    monkeypatch.setattr(target_module, "run", explode)
     response = _client(tmp_path).post("/api/capabilities/cap_codex_cli/health-check")
 
     assert response.status_code == 200
@@ -59,7 +60,8 @@ def test_health_check_real_mode_requires_noeticbraid_health_check_live_opt_in(tm
 
     monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
     monkeypatch.setattr(
-        "subprocess.run",
+        target_module,
+        "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="codex 5.5", stderr=""),
     )
     live = _client(tmp_path).post("/api/capabilities/cap_codex_cli/health-check").json()
@@ -71,7 +73,8 @@ def test_health_check_real_mode_requires_noeticbraid_health_check_live_opt_in(tm
 def test_health_check_real_mode_writes_artifact_trace_when_enabled(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
     monkeypatch.setattr(
-        "subprocess.run",
+        target_module,
+        "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="codex 5.5", stderr=""),
     )
 
@@ -90,7 +93,8 @@ def test_health_check_real_mode_writes_artifact_trace_when_enabled(tmp_path: Pat
 def test_capabilities_routes_status_field_unhealthy_when_subprocess_fails(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
     monkeypatch.setattr(
-        "subprocess.run",
+        target_module,
+        "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="", stderr="provider unavailable"),
     )
 
@@ -109,7 +113,7 @@ def test_capabilities_routes_returns_http_200_even_on_unhealthy(tmp_path: Path, 
     def fake_run(*_args, **_kwargs):
         raise FileNotFoundError("missing codex")
 
-    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     response = _client(tmp_path).post("/api/capabilities/cap_codex_cli/health-check")
 
@@ -118,3 +122,13 @@ def test_capabilities_routes_returns_http_200_even_on_unhealthy(tmp_path: Path, 
     assert body["result"]["status"] == "unhealthy"
     assert body["result"]["version"] is None
     assert body["result"]["error_msg"] == "codex executable not found"
+
+
+def test_live_artifact_ref_falls_back_to_filename_outside_project_root(tmp_path: Path) -> None:
+    outside_project = tmp_path / "external" / "health-check-cap_codex_cli.json"
+    project_root = tmp_path / "project"
+
+    assert (
+        target_module._relative_if_possible(outside_project, project_root)
+        == "health-check-cap_codex_cli.json"
+    )

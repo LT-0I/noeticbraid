@@ -14,7 +14,9 @@ for path in (REPO_ROOT / "packages" / "noeticbraid-core" / "src", PACKAGE_ROOT /
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from noeticbraid_backend.omc_workspace.capability_registry import health_check
+from noeticbraid_backend.omc_workspace import capability_registry as target_module
+
+health_check = target_module.health_check
 
 FIXTURE_PATH = PACKAGE_ROOT / "tests" / "fixtures" / "capability_health_live_subprocess_mock.json"
 
@@ -40,7 +42,7 @@ def test_real_health_check_returns_version_when_cli_exists(tmp_path: Path, monke
         calls.append((args, kwargs))
         return SimpleNamespace(**fixture)
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     payload = health_check("cap_codex_cli", project_root=tmp_path)
 
@@ -69,7 +71,7 @@ def test_real_health_check_fail_soft_on_subprocess_timeout(tmp_path: Path, monke
     def fake_run(_args, **_kwargs):
         raise subprocess.TimeoutExpired(cmd=["codex", "--version"], timeout=5)
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     result = health_check("cap_codex_cli", project_root=tmp_path)["result"]
 
@@ -87,7 +89,7 @@ def test_real_health_check_fail_soft_on_subprocess_filenotfound(tmp_path: Path, 
     def fake_run(_args, **_kwargs):
         raise FileNotFoundError("No such file or directory: /home/l1u/bin/codex")
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     result = health_check("cap_codex_cli", project_root=tmp_path)["result"]
 
@@ -108,7 +110,7 @@ def test_real_health_check_fail_soft_on_subprocess_nonzero_exit(tmp_path: Path, 
             stderr="fatal config at /home/l1u/.config/noetic/token=secret-value",
         )
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     result = health_check("cap_codex_cli", project_root=tmp_path)["result"]
 
@@ -126,7 +128,7 @@ def test_real_health_check_error_msg_truncated_to_256_chars(tmp_path: Path, monk
     def fake_run(_args, **_kwargs):
         return SimpleNamespace(returncode=9, stdout="", stderr="x" * 400)
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     result = health_check("cap_codex_cli", project_root=tmp_path)["result"]
 
@@ -146,7 +148,7 @@ def test_real_health_check_error_msg_does_not_leak_raw_subprocess_output(tmp_pat
             stderr="failure in /home/l1u/private/profile with token=abc123",
         )
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", fake_run)
+    monkeypatch.setattr(target_module, "run", fake_run)
 
     payload = health_check("cap_codex_cli", project_root=tmp_path)
     serialized = json.dumps(payload, ensure_ascii=False)
@@ -170,7 +172,7 @@ def test_gemini_web_returns_not_implemented_placeholder_with_hotfix_note(tmp_pat
     def explode(*_args, **_kwargs):
         raise AssertionError("Gemini Web placeholder must not execute subprocess or browser automation")
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", explode)
+    monkeypatch.setattr(target_module, "run", explode)
 
     result = health_check("cap_gemini_web", project_root=tmp_path)["result"]
 
@@ -187,7 +189,7 @@ def test_real_health_check_writes_ledger_artifact_with_live_mode_only(tmp_path: 
         raise AssertionError("mock mode must not execute provider CLI")
 
     monkeypatch.delenv("NOETICBRAID_HEALTH_CHECK_LIVE", raising=False)
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", explode)
+    monkeypatch.setattr(target_module, "run", explode)
 
     mock_result = health_check("cap_codex_cli", project_root=tmp_path)["result"]
     assert mock_result["mode"] == "mock"
@@ -196,7 +198,8 @@ def test_real_health_check_writes_ledger_artifact_with_live_mode_only(tmp_path: 
 
     monkeypatch.setenv("NOETICBRAID_HEALTH_CHECK_LIVE", "1")
     monkeypatch.setattr(
-        "noeticbraid_backend.omc_workspace.capability_registry.subprocess.run",
+        target_module,
+        "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="codex 5.5\n", stderr=""),
     )
 
@@ -225,7 +228,7 @@ def test_mock_mode_unchanged_when_env_not_set(tmp_path: Path, monkeypatch) -> No
     def explode(*_args, **_kwargs):
         raise AssertionError("mock health check must not execute provider CLI")
 
-    monkeypatch.setattr("noeticbraid_backend.omc_workspace.capability_registry.subprocess.run", explode)
+    monkeypatch.setattr(target_module, "run", explode)
 
     payload = health_check("cap_codex_cli", project_root=tmp_path)
     result = payload["result"]

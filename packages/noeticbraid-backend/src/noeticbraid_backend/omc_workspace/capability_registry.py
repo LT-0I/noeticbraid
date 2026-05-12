@@ -10,6 +10,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from subprocess import run
 from typing import Any
 
 from noeticbraid_core.schemas import CapabilityHealthResult, CapabilityRegistryEntry
@@ -94,6 +95,8 @@ def _relative_if_possible(path: Path, root: Path) -> str:
     try:
         return str(path.relative_to(root))
     except ValueError:
+        # Outside-project artifacts should not leak host paths; keep only the
+        # stable filename so callers still receive a usable artifact reference.
         return path.name
 
 
@@ -164,7 +167,7 @@ def _health_result(
 
 
 def _run_version_command(cli_path: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return run(
         [cli_path, "--version"],
         capture_output=True,
         timeout=LIVE_SUBPROCESS_TIMEOUT_SECONDS,
@@ -204,7 +207,10 @@ def _live_cli_health_result(
         error_msg = f"health-check timed out after {LIVE_SUBPROCESS_TIMEOUT_SECONDS} seconds"
     except FileNotFoundError:
         status = "unhealthy"
-        error_msg = f"{command} executable not found"
+        error_msg = (
+            _sanitize_and_truncate(f"{command} executable not found")
+            or "executable not found"
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         status = "unhealthy"
         error_msg = _sanitize_and_truncate(exc) or "subprocess health-check failed"
