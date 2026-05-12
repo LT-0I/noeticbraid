@@ -134,7 +134,10 @@ def _cmd_b1_rebut(args: argparse.Namespace) -> int:
     now = _now_utc()
     state = load_opt_out_state()
     history = _recent_rebuts(state, now)
-    if not any(record.note_id == note_id and record.note_type == note_type for record in history):
+    already_recorded = any(record.note_id == note_id and record.note_type == note_type for record in history)
+    if already_recorded:
+        print(f"note (note_id={note_id}, note_type={note_type}) already in rebut_history; no-op")
+    else:
         history.append(RebutRecord(note_id=note_id, note_type=note_type, timestamp=now))
     throttled = list(dict.fromkeys(state.throttled_note_types))
     count = _distinct_rebut_count(history, note_type, now)
@@ -151,6 +154,9 @@ def _cmd_b1_rebut(args: argparse.Namespace) -> int:
 def _cmd_b1_accept(args: argparse.Namespace) -> int:
     note_type: SideNoteOptOutNoteType = args.note_type
     state = load_opt_out_state()
+    # Wider than spec intent: clears the entire rebut_history for note_type,
+    # not only the 30-day window. This accelerates throttle clearance while
+    # remaining data-safe; a future hotfix may narrow scope to the 30-day window.
     history = [record for record in state.rebut_history if record.note_type != note_type]
     throttled = [item for item in state.throttled_note_types if item != note_type]
     updated = _touch(state, rebut_history=history, throttled_note_types=throttled)
@@ -160,6 +166,9 @@ def _cmd_b1_accept(args: argparse.Namespace) -> int:
 
 
 def _cmd_b1_mark_inaccurate(args: argparse.Namespace) -> int:
+    # Intentional first-phase stub per SDD-D2-05 A5 R7: mark_inaccurate is an
+    # intentional no-op (no state mutation); do not add state records without a
+    # spec change.
     print(f"marked inaccurate without counting as rebut: {args.note_id} ({args.note_type})")
     return 0
 

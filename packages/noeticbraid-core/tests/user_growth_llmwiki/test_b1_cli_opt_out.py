@@ -33,7 +33,9 @@ def test_b1_cli_opt_out(tmp_path: Path, monkeypatch) -> None:
     assert load_opt_out_state().disabled_note_types == ["hypothesis"]
 
 
-def test_b1_cli_rebut_increments(tmp_path: Path, monkeypatch) -> None:
+def test_b1_cli_rebut_deduplicates_same_note_id(tmp_path: Path, monkeypatch) -> None:
+    """Four rebut calls with one duplicate note_id record three distinct rebut entries."""
+
     _configure(monkeypatch, tmp_path)
 
     assert main(["b1-rebut", "--note-id=free_form_note", "--note-type=hypothesis"]) == 0
