@@ -1,0 +1,74 @@
+{
+  "fixture_id": "fixture_omc_debate_loop_mock",
+  "description": "Mock provider artifacts for SDD-D2-01 task_omc_ingest; no live provider calls and no raw transcripts.",
+  "rounds": [
+    {
+      "role": "producer",
+      "artifact_ref": "artifact_omc_claude_proposal",
+      "round_type": "production",
+      "verdict": "informational",
+      "summary": "Claude proposes a bounded OMC ingestion lesson candidate chain: external references plus program-memory candidate evidence, limited to the manual debate-loop slice.",
+      "objections": []
+    },
+    {
+      "role": "adversary",
+      "artifact_ref": "artifact_omc_codex_adversary",
+      "round_type": "adversarial_review",
+      "verdict": "concern",
+      "summary": "Codex attacks overclaim risk: a debate-loop candidate alone cannot complete the full §10.1 OMC demo or confirmed-memory upgrade.",
+      "objections": [
+        {
+          "objection_id": "obj_omc_scope_overclaim",
+          "severity": "high",
+          "status": "unresolved",
+          "summary": "Do not claim full §10.1 OMC demo completion from this loop; it only satisfies the manual §10.4 item 5 evidence slice.",
+          "evidence_refs": ["artifact_omc_codex_adversary"],
+          "raised_by": "manual"
+        }
+      ]
+    },
+    {
+      "role": "source_auditor",
+      "artifact_ref": "artifact_omc_gemini_source_audit",
+      "round_type": "review",
+      "verdict": "concern",
+      "summary": "Gemini source-audits the chain against project definition and invocation reference; source refs must remain references only.",
+      "objections": [
+        {
+          "objection_id": "obj_omc_source_refs_required",
+          "severity": "medium",
+          "status": "accepted",
+          "summary": "Candidate evidence must preserve source refs instead of embedding original notes or provider long-form text.",
+          "evidence_refs": ["artifact_omc_gemini_source_audit"],
+          "raised_by": "manual"
+        }
+      ]
+    }
+  ],
+  "provider_artifacts": [
+    {
+      "artifact_ref": "artifact_omc_claude_proposal",
+      "provider": "claude",
+      "model_ref": "model_claude_opus_4_7",
+      "role": "producer",
+      "summary": "Bounded OMC ingestion proposal for candidate-only program memory.",
+      "source_refs": ["source_project_definition_v3_2", "source_omc_metadata"]
+    },
+    {
+      "artifact_ref": "artifact_omc_codex_adversary",
+      "provider": "codex",
+      "model_ref": "model_codex_gpt_5_5",
+      "role": "adversary",
+      "summary": "Adversarial objection: no majority shortcut and no full OMC demo completion claim.",
+      "source_refs": ["source_project_definition_v3_2"]
+    },
+    {
+      "artifact_ref": "artifact_omc_gemini_source_audit",
+      "provider": "gemini",
+      "model_ref": "model_gemini_3_1_pro",
+      "role": "source_auditor",
+      "summary": "Source audit requires source/artifact refs only and preserves raw-record boundaries.",
+      "source_refs": ["source_ai_invocation_reference", "source_omc_metadata"]
+    }
+  ]
+}

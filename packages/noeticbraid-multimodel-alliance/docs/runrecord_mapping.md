@@ -1,6 +1,6 @@
 # RunRecord and archive mapping
 
-This module is an upper-layer collaboration record. It does not modify the frozen `RunRecord` implementation, does not add event types in code, and does not change how the current ledger stores events. The mapping below describes how module records can link to existing evidence once a future integration round chooses to persist them.
+This module is an upper-layer collaboration record. It does not modify the frozen `RunRecord` implementation, does not add event types in code, and does not change backend/contract storage. D2-01 adds a module-local ledger bridge that writes RunRecord-shaped JSONL under the configured state root using existing event types only.
 
 ## Stable references
 
@@ -15,16 +15,16 @@ This module is an upper-layer collaboration record. It does not modify the froze
 
 ## Current frozen RunRecord behavior
 
-The read-only `RunRecord` reference exposes stable fields for `run_id`, `task_id`, `event_type`, `actor`, `model_refs`, `source_refs`, `artifact_refs`, `routing_advice`, and `status`. Its event type enum is frozen for the current implementation surface. This module therefore treats route/debate/convergence records as file artifacts that can be linked through existing `artifact_created`, `routing_advice_recorded`, and `source_record_linked` events.
+The read-only `RunRecord` reference exposes stable fields for `run_id`, `task_id`, `event_type`, `actor`, `model_refs`, `source_refs`, `artifact_refs`, `routing_advice`, and `status`. Its event type enum is frozen for the current implementation surface. D2-01 therefore treats route/debate/convergence/markdown/candidate outputs as file artifacts and links them through existing `artifact_created`, `routing_advice_recorded`, and `lesson_candidate_created` events only.
 
 ## Evidence chain
 
-A future archive can connect these records in this order:
+The D2-01 archive connects these records in this order:
 
 1. `ModelRoute` points to the task id, route trigger, selected models, rejected models, and context source refs.
 2. `Debate` points back to `route_id`, registers participants, and links every round to an artifact ref for a prompt, response, review, adversarial note, or verifier result.
 3. `Convergence` points back to `debate_id`, records objection handling, and lists next actions or user decision requirements.
-4. Existing `RunRecord` rows can reference the same model, source, and artifact ids so ledger queries can reconstruct the collaboration without embedding the new objects inside the frozen schema.
+4. `ledger_bridge.py` appends module-local RunRecord-shaped JSONL rows with `sdd_id=SDD-D2-01`, provider mode, candidate ids, decision status, blocked-decision count, and the same model/source/artifact refs.
 
 ## Future ledger event types
 
@@ -36,7 +36,7 @@ If the contract is reopened later, these event types would be candidates for a s
 - `convergence_reported`
 - `user_decision_requested`
 
-Until such a contract change is accepted, the safe bridge is to store the three module records as artifacts and use the existing ledger fields to point at them.
+Until such a contract change is accepted, the safe bridge is to store module records as artifacts and use only `artifact_created`, `routing_advice_recorded`, and `lesson_candidate_created` to point at them.
 
 ## Archive evidence examples
 
@@ -49,4 +49,4 @@ The module records are designed to reference archive evidence such as:
 - integration reports with local command evidence;
 - frozen-source references such as the Phase 1.2 OpenAPI contract and sidecar digest.
 
-The mapping is intentionally one-way and documentary in this round: it makes future integration easier without changing `RunRecord`, backend storage, Console behavior, or the frozen API contract.
+The mapping remains one-way and module-local in D2-01: it makes manual debate-loop evidence independently checkable without changing `RunRecord`, backend storage, Console behavior, or the frozen API contract.

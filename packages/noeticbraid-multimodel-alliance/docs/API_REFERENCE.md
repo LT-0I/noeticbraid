@@ -68,3 +68,24 @@ python -m multimodel_alliance validate-fixtures
 python -m multimodel_alliance route examples/task_card_medium.json --pretty
 python -m multimodel_alliance run-fixture multimodel_alliance/fixtures/dual_review_prompt_cycle.json --pretty
 ```
+
+## `run_debate_loop(task_card, *, state_root, artifact_root, mock_invocations=True, manual_invocation_artifacts=None, provider_mode=False) -> dict`
+
+SDD-D2-01 manual loop. It creates a fixed three-model route (Claude producer/convergence, Codex adversary, Gemini source auditor), consumes mock or manual provider artifacts by default, and writes only candidate/ledger/artifact outputs under the configured roots.
+
+Outputs include paths for ModelRoute JSON, Debate JSON, Convergence JSON, candidate JSONL, convergence markdown, provider artifact summaries, and RunRecord-shaped ledger JSONL. Candidate records stay `status="candidate"` and include the R-6 upgrade rule.
+
+Provider CLIs are never called unless `provider_mode=True` is explicit. `invocation_plan.build_invocation_plan()` exposes the Codex/Gemini/Claude command shapes from `AI_INVOCATION_REFERENCE.md` for review and artifact-backed opt-in execution.
+
+### Debate-loop CLI
+
+```bash
+PYTHONPATH=src python -m noeticbraid.tools.multimodel_alliance \
+  debate-loop examples/task_card_omc_ingest.json \
+  --mock-invocations \
+  --state-root "$(mktemp -d)" \
+  --artifact-root "$(mktemp -d)" \
+  --pretty
+```
+
+The command is manual-only: scheduler, cron, on-save, and b-1 detector triggers are rejected in D2-01.

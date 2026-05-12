@@ -1,14 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
 
 def test_public_api_imports():
-    from noeticbraid.tools.multimodel_alliance import converge, route, run_debate
+    from noeticbraid.tools.multimodel_alliance import converge, route, run_debate, run_debate_loop
 
     assert callable(route)
     assert callable(run_debate)
     assert callable(converge)
+    assert callable(run_debate_loop)
 
 
 def test_static_artifacts_are_packaged():
@@ -21,6 +22,8 @@ def test_static_artifacts_are_packaged():
         "fixtures/dual_review_prompt_cycle.json",
         "fixtures/multi_review_high_risk_gate.json",
         "fixtures/manual_convergence_disputed.json",
+        "fixtures/omc_debate_loop_mock.json",
+        "fixtures/omc_convergence_markdown_golden.md",
     ]:
         assert (package / rel).is_file(), rel
 

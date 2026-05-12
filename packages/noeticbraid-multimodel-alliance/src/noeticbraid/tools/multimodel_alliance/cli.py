@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .constants import FIXTURE_FILES
+from .loop import run_debate_loop
 from .router import route
 from .schema_loader import load_json
 from .validator import ValidationError, validate_all, validate_fixture
@@ -41,6 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     fixture_parser = sub.add_parser("run-fixture", help="Validate a fixture wrapper JSON file")
     fixture_parser.add_argument("fixture", help="Path to fixture JSON")
     fixture_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
+
+    loop_parser = sub.add_parser("debate-loop", help="Run the manual SDD-D2-01 debate loop over a task card")
+    loop_parser.add_argument("task_card", help="Path to task card JSON")
+    loop_parser.add_argument("--mock-invocations", action="store_true", help="Use packaged mock provider artifacts (default safe path)")
+    loop_parser.add_argument("--manual-invocation-artifact", action="append", default=[], help="Path to a manual provider artifact JSON file; may be repeated")
+    loop_parser.add_argument("--provider-mode", action="store_true", help="Explicitly opt into live provider CLI execution")
+    loop_parser.add_argument("--state-root", required=True, help="State root for candidate and ledger JSONL outputs")
+    loop_parser.add_argument("--artifact-root", required=True, help="Artifact root for route/debate/convergence/markdown outputs")
+    loop_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     return parser
 
 
@@ -64,6 +74,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("fixture JSON must be an object")
             validate_fixture(fixture, str(args.fixture))
             _dump({"fixture_id": fixture.get("fixture_id"), "status": "valid"}, args.pretty)
+            return 0
+        if args.command == "debate-loop":
+            result = run_debate_loop(
+                args.task_card,
+                state_root=args.state_root,
+                artifact_root=args.artifact_root,
+                mock_invocations=args.mock_invocations or not args.manual_invocation_artifact and not args.provider_mode,
+                manual_invocation_artifacts=args.manual_invocation_artifact or None,
+                provider_mode=args.provider_mode,
+            )
+            public_result = {key: value for key, value in result.items() if key not in {"route", "debate", "convergence", "candidate", "invocation_plan"}}
+            _dump(public_result, args.pretty)
             return 0
     except (OSError, ValueError, ValidationError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)

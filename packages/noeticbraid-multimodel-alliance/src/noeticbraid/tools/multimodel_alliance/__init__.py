@@ -2,6 +2,7 @@
 
 from .convergence import ConvergenceError, converge
 from .debate_runner import DebateError, run_debate
+from .loop import DebateLoopError, run_debate_loop
 from .router import RoutingError, route
 from .validator import (
     ValidationError,
@@ -15,10 +16,12 @@ from .validator import (
 __all__ = [
     "ConvergenceError",
     "DebateError",
+    "DebateLoopError",
     "RoutingError",
     "ValidationError",
     "converge",
     "route",
+    "run_debate_loop",
     "run_debate",
     "validate_all",
     "validate_convergence_record",

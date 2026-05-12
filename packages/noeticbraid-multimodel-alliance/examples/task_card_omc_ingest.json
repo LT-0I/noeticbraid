@@ -1,0 +1,18 @@
+{
+  "task_id": "task_omc_ingest",
+  "title": "Manual OMC ingestion debate-loop slice",
+  "trigger": "task_card",
+  "risk_hint": "high",
+  "required_capabilities": [
+    "planning",
+    "adversary",
+    "source_audit",
+    "convergence"
+  ],
+  "source_refs": [
+    "source_project_definition_v3_2",
+    "source_ai_invocation_reference",
+    "source_omc_metadata"
+  ],
+  "description": "Run the first-stage manual multimodel debate loop for the OMC ingestion candidate path. This task card proves §10.4 item 5 evidence only and does not claim full §10.1 completion."
+}
