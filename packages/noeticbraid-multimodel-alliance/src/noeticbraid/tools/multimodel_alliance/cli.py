@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.task_card,
                 state_root=args.state_root,
                 artifact_root=args.artifact_root,
-                mock_invocations=args.mock_invocations or not args.manual_invocation_artifact and not args.provider_mode,
+                mock_invocations=args.mock_invocations or (not args.manual_invocation_artifact and not args.provider_mode),
                 manual_invocation_artifacts=args.manual_invocation_artifact or None,
                 provider_mode=args.provider_mode,
             )

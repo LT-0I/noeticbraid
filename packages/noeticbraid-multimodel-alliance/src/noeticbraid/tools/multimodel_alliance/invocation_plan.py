@@ -15,7 +15,7 @@ from typing import Any
 
 from .candidate_store import assert_safe_output_root
 
-DEFAULT_WORKSPACE = Path("/home/l1u/workspace/noeticmind")
+DEFAULT_WORKSPACE = Path(os.getenv("NOETICBRAID_WORKSPACE_ROOT") or Path(__file__).resolve().parents[7])
 CODEX_REASONING_FLAG = "model_reasoning_effort='\"xhigh\"'"
 GEMINI_MODEL = "gemini-3.1-pro-preview"
 CLAUDE_MODEL = "claude-opus-4-7[1m]"

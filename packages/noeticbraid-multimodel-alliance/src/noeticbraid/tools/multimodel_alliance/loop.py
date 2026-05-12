@@ -182,9 +182,8 @@ def _load_manual_rounds(paths: list[str | Path]) -> tuple[list[dict[str, Any]], 
 
 
 def _contains_external_side_effect(text: str) -> bool:
-    lowered = text.lower()
     action_terms = ("publish", "external send", "send externally", "delete", "payment", "pay ", "account change", "change account")
-    return any(term in lowered for term in action_terms)
+    return any(re.search(rf"\b{re.escape(term.strip())}\b", text, re.IGNORECASE) for term in action_terms)
 
 
 def _inject_external_action_blocks(rounds: list[dict[str, Any]]) -> list[dict[str, Any]]:
