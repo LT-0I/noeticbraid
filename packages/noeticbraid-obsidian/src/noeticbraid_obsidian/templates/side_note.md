@@ -42,3 +42,9 @@ tags:
 - user_response_channel: accept / rebut / mark_inaccurate / disable_this_type
 
 Append-only user response area.
+
+---
+**opt-out**:
+- 关闭此类 SideNote: `noeticbraid b1-opt-out --note-type=<your-note-type>`
+- 整体暂停: `noeticbraid b1-pause`
+- 反驳此条: `noeticbraid b1-rebut --note-id=<note_id> --note-type=<your-note-type>`

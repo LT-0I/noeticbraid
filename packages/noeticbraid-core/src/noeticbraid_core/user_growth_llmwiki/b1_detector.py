@@ -16,14 +16,23 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from noeticbraid_core.schemas.side_note_opt_out import (
+    DEFAULT_B1_COOLDOWN_DAYS,
+    THROTTLE_COOLDOWN_DAYS,
+    THROTTLE_REBUT_THRESHOLD,
+    THROTTLE_ROLLING_WINDOW_DAYS,
+    SideNoteOptOutNoteType,
+    SideNoteOptOutState,
+)
 from noeticbraid_core.schemas.side_note import SideNote, TONE_CONSTRAINT_LITERAL, USER_RESPONSE_CHANNEL_VALUES
 
 from .mention_scanner import ProjectMention, scan_mentions
+from .opt_out_store import load_opt_out_state, save_opt_out_state
 from .progress_detector import ProgressCheckResult, candidate_queue_path, progress_checks
 from .tracked_project import ProjectCandidate, auto_discover, load_registry, normalize_project_ref
 
 DETECTOR_POLICY_VERSION = "b1_detector_v1"
-WINDOW_DAYS = 14
+WINDOW_DAYS = DEFAULT_B1_COOLDOWN_DAYS
 TRIGGER_THRESHOLD = 3
 
 
@@ -105,6 +114,7 @@ class B1DetectorReport:
     skip_reasons: dict[str, str] = field(default_factory=dict)
     discovered_candidates: list[str] = field(default_factory=list)
     queue_path: str | None = None
+    paused: bool = False
 
     @property
     def candidate_count(self) -> int:
@@ -124,6 +134,20 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
     run_at = _ensure_utc(run_timestamp_utc or datetime.now(timezone.utc))
     window_start = run_at - timedelta(days=WINDOW_DAYS)
     window_id = _window_id(window_start, run_at)
+    queue = candidate_queue_path(root)
+
+    opt_out_state = load_opt_out_state()
+    opt_out_state, opt_out_changed = _reconcile_throttles(opt_out_state, run_at)
+    if opt_out_changed:
+        save_opt_out_state(opt_out_state)
+    if opt_out_state.paused:
+        return B1DetectorReport(
+            [],
+            {"__opt_out__": "paused"},
+            [],
+            str(queue),
+            paused=True,
+        )
 
     before_registry = load_registry()
     discovered: list[str] = []
@@ -137,14 +161,17 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
     if not confirmed:
         for project in projects:
             skip_reasons[project.project_ref] = "not_confirmed"
-        return B1DetectorReport([], skip_reasons, discovered, str(candidate_queue_path(root)))
+        return B1DetectorReport([], skip_reasons, discovered, str(queue))
 
     mentions = scan_mentions(root, confirmed, window_start=window_start)
-    queue = candidate_queue_path(root)
     existing_rows = _read_queue(queue)
     new_candidates: list[CandidateB1SideNote] = []
 
     for project in sorted(confirmed, key=lambda item: item.project_ref.casefold()):
+        candidate_note_type: SideNoteOptOutNoteType = "hypothesis"
+        if candidate_note_type in opt_out_state.disabled_note_types:
+            skip_reasons[project.project_ref] = f"opt_out_disabled:{candidate_note_type}"
+            continue
         project_mentions = mentions.get(project.project_ref, [])
         deduped = _same_day_dedup(project_mentions)
         if len(deduped) < TRIGGER_THRESHOLD:
@@ -156,7 +183,13 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
                 key for key, value in checks.to_record().items() if value is False
             )
             continue
-        if _has_cooldown(existing_rows, project.project_ref, window_start, run_at, window_id):
+        cooldown_days = (
+            THROTTLE_COOLDOWN_DAYS
+            if candidate_note_type in opt_out_state.throttled_note_types
+            else DEFAULT_B1_COOLDOWN_DAYS
+        )
+        cooldown_start = run_at - timedelta(days=cooldown_days)
+        if _has_cooldown(existing_rows, project.project_ref, cooldown_start, run_at, window_id, candidate_note_type):
             skip_reasons[project.project_ref] = "cooldown"
             continue
         candidate = _build_candidate(project, deduped, checks, run_at, window_id)
@@ -208,10 +241,14 @@ def _has_cooldown(
     window_start: datetime,
     run_at: datetime,
     window_id: str,
+    note_type: SideNoteOptOutNoteType | None = None,
 ) -> bool:
     ref = normalize_project_ref(project_ref)
     for row in rows:
         if row.get("candidate_type") != "b1_sidenote":
+            continue
+        row_note_type = row.get("note_type")
+        if note_type is not None and row_note_type not in {None, "", note_type}:
             continue
         if normalize_project_ref(str(row.get("project_ref", ""))) != ref:
             continue
@@ -233,6 +270,40 @@ def _read_queue(path: Path) -> list[dict[str, Any]]:
     if not isinstance(data, list):
         return []
     return [dict(item) for item in data if isinstance(item, dict)]
+
+
+def _reconcile_throttles(
+    state: SideNoteOptOutState, run_at: datetime
+) -> tuple[SideNoteOptOutState, bool]:
+    """Clear throttle flags whose rolling rebut count has dropped below threshold."""
+
+    active: list[SideNoteOptOutNoteType] = []
+    seen: set[str] = set()
+    changed = False
+    for note_type in state.throttled_note_types:
+        if note_type in seen:
+            changed = True
+            continue
+        seen.add(note_type)
+        if _rolling_rebut_count(state, note_type, run_at) >= THROTTLE_REBUT_THRESHOLD:
+            active.append(note_type)
+        else:
+            changed = True
+    if not changed:
+        return state, False
+    return state.model_copy(update={"throttled_note_types": active, "last_updated": run_at}), True
+
+
+def _rolling_rebut_count(
+    state: SideNoteOptOutState, note_type: SideNoteOptOutNoteType, run_at: datetime
+) -> int:
+    start = run_at - timedelta(days=THROTTLE_ROLLING_WINDOW_DAYS)
+    note_ids = {
+        record.note_id
+        for record in state.rebut_history
+        if record.note_type == note_type and start <= _ensure_utc(record.timestamp) <= run_at
+    }
+    return len(note_ids)
 
 
 def _append_candidates(path: Path, candidates: list[CandidateB1SideNote]) -> None:
