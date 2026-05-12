@@ -377,6 +377,14 @@ describe('console routes', () => {
     expect(screen.getByTestId('status-badge-cap_gemini_web').style.color).toBe('gray')
   })
 
+  test('capabilities renders 5 entries', async () => {
+    renderAt('/capabilities')
+    await waitFor(() => expect(screen.getByTestId('capabilities-root')).toBeInTheDocument())
+
+    expect(screen.getByTestId('capability-list').querySelectorAll('li')).toHaveLength(5)
+    expect(screen.getByTestId('capability-cap_chatgpt_web')).toHaveTextContent('ChatGPT Web')
+  })
+
   test('capabilities route shows version last checked and error message after manual trigger', async () => {
     let triggered = false
     const initialCapabilities = [

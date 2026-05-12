@@ -53,6 +53,10 @@ Thumbs.db
 .tmp/
 **/pytest-tmp/
 
+# web-ai-capability-hub generated runtime state (browser profiles, sqlite DB, downloads, logs)
+# Created when hub launches Chrome via CDP under NoeticBraid project root; never source.
+data/
+
 # Console test artifacts
 packages/noeticbraid-console/playwright-report/
 packages/noeticbraid-console/test-results/

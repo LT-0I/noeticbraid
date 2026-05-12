@@ -23,7 +23,7 @@ def _client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None)))
 
 
-def test_capabilities_route_lists_four_first_stage_entries(tmp_path: Path) -> None:
+def test_capabilities_route_lists_five_first_stage_entries(tmp_path: Path) -> None:
     response = _client(tmp_path).get("/api/capabilities")
 
     assert response.status_code == 200
@@ -33,6 +33,7 @@ def test_capabilities_route_lists_four_first_stage_entries(tmp_path: Path) -> No
         "Codex CLI",
         "Gemini CLI",
         "Gemini Web",
+        "ChatGPT Web",
     ]
     assert all(item["first_stage"] is True for item in capabilities)
 

@@ -15,6 +15,8 @@ from typing import Any
 
 from noeticbraid_core.schemas import CapabilityHealthResult, CapabilityRegistryEntry
 
+from noeticbraid_backend.omc_workspace import web_ai_hub_client
+
 CAPABILITIES: tuple[dict[str, Any], ...] = (
     {
         "capability_id": "cap_claude_code_cli",
@@ -44,9 +46,22 @@ CAPABILITIES: tuple[dict[str, Any], ...] = (
         "end_type": "web",
         "command": None,
     },
+    {
+        "capability_id": "cap_chatgpt_web",
+        "display_name": "ChatGPT Web",
+        "provider": "openai",
+        "end_type": "web",
+        "command": None,
+        "initial_status": "not_implemented",
+    },
 )
 
 GEMINI_WEB_DEFERRED_ERROR = "real ping deferred to SDD-D2-03-hotfix-01"
+CHATGPT_WEB_HUB_PATH_UNSET_ERROR = "Hub path not configured (NOETICBRAID_WEB_AI_HUB_PATH unset)"
+CHATGPT_WEB_CHROME_NOT_LAUNCHED_ERROR = (
+    "Chrome not launched; user must run web-ai-capability-hub browser:launch --profile chatgpt first"
+)
+CHATGPT_WEB_HUB_NOT_CONFIGURED_ERROR = "web-ai-capability-hub 未配置或未启动"
 ERROR_MSG_MAX_LENGTH = 256
 VERSION_MAX_LENGTH = 256
 LIVE_SUBPROCESS_TIMEOUT_SECONDS = 5
@@ -110,15 +125,16 @@ def _write_live_artifact(
     error_msg: str | None,
     duration_ms: int | None,
     exit_code: int | None,
+    sdd_id: str = "SDD-D2-03",
 ) -> str | None:
-    """Write the SDD-D2-03 safe live CLI artifact, failing soft on I/O errors."""
+    """Write the safe live health artifact, failing soft on I/O errors."""
 
     try:
         artifact_root = project_root / ".omx" / "artifacts"
         artifact_root.mkdir(parents=True, exist_ok=True)
         artifact_path = artifact_root / f"health-check-{capability_id}-{last_checked.strftime('%Y%m%dT%H%M%SZ')}.json"
         payload: dict[str, Any] = {
-            "sdd_id": "SDD-D2-03",
+            "sdd_id": sdd_id,
             "artifact_schema_version": "capability-health/v1",
             "capability_id": capability_id,
             "mode": "live",
@@ -256,6 +272,64 @@ def _gemini_web_placeholder_result(*, item: dict[str, Any], checked_at: datetime
     )
 
 
+def _chatgpt_web_health_result(
+    *,
+    item: dict[str, Any],
+    checked_at: datetime,
+    project_root: Path,
+) -> CapabilityHealthResult:
+    started = time.monotonic()
+    version: str | None = None
+    error_msg: str | None = None
+    hub_path_value = os.getenv("NOETICBRAID_WEB_AI_HUB_PATH")
+
+    if not hub_path_value:
+        status = "not_implemented"
+        error_msg = CHATGPT_WEB_HUB_PATH_UNSET_ERROR
+    else:
+        hub_path = Path(hub_path_value)
+        if not hub_path.is_absolute():
+            status = "not_implemented"
+            error_msg = CHATGPT_WEB_HUB_NOT_CONFIGURED_ERROR
+        else:
+            browser_status = web_ai_hub_client.check_hub_browser_status(hub_path)
+            if not browser_status.get("connected"):
+                status = "not_implemented"
+                error_msg = CHATGPT_WEB_CHROME_NOT_LAUNCHED_ERROR
+            else:
+                pages = web_ai_hub_client.get_chatgpt_pages(hub_path)
+                status, version, error_msg = web_ai_hub_client.parse_chatgpt_login_state(pages)
+
+    duration_ms = int((time.monotonic() - started) * 1000)
+    artifact_ref = _write_live_artifact(
+        project_root=project_root,
+        capability_id=item["capability_id"],
+        status=status,
+        version=version,
+        last_checked=checked_at,
+        error_msg=error_msg,
+        duration_ms=duration_ms,
+        exit_code=None,
+        sdd_id="SDD-D2-06",
+    )
+    summary = (
+        "Live health OK for ChatGPT Web; browser page state parsed."
+        if status == "healthy"
+        else "Live ChatGPT Web health-check failed safely."
+    )
+    return _health_result(
+        item=item,
+        mode="live_opt_in",
+        status=status,
+        checked_at=checked_at,
+        summary=summary,
+        artifact_ref=artifact_ref,
+        version=version,
+        error_msg=error_msg,
+        set_last_checked=True,
+    )
+
+
 def list_capabilities() -> list[dict[str, Any]]:
     return [
         CapabilityRegistryEntry(
@@ -263,7 +337,7 @@ def list_capabilities() -> list[dict[str, Any]]:
             display_name=item["display_name"],
             provider=item["provider"],
             end_type=item["end_type"],
-            status="unknown",
+            status=item.get("initial_status", "unknown"),
             health_mode="mock",
             last_checked_at=None,
             last_result=None,
@@ -295,6 +369,8 @@ def health_check(capability_id: str, *, project_root: Path) -> dict[str, Any]:
             checked_at=checked_at,
             summary=f"Mock health OK for {item['display_name']}; live provider checks are opt-in.",
         )
+    elif item["capability_id"] == "cap_chatgpt_web":
+        result = _chatgpt_web_health_result(item=item, checked_at=checked_at, project_root=project_root)
     elif item.get("command"):
         result = _live_cli_health_result(item=item, checked_at=checked_at, project_root=project_root)
     else:

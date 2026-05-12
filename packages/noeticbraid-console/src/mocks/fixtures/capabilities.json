@@ -47,6 +47,18 @@
       "last_result": null,
       "source_ref": "source_ai_invocation_reference",
       "first_stage": true
+    },
+    {
+      "capability_id": "cap_chatgpt_web",
+      "display_name": "ChatGPT Web",
+      "provider": "openai",
+      "end_type": "web",
+      "status": "not_implemented",
+      "health_mode": "mock",
+      "last_checked_at": null,
+      "last_result": null,
+      "source_ref": "source_ai_invocation_reference",
+      "first_stage": true
     }
   ]
 }
