@@ -48,6 +48,7 @@ Thumbs.db
 
 # Codex / OMX / pytest temp dirs (per-package or top-level)
 .codex-tmp/
+.omc/
 .omx/
 .tmp/
 **/pytest-tmp/

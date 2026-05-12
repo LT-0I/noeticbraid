@@ -29,7 +29,13 @@ from noeticbraid_core.schemas.side_note import SideNote, TONE_CONSTRAINT_LITERAL
 from .mention_scanner import ProjectMention, scan_mentions
 from .opt_out_store import load_opt_out_state, save_opt_out_state
 from .progress_detector import ProgressCheckResult, candidate_queue_path, progress_checks
-from .tracked_project import ProjectCandidate, auto_discover, load_registry, normalize_project_ref
+from .tracked_project import (
+    ProjectCandidate,
+    auto_discover,
+    cleanup_expired_candidates,
+    load_registry,
+    normalize_project_ref,
+)
 
 DETECTOR_POLICY_VERSION = "b1_detector_v1"
 WINDOW_DAYS = DEFAULT_B1_COOLDOWN_DAYS
@@ -132,6 +138,7 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
 
     root = Path(vault_path)
     run_at = _ensure_utc(run_timestamp_utc or datetime.now(timezone.utc))
+    cleanup_expired_candidates(now=run_at)
     window_start = run_at - timedelta(days=WINDOW_DAYS)
     window_id = _window_id(window_start, run_at)
     queue = candidate_queue_path(root)
@@ -168,6 +175,8 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
     new_candidates: list[CandidateB1SideNote] = []
 
     for project in sorted(confirmed, key=lambda item: item.project_ref.casefold()):
+        # SDD-D1-02 first-phase scope generates only hypothesis-class SideNote
+        # candidates; fact/action_suggestion are left to a future hotfix.
         candidate_note_type: SideNoteOptOutNoteType = "hypothesis"
         if candidate_note_type in opt_out_state.disabled_note_types:
             skip_reasons[project.project_ref] = f"opt_out_disabled:{candidate_note_type}"

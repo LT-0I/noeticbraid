@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from noeticbraid_core.r6_gate import R6_GATE_DEFAULT_TTL_DAYS, R6GateState, evaluate_r6_gate, record_reuse
 
 NOW = datetime(2026, 5, 12, 12, 0, tzinfo=timezone.utc)
@@ -18,15 +20,14 @@ def test_adopted_at_set_confirms() -> None:
 
 
 def test_three_reuses_with_ledger_confirms() -> None:
-    state = R6GateState(reuse_count=3, ledger_evidence_refs=["run_alpha"])
+    state = R6GateState(reuse_count=3, ledger_evidence_refs=["run_alpha", "run_beta", "run_gamma"])
 
     assert evaluate_r6_gate(state, now=NOW) == "confirmed"
 
 
-def test_three_reuses_without_ledger_stays_candidate() -> None:
-    state = R6GateState(reuse_count=3, ledger_evidence_refs=[])
-
-    assert evaluate_r6_gate(state, now=NOW) == "candidate"
+def test_reuse_count_without_matching_ledger_refs_is_rejected() -> None:
+    with pytest.raises(ValueError, match="reuse_count must equal"):
+        R6GateState(reuse_count=3, ledger_evidence_refs=[])
 
 
 def test_two_reuses_stays_candidate() -> None:

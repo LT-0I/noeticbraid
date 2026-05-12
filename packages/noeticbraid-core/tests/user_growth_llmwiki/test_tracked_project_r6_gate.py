@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from noeticbraid_core.r6_gate import R6_GATE_DEFAULT_TTL_DAYS, R6GateState, evaluate_r6_gate
+from noeticbraid_core.user_growth_llmwiki.b1_detector import run_b1_detector_with_report
 from noeticbraid_core.user_growth_llmwiki.cli import main
 from noeticbraid_core.user_growth_llmwiki.tracked_project import ProjectCandidate, approve, auto_discover, load_registry, save_registry
 
@@ -85,6 +86,31 @@ def test_expired_project_skipped_by_detector(tmp_path: Path, monkeypatch) -> Non
     assert candidate.status == "expired"
     queue = tmp_path / "state" / "b1-detector.json"
     assert not queue.exists()
+
+
+def test_expired_project_cleanup_runs_for_detector_library_callers(tmp_path: Path, monkeypatch) -> None:
+    _configure(monkeypatch, tmp_path)
+    vault = tmp_path / "vault"
+    _write(vault / "Daily" / "2026-05-13.md", "[[Projects/Alpha]]\n")
+    _write(vault / "Daily" / "2026-05-14.md", "[[Projects/Alpha]]\n")
+    _write(vault / "Daily" / "2026-05-15.md", "[[Projects/Alpha]]\n")
+    save_registry(
+        [
+            ProjectCandidate(
+                project_ref="Projects/Alpha",
+                project_name="Alpha",
+                status="candidate",
+                r6_gate=R6GateState(expires_at=datetime(2000, 1, 1, tzinfo=timezone.utc)),
+            )
+        ]
+    )
+
+    report = run_b1_detector_with_report(vault, RUN_AT)
+
+    [candidate] = load_registry()
+    assert candidate.status == "expired"
+    assert report.candidates == []
+    assert not (tmp_path / "state" / "b1-detector.json").exists()
 
 
 def test_gate_cleanup_cli_marks_expired(tmp_path: Path, monkeypatch, capsys) -> None:

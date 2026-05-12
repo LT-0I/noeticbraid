@@ -171,6 +171,98 @@ describe('console routes', () => {
     expect(screen.getByTestId('r6-reuse-count-memory_r6_reuse_count')).toHaveTextContent('reuse count: 2')
   })
 
+  test('omc-ingest renders R6 candidate fallback for legacy data', async () => {
+    server.use(
+      http.get('/api/projects/omc-ingest/candidates', () =>
+        HttpResponse.json({
+          project_id: 'omc-ingest',
+          candidates: [
+            {
+              candidate_id: 'memory_r6_legacy_undefined',
+              project_id: 'omc-ingest',
+              source_sdd_ids: ['SDD-D2-01', 'SDD-D2-02'],
+              summary: 'legacy candidate without r6 gate',
+              status: 'candidate',
+              upgrade_rule:
+                'explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient',
+              adopted_at: null,
+              adopted_by: null,
+              run_record_ref: 'run_r6_legacy_undefined',
+              reuse_evidence_refs: [],
+              artifact_refs: ['artifact_convergence_r6_legacy_undefined'],
+              source_refs: ['source_omc_metadata'],
+            },
+            {
+              candidate_id: 'memory_r6_legacy_null',
+              project_id: 'omc-ingest',
+              source_sdd_ids: ['SDD-D2-01', 'SDD-D2-02'],
+              summary: 'legacy candidate with null r6 gate',
+              status: 'candidate',
+              upgrade_rule:
+                'explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient',
+              adopted_at: null,
+              adopted_by: null,
+              run_record_ref: 'run_r6_legacy_null',
+              reuse_evidence_refs: [],
+              artifact_refs: ['artifact_convergence_r6_legacy_null'],
+              source_refs: ['source_omc_metadata'],
+              r6_gate: null,
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/projects/omc-ingest')
+
+    await waitFor(() => expect(screen.getByTestId('r6-gate-memory_r6_legacy_undefined')).toBeInTheDocument())
+    expect(screen.getByTestId('r6-gate-memory_r6_legacy_undefined')).toHaveTextContent('R6Gate: candidate')
+    expect(screen.getByTestId('r6-gate-memory_r6_legacy_undefined').style.color).toBe('gray')
+    expect(screen.getByTestId('r6-gate-memory_r6_legacy_null')).toHaveTextContent('R6Gate: candidate')
+    expect(screen.getByTestId('r6-gate-memory_r6_legacy_null').style.color).toBe('gray')
+  })
+
+  test('omc-ingest renders R6 expired badge with strikethrough', async () => {
+    server.use(
+      http.get('/api/projects/omc-ingest/candidates', () =>
+        HttpResponse.json({
+          project_id: 'omc-ingest',
+          candidates: [
+            {
+              candidate_id: 'memory_r6_expired',
+              project_id: 'omc-ingest',
+              source_sdd_ids: ['SDD-D2-01', 'SDD-D2-02'],
+              summary: 'expired candidate gate',
+              status: 'candidate',
+              upgrade_rule:
+                'explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient',
+              adopted_at: null,
+              adopted_by: null,
+              run_record_ref: 'run_r6_expired',
+              reuse_evidence_refs: [],
+              artifact_refs: ['artifact_convergence_r6_expired'],
+              source_refs: ['source_omc_metadata'],
+              r6_gate: {
+                reuse_count: 0,
+                ledger_evidence_refs: [],
+                adopted_at: null,
+                expires_at: '2000-01-01T00:00:00Z',
+                r6_gate_schema_version: '1.0.0',
+              },
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/projects/omc-ingest')
+
+    await waitFor(() => expect(screen.getByTestId('r6-gate-memory_r6_expired')).toBeInTheDocument())
+    expect(screen.getByTestId('r6-gate-memory_r6_expired')).toHaveTextContent('R6Gate: expired')
+    expect(screen.getByTestId('r6-gate-memory_r6_expired').style.color).toBe('darkgray')
+    expect(screen.getByTestId('r6-gate-memory_r6_expired').style.textDecoration).toBe('line-through')
+  })
+
   test('OMC project candidate adopt button calls backend adoption endpoint', async () => {
     let adoptedId = ''
     server.use(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from noeticbraid_core.schemas._common import COMMON_MODEL_CONFIG, ensure_optional_utc_datetime
 
@@ -39,3 +39,9 @@ class R6GateState(BaseModel):
                 refs.append(text)
                 seen.add(text)
         return refs
+
+    @model_validator(mode="after")
+    def _reuse_count_matches_ledger_refs(self) -> "R6GateState":
+        if self.reuse_count != len(self.ledger_evidence_refs):
+            raise ValueError("reuse_count must equal len(ledger_evidence_refs)")
+        return self
