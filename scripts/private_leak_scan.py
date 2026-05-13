@@ -158,6 +158,16 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         "Console read-surface tests seed synthetic forbidden marker names for sanitizer assertions",
     ),
     AllowlistRule(
+        "packages/noeticbraid-backend/tests/test_capabilities_chatgpt_web.py",
+        frozenset({"session_token", "profile_dir"}),
+        "SDD-D2-06-hotfix-02 hub consumer:health response sanitizer test enumerates forbidden marker names to assert isdisjoint against response keys; no private data",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-multimodel-alliance/tests/test_provider_round_parser.py",
+        frozenset({"raw_token"}),
+        "SDD-D2-01-hotfix-03 provider-round parser forbidden-material rejection test uses raw_token as a synthetic denied-marker fixture to drive scan_forbidden_material rejection path; no private data",
+    ),
+    AllowlistRule(
         "packages/noeticbraid-runtime/src/noeticbraid_runtime/browser/playwright_launcher.py",
         frozenset({"profile_dir", "profile_path"}),
         "SP-C2 launcher uses profile_dir/profile_path as Chrome user-data-dir variable names; no private data",
