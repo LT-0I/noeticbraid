@@ -40,6 +40,8 @@ from .tracked_project import (
 DETECTOR_POLICY_VERSION = "b1_detector_v1"
 WINDOW_DAYS = DEFAULT_B1_COOLDOWN_DAYS
 TRIGGER_THRESHOLD = 3
+ACTION_SUGGESTION_THRESHOLD = 5
+FACT_THRESHOLD = 7
 
 
 class CandidateB1SideNote(BaseModel):
@@ -51,7 +53,7 @@ class CandidateB1SideNote(BaseModel):
     window_id: str = Field(..., min_length=1, max_length=128)
     detector_policy_version: Literal["b1_detector_v1"] = DETECTOR_POLICY_VERSION
     evidence_source: list[str] = Field(..., min_length=1, max_length=100)
-    note_type: Literal["hypothesis", "action_suggestion"] = "hypothesis"
+    note_type: Literal["fact", "hypothesis", "action_suggestion"] = "hypothesis"
     claim: str = Field(..., min_length=1, max_length=4096)
     confidence: Literal["low", "medium", "high"] = "medium"
     tone_constraint: Literal["不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal"] = TONE_CONSTRAINT_LITERAL
@@ -175,14 +177,12 @@ def run_b1_detector_with_report(vault_path: str | Path, run_timestamp_utc: datet
     new_candidates: list[CandidateB1SideNote] = []
 
     for project in sorted(confirmed, key=lambda item: item.project_ref.casefold()):
-        # SDD-D1-02 first-phase scope generates only hypothesis-class SideNote
-        # candidates; fact/action_suggestion are left to a future hotfix.
-        candidate_note_type: SideNoteOptOutNoteType = "hypothesis"
+        project_mentions = mentions.get(project.project_ref, [])
+        deduped = _same_day_dedup(project_mentions)
+        candidate_note_type: SideNoteOptOutNoteType = _select_note_type(len(deduped))
         if candidate_note_type in opt_out_state.disabled_note_types:
             skip_reasons[project.project_ref] = f"opt_out_disabled:{candidate_note_type}"
             continue
-        project_mentions = mentions.get(project.project_ref, [])
-        deduped = _same_day_dedup(project_mentions)
         if len(deduped) < TRIGGER_THRESHOLD:
             skip_reasons[project.project_ref] = f"below_threshold:{len(deduped)}/{TRIGGER_THRESHOLD}"
             continue
@@ -219,21 +219,50 @@ def _build_candidate(
     refs = [mention.source_ref for mention in mentions]
     candidate_id = _candidate_id(project.project_ref, window_id, refs)
     count = len(mentions)
-    claim = (
-        f"Hypothesis: 过去 14 天的笔记中有 {count} 个日期提到 {project.project_name}，"
-        "但未记录项目文件更新、完成项或旁注回应变化；可检查是否需要保留、调整或暂停该项目。"
-    )
+    note_type = _select_note_type(count)
+    claim = _build_claim(project.project_name, count, note_type)
     return CandidateB1SideNote(
         candidate_id=candidate_id,
         project_ref=project.project_ref,
         window_id=window_id,
         evidence_source=refs,
-        note_type="hypothesis",
+        note_type=note_type,
         claim=claim,
-        confidence="medium" if count >= TRIGGER_THRESHOLD else "low",
+        confidence=_confidence_for(note_type),
         created_at=_iso(run_at),
         mention_count_same_day_dedup=count,
         progress_checks=checks.to_record(),
+    )
+
+
+def _select_note_type(mention_count: int) -> SideNoteOptOutNoteType:
+    if mention_count >= FACT_THRESHOLD:
+        return "fact"
+    if mention_count >= ACTION_SUGGESTION_THRESHOLD:
+        return "action_suggestion"
+    return "hypothesis"
+
+
+def _confidence_for(note_type: SideNoteOptOutNoteType) -> Literal["low", "medium", "high"]:
+    if note_type == "fact":
+        return "high"
+    return "medium"
+
+
+def _build_claim(project_name: str, count: int, note_type: SideNoteOptOutNoteType) -> str:
+    if note_type == "fact":
+        return (
+            f"过去 14 天的笔记中有 {count} 个日期提到 {project_name}，"
+            "但未观察到项目文件更新、完成项或旁注回应变化。"
+        )
+    if note_type == "action_suggestion":
+        return (
+            f"过去 14 天有 {count} 个日期提到 {project_name}，"
+            "建议在本周内为该项目明确下一步或者暂停。"
+        )
+    return (
+        f"Hypothesis: 过去 14 天的笔记中有 {count} 个日期提到 {project_name}，"
+        "但未记录项目文件更新、完成项或旁注回应变化；可检查是否需要保留、调整或暂停该项目。"
     )
 
 
