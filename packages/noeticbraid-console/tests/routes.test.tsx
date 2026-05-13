@@ -82,7 +82,7 @@ describe('console routes', () => {
     renderAt('/projects/omc-ingest')
 
     await waitFor(() => expect(screen.getByTestId('omc-project-root')).toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: '吸收 OMC' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ingest OMC' })).toBeInTheDocument()
     expect(screen.getByTestId('omc-task-card')).toHaveTextContent('Task card')
     expect(screen.getByTestId('project-chat-entry')).toHaveTextContent('card + adopt log')
     expect(screen.getByTestId('external-reference-pool')).toHaveTextContent('OMC_DEBATE_LOOP.md')

@@ -1,0 +1,47 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  width: fit-content;
+  border-radius: var(--nb-radius-pill);
+  padding: 3px 9px;
+  font-size: var(--nb-font-size-caption);
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.withDot::before { content: ''; }
+
+.neutral {
+  background: color-mix(in srgb, var(--nb-color-text-muted) 12%, transparent);
+  color: var(--nb-color-text-muted);
+}
+.success {
+  background: color-mix(in srgb, var(--nb-color-status-success) 14%, transparent);
+  color: var(--nb-color-status-success);
+}
+.warning {
+  background: color-mix(in srgb, var(--nb-color-status-warning) 16%, transparent);
+  color: var(--nb-color-status-warning);
+}
+.error,
+.danger {
+  background: color-mix(in srgb, var(--nb-color-status-error) 14%, transparent);
+  color: var(--nb-color-status-error);
+}
+.info {
+  background: color-mix(in srgb, var(--nb-color-status-info) 14%, transparent);
+  color: var(--nb-color-status-info);
+}
+.expired { opacity: 0.68; text-decoration: line-through; }

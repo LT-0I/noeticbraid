@@ -60,3 +60,4 @@ data/
 # Console test artifacts
 packages/noeticbraid-console/playwright-report/
 packages/noeticbraid-console/test-results/
+packages/noeticbraid-console/.playwright-mcp/

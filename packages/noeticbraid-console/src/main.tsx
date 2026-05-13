@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
+import './i18n'
+import './styles/global.css'
 import { routeTree } from './routes/routeTree'
 
 async function enableMocking() {
