@@ -6,7 +6,7 @@ note_id: "{{note_id}}"
 created_at: "{{created_at}}"
 linked_source_refs:
   - "{{source_ref_id}}"
-note_type: challenge
+note_type: hypothesis
 confidence: medium
 user_response: unread
 follow_up_ref: "{{digestion_id}}"
