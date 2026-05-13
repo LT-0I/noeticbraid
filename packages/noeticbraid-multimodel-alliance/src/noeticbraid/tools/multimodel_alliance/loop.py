@@ -22,6 +22,7 @@ from .convergence_markdown import write_convergence_markdown
 from .debate_runner import run_debate
 from .invocation_plan import build_invocation_plan, execute_invocation_plan
 from .ledger_bridge import record_debate_loop_ledger
+from .provider_round_parser import ProviderRoundParseError, build_real_rounds
 from .schema_loader import FIXTURE_DIR, load_json
 from .validator import validate_convergence_record, validate_debate_record, validate_route_record
 
@@ -301,10 +302,11 @@ def run_debate_loop(
 
     provider_artifacts: list[dict[str, Any]]
     if provider_mode:
-        # Explicit opt-in only. Command outputs are artifact-backed; structured
-        # round extraction remains caller/manual responsibility for D2-01.
         execute_invocation_plan(invocation_plan, provider_mode=True)
-        rounds_input, provider_artifacts = _load_mock_rounds()
+        try:
+            rounds_input, provider_artifacts = build_real_rounds(invocation_plan, task)
+        except ProviderRoundParseError as exc:
+            raise DebateLoopError(f"provider_mode round parse failed: {exc}") from exc
     elif manual_invocation_artifacts:
         rounds_input, provider_artifacts = _load_manual_rounds(manual_invocation_artifacts)
     elif mock_invocations:

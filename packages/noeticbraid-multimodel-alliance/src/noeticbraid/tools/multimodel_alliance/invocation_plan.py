@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,10 @@ DEFAULT_WORKSPACE = Path(os.getenv("NOETICBRAID_WORKSPACE_ROOT") or Path(__file_
 CODEX_REASONING_FLAG = 'model_reasoning_effort="xhigh"'
 GEMINI_MODEL = "gemini-3.1-pro-preview"
 CLAUDE_MODEL = "claude-opus-4-7[1m]"
+STRUCTURED_ROUND_JSON_INSTRUCTION = '\n\nAfter your prose, emit exactly one fenced ```json``` block matching this schema (no extra keys): {"objections":[{"objection_id":"obj_*","severity":"low|medium|high|critical","status":"raised|unresolved|needs_user_decision","summary":"<≤200 chars>","evidence_refs":[]}],"recommendation":"<≤500 chars>","summary":"<≤500 chars>"}. Use stable obj_ ids. If you have no objections, return objections: [].'
+GEMINI_RETRY_BACKOFF_SECONDS: tuple[int, ...] = (30, 60, 120)
+RATE_LIMIT_SIGNALS = ("429", "rate limit", "resource_exhausted", "quota exceeded")
+OMC_ASK_LINK_RE = re.compile(r"(?<![A-Za-z0-9_/-])(\.omc/artifacts/ask/[A-Za-z0-9_./\-]+\.md)")
 
 
 class InvocationPlanError(ValueError):
@@ -40,7 +46,31 @@ def _prompt(task_card: dict[str, Any], role: str) -> str:
         f"SDD-D2-01 multimodel debate role={role}. Review task {task_id}. "
         "Return concise structured objections/evidence only; do not perform external side effects. "
         f"Task card JSON: {json.dumps(task_card, ensure_ascii=False, sort_keys=True)}"
+        + STRUCTURED_ROUND_JSON_INSTRUCTION
     )
+
+
+def _is_rate_limited(stdout: str, stderr: str) -> bool:
+    blob = (stdout + "\n" + stderr).lower()
+    return any(signal.lower() in blob for signal in RATE_LIMIT_SIGNALS)
+
+
+def _follow_claude_ask_link(stdout: str, *, workspace_root: Path) -> Path | None:
+    match = OMC_ASK_LINK_RE.search(stdout)
+    if not match:
+        return None
+    candidate = (workspace_root / match.group(1)).resolve()
+    workspace_root_resolved = workspace_root.resolve()
+    try:
+        candidate.relative_to(workspace_root_resolved)
+    except ValueError:
+        return None
+    assert_safe_output_root(candidate.parent)
+    return candidate if candidate.is_file() else None
+
+
+def _artifact_has_full_content(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 256
 
 
 def build_invocation_plan(
@@ -139,15 +169,44 @@ def execute_invocation_plan(plan: dict[str, Any], *, provider_mode: bool = False
     for item in plan.get("plans", []):
         artifact_path = Path(item["artifact_path"])
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        completed = subprocess.run(  # noqa: S603 - explicit user/provider-mode boundary.
-            item["argv"],
-            env={**os.environ, **item.get("env", {})},
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-        if not artifact_path.exists():
+        retries_attempted = 0
+        completed: subprocess.CompletedProcess[str] | None = None
+        delays = (0,) + GEMINI_RETRY_BACKOFF_SECONDS
+        for attempt_index, delay in enumerate(delays):
+            if delay:
+                time.sleep(delay)
+            completed = subprocess.run(  # noqa: S603 - explicit user/provider-mode boundary.
+                item["argv"],
+                env={**os.environ, **item.get("env", {})},
+                text=True,
+                capture_output=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+            should_retry = (
+                item["provider"] == "gemini"
+                and completed.returncode != 0
+                and _is_rate_limited(completed.stdout or "", completed.stderr or "")
+                and attempt_index < len(delays) - 1
+            )
+            if not should_retry:
+                break
+            retries_attempted += 1
+        if completed is None:
+            raise InvocationPlanError("provider plan execution produced no subprocess result")
+
+        copied_claude_link = False
+        if item["provider"] == "claude" and not _artifact_has_full_content(artifact_path):
+            linked = _follow_claude_ask_link(
+                completed.stdout or "",
+                workspace_root=Path(os.getenv("NOETICBRAID_WORKSPACE_ROOT", str(DEFAULT_WORKSPACE))),
+            )
+            if linked is not None:
+                content = linked.read_text(encoding="utf-8")
+                artifact_path.write_text(content + f"\n<!-- copied from {linked} -->\n", encoding="utf-8")
+                copied_claude_link = True
+
+        if not artifact_path.exists() or (item["provider"] == "claude" and not copied_claude_link and not _artifact_has_full_content(artifact_path)):
             artifact_path.write_text((completed.stdout or "") + (completed.stderr or ""), encoding="utf-8")
         results.append(
             {
@@ -156,6 +215,7 @@ def execute_invocation_plan(plan: dict[str, Any], *, provider_mode: bool = False
                 "role": item["role"],
                 "artifact_path": str(artifact_path),
                 "returncode": completed.returncode,
+                "retries_attempted": retries_attempted,
             }
         )
     return results
