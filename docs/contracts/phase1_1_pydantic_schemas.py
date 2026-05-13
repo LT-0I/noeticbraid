@@ -108,16 +108,25 @@
 #   note_id: pattern=r"^note_[A-Za-z0-9_]+$", min_length=1, max_length=128
 #   created_at: default_factory=utc_now; UTC-normalize validator
 #   linked_source_refs: default_factory=list, max_length=100;
-#                       each item must match r"^source_[A-Za-z0-9_]+$"; no duplicates
-#   note_type: required; 4 Literal values
+#                       each item must match r"^(?:source_[A-Za-z0-9_]+|\S+:\d+)$";
+#                       no duplicates
+#   evidence_source: list[str], min_length=1, max_length=100;
+#                    each item must match r"^(?:source_[A-Za-z0-9_]+|\S+:\d+)$";
+#                    no duplicates; must exactly match linked_source_refs
+#   note_type: required (no default); 3 Literal values (v2 contract 2.0.0)
+#              old `challenge` / `action` migrate via migration/note_type_v2.py
 #   claim: min_length=1, max_length=4096
-#   confidence: required; 3 Literal values
+#   confidence: required (no default); 3 Literal values (low | medium | high)
 #   user_response: default="unread"; 4 Literal values
+#   tone_constraint: required, exactly equal to literal
+#                    "不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal"
+#   user_response_channel: required; min_length=4, max_length=4; exact set
+#                          {accept, rebut, mark_inaccurate, disable_this_type}; no duplicates
 #   follow_up_ref: default=None, max_length=128; blank-string→None pre-validator
 #   methods:
 #     - SideNote.has_sources() -> bool  (linked_source_refs is non-empty)
 #     - SideNote.is_actionable() -> bool
-#       (note_type in {"challenge", "action"} and user_response in {"unread", "modified"})
+#       (note_type in {"hypothesis", "action_suggestion"} and user_response in {"unread", "modified"})
 #     - SideNote.is_user_resolved() -> bool
 #       (user_response in {"accepted", "rejected", "modified"})
 #
@@ -201,10 +210,13 @@ class SideNote(BaseModel):
     note_id: str
     created_at: datetime
     linked_source_refs: list[str]
-    note_type: Literal["fact", "hypothesis", "challenge", "action"]
+    evidence_source: list[str]
+    note_type: Literal["fact", "hypothesis", "action_suggestion"]
     claim: str
     confidence: Literal["low", "medium", "high"]
     user_response: Literal["unread", "accepted", "rejected", "modified"]
+    tone_constraint: Literal["不审判用户 / 不羞辱用户 / 不替用户解释自己；违反任一构成 fatal"]
+    user_response_channel: list[Literal["accept", "rebut", "mark_inaccurate", "disable_this_type"]]
     follow_up_ref: Optional[str]
 
 
