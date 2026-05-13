@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-05-13T08:29:20.508Z",
+  "scenarios": {
+    "connected-chatgpt-page": {
+      "ok": true,
+      "target": "chatgpt",
+      "profile": "chatgpt",
+      "connected": true,
+      "pageCount": 2,
+      "loginLikeState": "healthy",
+      "status": "ok",
+      "errorCode": null,
+      "message": "ChatGPT target is available.",
+      "checkedAt": "2026-05-13T08:29:20.508Z"
+    },
+    "connected-no-chatgpt-page": {
+      "ok": false,
+      "target": "chatgpt",
+      "profile": "chatgpt",
+      "connected": true,
+      "pageCount": 1,
+      "loginLikeState": "not_implemented",
+      "status": "missing",
+      "errorCode": "TARGET_PAGE_MISSING",
+      "message": "Target page missing in managed browser.",
+      "checkedAt": "2026-05-13T08:29:20.508Z"
+    },
+    "disconnected": {
+      "ok": false,
+      "target": "chatgpt",
+      "profile": "chatgpt",
+      "connected": false,
+      "pageCount": 0,
+      "loginLikeState": "not_implemented",
+      "status": "missing",
+      "errorCode": "BROWSER_NOT_LAUNCHED",
+      "message": "Managed browser is not launched.",
+      "checkedAt": "2026-05-13T08:29:20.508Z"
+    },
+    "command-timeout": {
+      "ok": false,
+      "target": "chatgpt",
+      "profile": "chatgpt",
+      "connected": false,
+      "pageCount": 0,
+      "loginLikeState": "not_implemented",
+      "status": "needs_review",
+      "errorCode": "COMMAND_TIMEOUT",
+      "message": "Timed out while calling hub consumer health.",
+      "checkedAt": "2026-05-13T08:29:20.508Z"
+    }
+  }
+}

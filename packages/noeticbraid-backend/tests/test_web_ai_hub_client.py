@@ -16,11 +16,35 @@ for path in (REPO_ROOT / "packages" / "noeticbraid-core" / "src", PACKAGE_ROOT /
 
 from noeticbraid_backend.omc_workspace import web_ai_hub_client as target_module
 
-FIXTURE_PATH = PACKAGE_ROOT / "tests" / "fixtures" / "chatgpt_web_browser_pages_mock.json"
+
+def _consumer_health(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": True,
+        "target": "chatgpt",
+        "profile": "chatgpt",
+        "connected": True,
+        "pageCount": 2,
+        "loginLikeState": "healthy",
+        "status": "ok",
+        "errorCode": None,
+        "message": "ChatGPT target is available.",
+        "checkedAt": "2026-05-13T08:29:20.508Z",
+    }
+    payload.update(overrides)
+    return payload
 
 
-def _fixture(key: str) -> list[dict[str, Any]]:
-    return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))[key]
+def _assert_consumer_error_shape(result: dict[str, Any], *, error_code: str) -> None:
+    assert result["ok"] is False
+    assert result["target"] == "chatgpt"
+    assert result["profile"] == "chatgpt"
+    assert result["connected"] is False
+    assert result["pageCount"] == 0
+    assert result["loginLikeState"] == "not_implemented"
+    assert result["status"] == "needs_review"
+    assert result["errorCode"] == error_code
+    assert isinstance(result["message"], str) and result["message"]
+    assert isinstance(result["checkedAt"], str) and result["checkedAt"]
 
 
 def test_run_hub_command_success_parses_json(tmp_path: Path, monkeypatch) -> None:
@@ -33,14 +57,25 @@ def test_run_hub_command_success_parses_json(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
     result = target_module.run_hub_command(
-        ["browser:status", "--profile", "chatgpt", "--json"], hub_path=tmp_path, timeout=5
+        ["consumer:health", "--target", "chatgpt", "--profile", "chatgpt", "--json"],
+        hub_path=tmp_path,
+        timeout=15,
     )
 
     assert result == {"connected": True}
     assert calls == [
         (
-            ["node", str(tmp_path / "dist" / "src" / "cli.js"), "browser:status", "--profile", "chatgpt", "--json"],
-            {"capture_output": True, "timeout": 5, "check": False, "text": True},
+            [
+                "node",
+                str(tmp_path / "dist" / "src" / "cli.js"),
+                "consumer:health",
+                "--target",
+                "chatgpt",
+                "--profile",
+                "chatgpt",
+                "--json",
+            ],
+            {"capture_output": True, "timeout": 15, "check": False, "text": True},
         )
     ]
 
@@ -51,7 +86,7 @@ def test_run_hub_command_timeout_fail_soft(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
-    result = target_module.run_hub_command(["browser:pages"], hub_path=tmp_path)
+    result = target_module.run_hub_command(["consumer:health"], hub_path=tmp_path)
 
     assert result["ok"] is False
     assert result["error_type"] == "timeout"
@@ -64,7 +99,7 @@ def test_run_hub_command_file_not_found_fail_soft(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
-    result = target_module.run_hub_command(["browser:status"], hub_path=tmp_path)
+    result = target_module.run_hub_command(["consumer:health"], hub_path=tmp_path)
 
     assert result["ok"] is False
     assert result["error_type"] == "file_not_found"
@@ -77,7 +112,7 @@ def test_run_hub_command_non_zero_exit_fail_soft(tmp_path: Path, monkeypatch) ->
 
     monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
-    result = target_module.run_hub_command(["browser:status"], hub_path=tmp_path)
+    result = target_module.run_hub_command(["consumer:health"], hub_path=tmp_path)
 
     assert result["ok"] is False
     assert result["error_type"] == "non_zero_exit"
@@ -86,61 +121,96 @@ def test_run_hub_command_non_zero_exit_fail_soft(tmp_path: Path, monkeypatch) ->
     assert "/home/l1u" not in result["error"]
 
 
-def test_check_hub_browser_status_returns_dict(tmp_path: Path, monkeypatch) -> None:
-    calls: list[list[str]] = []
+def test_check_chatgpt_consumer_health_happy_path_returns_contract_unchanged(tmp_path: Path, monkeypatch) -> None:
+    payload = _consumer_health()
+    calls: list[tuple[list[str], dict[str, Any]]] = []
 
-    def fake_run_hub_command(args, *, hub_path, timeout=15):
-        calls.append(args)
-        assert hub_path == tmp_path
-        assert timeout == 5
-        return {"connected": True, "lastError": None, "pages": [{"url": "https://chatgpt.com/"}]}
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
 
-    monkeypatch.setattr(target_module, "run_hub_command", fake_run_hub_command)
+    monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
-    status = target_module.check_hub_browser_status(tmp_path)
+    result = target_module.check_chatgpt_consumer_health(tmp_path)
 
-    assert calls == [["browser:status", "--profile", "chatgpt", "--json"]]
-    assert status == {"connected": True, "lastError": None, "pageCount": 1}
-
-
-def test_parse_chatgpt_login_state_healthy() -> None:
-    status, version, error_msg = target_module.parse_chatgpt_login_state(_fixture("logged-in"))
-
-    assert status == "healthy"
-    assert version == "ChatGPT"
-    assert error_msg is None
-
-
-def test_parse_chatgpt_login_state_unhealthy_login_required() -> None:
-    status, version, error_msg = target_module.parse_chatgpt_login_state(_fixture("login-required"))
-
-    assert status == "unhealthy"
-    assert version is None
-    assert error_msg == "ChatGPT Web 未登录"
+    assert result == payload
+    assert calls == [
+        (
+            [
+                "node",
+                str(tmp_path / "dist" / "src" / "cli.js"),
+                "consumer:health",
+                "--target",
+                "chatgpt",
+                "--profile",
+                "chatgpt",
+                "--json",
+            ],
+            {"capture_output": True, "timeout": 15, "check": False, "text": True},
+        )
+    ]
 
 
-def test_parse_chatgpt_login_state_not_implemented_no_chatgpt_page() -> None:
-    status, version, error_msg = target_module.parse_chatgpt_login_state(_fixture("no-chatgpt-page"))
+def test_check_chatgpt_consumer_health_non_zero_hub_not_built(tmp_path: Path, monkeypatch) -> None:
+    def fake_run(_args, **_kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="HUB_NOT_BUILT: Hub dist CLI is missing; run npm run build in /home/l1u/hub.",
+        )
 
-    assert status == "not_implemented"
-    assert version is None
-    assert error_msg == "Chrome 未打开 ChatGPT 页, 请在 hub 内手动 browser:launch + browser:open https://chatgpt.com/"
+    monkeypatch.setattr(target_module.subprocess, "run", fake_run)
+
+    result = target_module.check_chatgpt_consumer_health(tmp_path)
+
+    _assert_consumer_error_shape(result, error_code="HUB_NOT_BUILT")
+    assert "/home/l1u" not in result["message"]
+    assert "Hub dist CLI is missing" in result["message"]
 
 
-def test_sanitize_page_title_truncates_to_64() -> None:
-    title = "ChatGPT " + ("x" * 100)
+def test_check_chatgpt_consumer_health_command_timeout(tmp_path: Path, monkeypatch) -> None:
+    def fake_run(_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["node", "cli.js"], timeout=15)
 
-    sanitized = target_module._sanitize_page_title(title)
+    monkeypatch.setattr(target_module.subprocess, "run", fake_run)
 
-    assert len(sanitized) == 64
-    assert len(sanitized) != 256
+    result = target_module.check_chatgpt_consumer_health(tmp_path)
+
+    _assert_consumer_error_shape(result, error_code="COMMAND_TIMEOUT")
+    assert "timed out" in result["message"]
 
 
-def test_sanitize_page_title_redacts_home_path_email_token(monkeypatch) -> None:
+def test_check_chatgpt_consumer_health_invalid_json(tmp_path: Path, monkeypatch) -> None:
+    def fake_run(_args, **_kwargs):
+        return SimpleNamespace(returncode=0, stdout="{not-json", stderr="")
+
+    monkeypatch.setattr(target_module.subprocess, "run", fake_run)
+
+    result = target_module.check_chatgpt_consumer_health(tmp_path)
+
+    _assert_consumer_error_shape(result, error_code="INVALID_JSON")
+    assert "invalid JSON" in result["message"]
+
+
+def test_check_chatgpt_consumer_health_tolerates_extra_forbidden_field(tmp_path: Path, monkeypatch) -> None:
+    payload = _consumer_health(cdpEndpoint="http://127.0.0.1:9222")
+
+    def fake_run(_args, **_kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr(target_module.subprocess, "run", fake_run)
+
+    result = target_module.check_chatgpt_consumer_health(tmp_path)
+
+    assert result["ok"] is True
+    assert result["cdpEndpoint"] == "http://127.0.0.1:9222"
+
+
+def test_sanitize_error_msg_redacts_home_path_email_token(monkeypatch) -> None:
     monkeypatch.setenv("USER", "l1u")
-    title = "ChatGPT /home/l1u/private /tmp/file alice@example.com token=secret Bearer abcdef"
+    message = "ChatGPT /home/l1u/private /tmp/file alice@example.com token=secret Bearer abcdef"
 
-    sanitized = target_module._sanitize_page_title(title, max_chars=256)
+    sanitized = target_module.sanitize_error_msg(message)
 
     assert "/home/l1u" not in sanitized
     assert "/tmp/file" not in sanitized

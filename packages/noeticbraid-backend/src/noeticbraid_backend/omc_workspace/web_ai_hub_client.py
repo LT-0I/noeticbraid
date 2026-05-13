@@ -7,13 +7,12 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Literal
-from urllib.parse import urlparse
+from typing import Any
 
 CHATGPT_PROFILE = "chatgpt"
-CHATGPT_VERSION_MAX_LENGTH = 64
 ERROR_MSG_MAX_LENGTH = 256
 
 _POSIX_ABSOLUTE_PATH_RE = re.compile(r"(?<![\w.-])/(?:[^\s\"'`<>|;:]+)")
@@ -23,6 +22,31 @@ _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(token|api[_-]?key|password|credential|secret|authorization|auth)(\s*[:=]\s*)([^\s,;]+)"
 )
 _BEARER_RE = re.compile(r"(?i)\b(bearer)\s+[^\s,;]+")
+
+_CONSUMER_ERROR_CODES = {
+    "HUB_NOT_BUILT",
+    "BROWSER_NOT_LAUNCHED",
+    "PROFILE_NOT_FOUND",
+    "TARGET_PAGE_MISSING",
+    "LOGIN_REQUIRED",
+    "CAPABILITY_DB_NOT_INIT",
+    "COMMAND_TIMEOUT",
+    "INVALID_JSON",
+    "POLICY_APPROVAL_REQUIRED",
+    "UNKNOWN",
+}
+_CONSUMER_KEYS = {
+    "ok",
+    "target",
+    "profile",
+    "connected",
+    "pageCount",
+    "loginLikeState",
+    "status",
+    "errorCode",
+    "message",
+    "checkedAt",
+}
 
 
 def sanitize_error_msg(msg: str, max_chars: int = ERROR_MSG_MAX_LENGTH) -> str:
@@ -44,12 +68,6 @@ def sanitize_error_msg(msg: str, max_chars: int = ERROR_MSG_MAX_LENGTH) -> str:
         text = text.replace(username, "[user]")
     text = " ".join(text.split())
     return text[:max_chars]
-
-
-def _sanitize_page_title(title: str, max_chars: int = CHATGPT_VERSION_MAX_LENGTH) -> str:
-    """Return a redacted, bounded ChatGPT title suitable for ``version``."""
-
-    return sanitize_error_msg(title, max_chars=max_chars)
 
 
 def _cli_path(hub_path: Path) -> Path:
@@ -107,115 +125,83 @@ def run_hub_command(args: list[str], *, hub_path: Path, timeout: int = 15) -> di
     return {"data": parsed}
 
 
-def check_hub_browser_status(hub_path: Path) -> dict[str, Any]:
-    """Return a safe subset of ``browser:status --profile chatgpt --json``."""
+def _checked_at_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-    payload = run_hub_command(
-        ["browser:status", "--profile", CHATGPT_PROFILE, "--json"],
-        hub_path=hub_path,
-        timeout=5,
-    )
-    if payload.get("ok") is False:
-        return {"connected": False, "lastError": payload.get("error")}
-    last_error = payload.get("lastError")
-    safe: dict[str, Any] = {
-        "connected": bool(payload.get("connected")),
-        "lastError": sanitize_error_msg(str(last_error)) if last_error else None,
+
+def _consumer_health_error_dict(error_code: str, message: object) -> dict[str, Any]:
+    code = error_code if error_code in _CONSUMER_ERROR_CODES else "UNKNOWN"
+    return {
+        "ok": False,
+        "target": CHATGPT_PROFILE,
+        "profile": CHATGPT_PROFILE,
+        "connected": False,
+        "pageCount": 0,
+        "loginLikeState": "not_implemented",
+        "status": "needs_review",
+        "errorCode": code,
+        "message": sanitize_error_msg(str(message)) or "web-ai-capability-hub command failed",
+        "checkedAt": _checked_at_now(),
     }
-    if isinstance(payload.get("browser"), str):
-        safe["browser"] = sanitize_error_msg(str(payload["browser"]))
-    pages = payload.get("pages")
-    if isinstance(pages, list):
-        safe["pageCount"] = len(pages)
-    return safe
 
 
-def get_chatgpt_pages(hub_path: Path) -> list[dict[str, Any]]:
-    """Return safe page metadata from ``browser:pages --profile chatgpt --json``."""
+def _error_code_from_run_failure(payload: dict[str, Any]) -> str:
+    error_type = str(payload.get("error_type") or "")
+    message = str(payload.get("error") or "")
+    upper_message = message.upper()
+    for code in _CONSUMER_ERROR_CODES:
+        if code in upper_message:
+            return code
+    if error_type == "timeout":
+        return "COMMAND_TIMEOUT"
+    if error_type == "json_parse_error":
+        return "INVALID_JSON"
+    lowered = message.lower()
+    if error_type == "non_zero_exit" and (
+        "cannot find module" in lowered
+        or "dist/src/cli.js" in lowered
+        or "hub dist cli" in lowered
+    ):
+        return "HUB_NOT_BUILT"
+    return "UNKNOWN"
+
+
+def check_chatgpt_consumer_health(hub_path: Path) -> dict[str, Any]:
+    """Call ``consumer:health`` and return its consumer-contract response.
+
+    Subprocess, timeout, and JSON failures are converted to the same allowlist
+    key shape with a stable consumer error code and sanitized message.
+    """
 
     payload = run_hub_command(
-        ["browser:pages", "--profile", CHATGPT_PROFILE, "--json"],
+        [
+            "consumer:health",
+            "--target",
+            CHATGPT_PROFILE,
+            "--profile",
+            CHATGPT_PROFILE,
+            "--json",
+        ],
         hub_path=hub_path,
         timeout=15,
     )
-    if payload.get("ok") is False:
-        return [{"_hub_error": payload.get("error") or "browser:pages failed"}]
-    pages: Any
-    if isinstance(payload.get("data"), list):
-        pages = payload["data"]
-    elif isinstance(payload.get("pages"), list):
-        pages = payload["pages"]
-    elif isinstance(payload, list):  # pragma: no cover - defensive; run_hub_command wraps lists.
-        pages = payload
-    else:
-        pages = []
-
-    safe_pages: list[dict[str, Any]] = []
-    for page in pages:
-        if not isinstance(page, dict):
-            continue
-        safe_pages.append(
-            {
-                "id": str(page.get("id") or ""),
-                "url": str(page.get("url") or ""),
-                "title": _sanitize_page_title(str(page.get("title") or "")),
-            }
+    if payload.get("error_type"):
+        return _consumer_health_error_dict(
+            _error_code_from_run_failure(payload),
+            payload.get("error") or "web-ai-capability-hub command failed",
         )
-    return safe_pages
-
-
-def _is_chatgpt_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-    except ValueError:
-        return False
-    return parsed.scheme == "https" and parsed.netloc.lower() == "chatgpt.com"
-
-
-def _title_indicates_login(title: str) -> bool:
-    normalized = title.lower()
-    return any(marker in normalized for marker in ("log in", "login", "sign in", "sign-in"))
-
-
-def parse_chatgpt_login_state(
-    pages: list[dict[str, Any]],
-) -> tuple[Literal["healthy", "unhealthy", "not_implemented"], str | None, str | None]:
-    """Infer ChatGPT Web health from browser page URL/title metadata only."""
-
-    for page in pages:
-        hub_error = page.get("_hub_error")
-        if hub_error:
-            return "unhealthy", None, sanitize_error_msg(str(hub_error))
-
-    chatgpt_pages = [page for page in pages if _is_chatgpt_url(str(page.get("url") or ""))]
-    if not chatgpt_pages:
-        return (
-            "not_implemented",
-            None,
-            "Chrome 未打开 ChatGPT 页, 请在 hub 内手动 browser:launch + browser:open https://chatgpt.com/",
-        )
-
-    for page in chatgpt_pages:
-        title = str(page.get("title") or "")
-        if _title_indicates_login(title):
-            return "unhealthy", None, "ChatGPT Web 未登录"
-
-    for page in chatgpt_pages:
-        title = str(page.get("title") or "")
-        if "chatgpt" in title.lower():
-            version = _sanitize_page_title(title) or None
-            return "healthy", version, None
-
-    return "unhealthy", None, "ChatGPT Web 页面状态不可判定"
+    if _CONSUMER_KEYS.issubset(payload):
+        return payload
+    return _consumer_health_error_dict(
+        "INVALID_JSON",
+        "Hub consumer health returned a non-contract JSON payload.",
+    )
 
 
 __all__ = [
     "CHATGPT_PROFILE",
-    "CHATGPT_VERSION_MAX_LENGTH",
-    "check_hub_browser_status",
-    "get_chatgpt_pages",
-    "parse_chatgpt_login_state",
+    "ERROR_MSG_MAX_LENGTH",
+    "check_chatgpt_consumer_health",
     "run_hub_command",
     "sanitize_error_msg",
-    "_sanitize_page_title",
 ]

@@ -81,6 +81,19 @@ def _iso_z(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
+def _datetime_from_iso_z(value: object) -> datetime:
+    text = str(value or "").strip()
+    if not text:
+        return _now()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return _now()
+    if parsed.tzinfo is None or parsed.tzinfo.utcoffset(parsed) is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _sanitize_and_truncate(message: object, *, max_length: int = ERROR_MSG_MAX_LENGTH) -> str:
     text = str(message or "").strip()
     if not text:
@@ -292,13 +305,38 @@ def _chatgpt_web_health_result(
             status = "not_implemented"
             error_msg = CHATGPT_WEB_HUB_NOT_CONFIGURED_ERROR
         else:
-            browser_status = web_ai_hub_client.check_hub_browser_status(hub_path)
-            if not browser_status.get("connected"):
-                status = "not_implemented"
-                error_msg = CHATGPT_WEB_CHROME_NOT_LAUNCHED_ERROR
+            health = web_ai_hub_client.check_chatgpt_consumer_health(hub_path)
+            checked_at = _datetime_from_iso_z(health.get("checkedAt"))
+            login_like_state = str(health.get("loginLikeState") or "not_implemented")
+            version = (
+                f"connected:{login_like_state}"
+                if bool(health.get("connected"))
+                else "disconnected"
+            )
+            version = _sanitize_and_truncate(version, max_length=VERSION_MAX_LENGTH)
+
+            error_code = health.get("errorCode")
+            message = web_ai_hub_client.sanitize_error_msg(str(health.get("message") or ""))
+            if error_code:
+                error_msg = _sanitize_and_truncate(
+                    f"{error_code}: {message}" if message else str(error_code),
+                    max_length=ERROR_MSG_MAX_LENGTH,
+                )
+            elif health.get("ok") is False and message:
+                error_msg = _sanitize_and_truncate(message, max_length=ERROR_MSG_MAX_LENGTH)
             else:
-                pages = web_ai_hub_client.get_chatgpt_pages(hub_path)
-                status, version, error_msg = web_ai_hub_client.parse_chatgpt_login_state(pages)
+                error_msg = ""
+
+            if health.get("ok") is False and error_code:
+                status = "unhealthy"
+            elif health.get("status") == "ok":
+                status = "healthy"
+            elif health.get("status") == "missing":
+                status = "not_implemented"
+            elif health.get("status") in {"blocked", "needs_review"}:
+                status = "unhealthy"
+            else:
+                status = "healthy" if health.get("ok") is True else "unhealthy"
 
     duration_ms = int((time.monotonic() - started) * 1000)
     artifact_ref = _write_live_artifact(
@@ -310,10 +348,10 @@ def _chatgpt_web_health_result(
         error_msg=error_msg,
         duration_ms=duration_ms,
         exit_code=None,
-        sdd_id="SDD-D2-06",
+        sdd_id="SDD-D2-06-hotfix-02",
     )
     summary = (
-        "Live health OK for ChatGPT Web; browser page state parsed."
+        "Live health OK for ChatGPT Web; hub consumer health reported ready."
         if status == "healthy"
         else "Live ChatGPT Web health-check failed safely."
     )
