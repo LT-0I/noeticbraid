@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from datetime import datetime, timezone
@@ -70,8 +69,6 @@ def run_omc_debate_loop(
 
     original_run_id = _run_id_from_result(result)
     unique_run_id = _unique_submit_run_id(original_run_id, store)
-    if unique_run_id != original_run_id:
-        _rewrite_current_debate_ledger_run_id(result, original_run_id=original_run_id, unique_run_id=unique_run_id)
     _apply_submit_run_id(result, unique_run_id)
     new_candidate = candidate_from_d2_result(result)
     matches = find_matching_lessons(
@@ -80,7 +77,7 @@ def run_omc_debate_loop(
         exclude_candidate_id=new_candidate["candidate_id"],
     )
 
-    compact_d2_records = _compact_d2_ledger_records(result)
+    compact_d2_records = _compact_d2_ledger_records(result, submit_run_id=unique_run_id)
     extraction_records = _extraction_ledger_records(
         result,
         extraction=extraction,
@@ -142,28 +139,6 @@ def _used_run_ids(store: OMCProjectStore) -> set[str]:
     return used
 
 
-def _rewrite_current_debate_ledger_run_id(result: dict[str, Any], *, original_run_id: str, unique_run_id: str) -> None:
-    ledger_value = result.get("artifact_paths", {}).get("ledger_jsonl")
-    event_count = len(result.get("ledger_event_types", []))
-    if not ledger_value or event_count <= 0:
-        raise ValueError("cannot rewrite D2 ledger run_id without ledger path and event count")
-    ledger_path = Path(ledger_value)
-    lines = ledger_path.read_text(encoding="utf-8").splitlines()
-    if len(lines) < event_count:
-        raise ValueError("D2 ledger has fewer rows than the current submit event count")
-    prefix = lines[:-event_count]
-    current_rows = [json.loads(line) for line in lines[-event_count:]]
-    if any(row.get("run_id") != original_run_id for row in current_rows):
-        raise ValueError("latest D2 ledger rows do not match the original submit run_id")
-    for row in current_rows:
-        row["run_id"] = unique_run_id
-    rewritten = [
-        *prefix,
-        *[json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for row in current_rows],
-    ]
-    ledger_path.write_text("\n".join(rewritten) + "\n", encoding="utf-8")
-
-
 def _task_card_with_local_source(task_card: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(task_card)
     enriched["source_refs"] = list(dict.fromkeys([*enriched.get("source_refs", []), LOCAL_METADATA_SOURCE_REF]))
@@ -200,12 +175,16 @@ def _public_artifact_path(value: str, *, project_root: Path) -> str:
         return str(path)
 
 
-def _compact_d2_ledger_records(result: dict[str, Any]) -> list[dict[str, Any]]:
+def _compact_d2_ledger_records(result: dict[str, Any], *, submit_run_id: str) -> list[dict[str, Any]]:
     candidate = result["candidate"]
-    run_id = result.get("route", {}).get("run_refs", [None])[0] or f"run_{result['task_id'].removeprefix('task_')}"
+    run_refs = result.get("route", {}).get("run_refs")
+    if not isinstance(run_refs, list) or not run_refs or not run_refs[0]:
+        raise ValueError("cannot compact D2 ledger records without result.route.run_refs[0]")
+    run_id = str(run_refs[0])
     model_refs = _route_model_refs(result)
-    return [
-        {
+    records: list[dict[str, Any]] = []
+    for event_type in result.get("ledger_event_types", []):
+        record = {
             "run_id": run_id,
             "task_id": result["task_id"],
             "event_type": event_type,
@@ -217,8 +196,9 @@ def _compact_d2_ledger_records(result: dict[str, Any]) -> list[dict[str, Any]]:
             "routing_advice": f"SDD-D2-01 {event_type}",
             "created_at": candidate.get("created_at"),
         }
-        for event_type in result.get("ledger_event_types", [])
-    ]
+        record["run_id"] = submit_run_id
+        records.append(record)
+    return records
 
 
 def _extraction_ledger_records(
