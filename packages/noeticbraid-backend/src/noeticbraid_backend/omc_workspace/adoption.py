@@ -125,7 +125,12 @@ def record_reuse(
     state_dir: Path | None = None,
     store: OMCProjectStore | None = None,
 ) -> dict[str, Any]:
-    """Record ledger-backed reuse evidence for an OMC candidate and write it back."""
+    """Record reuse evidence on a candidate gate.
+
+    The caller owns the independently checkable RunRecord/artifact ledger event
+    whose run_id is passed as ``ledger_run_id``; this helper only updates the
+    candidate's embedded R-6 gate state in the project store.
+    """
 
     resolved_store = store or OMCProjectStore(state_dir or Settings.from_env().state_dir)
     candidate = resolved_store.find_candidate(candidate_id)

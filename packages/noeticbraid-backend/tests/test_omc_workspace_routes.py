@@ -25,6 +25,7 @@ FIXTURE_OMC_SOURCES = [
     (FIXTURES / "omc_source_claude_md_sample.md", "tests/fixtures/omc_source_claude_md_sample.md"),
     (FIXTURES / "omc_source_rtk_md_sample.md", "tests/fixtures/omc_source_rtk_md_sample.md"),
 ]
+SEED_ID = "memory_omc_help_lesson"
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -54,6 +55,17 @@ def test_omc_project_task_creates_candidate_from_d2_01_loop(tmp_path: Path) -> N
     assert "SDD-D2-01" in body["candidate"]["source_sdd_ids"]
 
 
+def test_omc_project_task_default_source_refs_reuse_seed(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    response = client.post("/api/projects/omc-ingest/tasks", json={"prompt": _task_card()["prompt"]})
+
+    assert response.status_code == 200, response.text
+    candidates = client.get("/api/projects/omc-ingest/candidates").json()["candidates"]
+    seed = next(candidate for candidate in candidates if candidate["candidate_id"] == SEED_ID)
+    assert seed["r6_gate"]["reuse_count"] == 1
+    assert seed["r6_gate"]["ledger_evidence_refs"] == [response.json()["run_record_ref"]]
+
+
 def test_omc_candidates_list_is_project_scoped(tmp_path: Path) -> None:
     client = _client(tmp_path)
     created = _create_candidate(client)
@@ -62,7 +74,9 @@ def test_omc_candidates_list_is_project_scoped(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     candidates = response.json()["candidates"]
-    assert [candidate["candidate_id"] for candidate in candidates] == [created["candidate_id"]]
+    assert {candidate["candidate_id"] for candidate in candidates} == {created["candidate_id"], SEED_ID}
+    seed = next(candidate for candidate in candidates if candidate["candidate_id"] == SEED_ID)
+    assert seed["status"] == "adopted"
     assert all(candidate["project_id"] == "omc-ingest" for candidate in candidates)
 
 
@@ -76,15 +90,17 @@ def test_adopted_history_returns_prior_ui_adoptions(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     adopted = response.json()["adopted_candidates"]
-    assert [candidate["candidate_id"] for candidate in adopted] == [created["candidate_id"]]
-    assert adopted[0]["adopted_at"] is not None
-    assert adopted[0]["run_record_ref"] == created["run_record_ref"]
+    assert {candidate["candidate_id"] for candidate in adopted} == {created["candidate_id"], SEED_ID}
+    created_adopted = next(candidate for candidate in adopted if candidate["candidate_id"] == created["candidate_id"])
+    assert created_adopted["adopted_at"] is not None
+    assert created_adopted["run_record_ref"] == created["run_record_ref"]
 
 
 def test_candidate_adopt_requires_explicit_post_and_writes_ledger_refs(tmp_path: Path) -> None:
     client = _client(tmp_path)
     created = _create_candidate(client)
-    before = client.get("/api/projects/omc-ingest/candidates").json()["candidates"][0]
+    candidates_before = client.get("/api/projects/omc-ingest/candidates").json()["candidates"]
+    before = next(candidate for candidate in candidates_before if candidate["candidate_id"] == created["candidate_id"])
     assert before["status"] == "candidate"
     assert before["adopted_at"] is None
 
@@ -118,8 +134,16 @@ def test_omc_run_record_references_adopted_candidate_for_reuse_evidence(tmp_path
     created = _create_candidate(client)
     client.post(f"/api/candidates/{created['candidate_id']}/adopt")
 
-    adopted = client.get("/api/projects/omc-ingest/adopted-history").json()["adopted_candidates"][0]
+    candidates = client.get("/api/projects/omc-ingest/candidates").json()["candidates"]
+    seed = next(candidate for candidate in candidates if candidate["candidate_id"] == SEED_ID)
+    adopted = next(
+        candidate
+        for candidate in client.get("/api/projects/omc-ingest/adopted-history").json()["adopted_candidates"]
+        if candidate["candidate_id"] == created["candidate_id"]
+    )
 
+    assert created["run_record_ref"] in seed["r6_gate"]["ledger_evidence_refs"]
+    assert seed["r6_gate"]["reuse_count"] == 1
     assert adopted["run_record_ref"] == created["run_record_ref"]
     assert any(ref.startswith("artifact_candidate_adoption_") for ref in adopted["reuse_evidence_refs"])
     assert any("candidate-adoption-" in ref and ref.endswith(".md") for ref in adopted["artifact_refs"])
@@ -130,7 +154,7 @@ def test_empty_task_card_rejected_without_candidate_write(tmp_path: Path) -> Non
     response = client.post("/api/projects/omc-ingest/tasks", json={**_task_card(), "prompt": "   "})
 
     assert response.status_code == 400
-    assert client.get("/api/projects/omc-ingest/candidates").json() == {
-        "project_id": "omc-ingest",
-        "candidates": [],
-    }
+    body = client.get("/api/projects/omc-ingest/candidates").json()
+    assert body["project_id"] == "omc-ingest"
+    assert [candidate["candidate_id"] for candidate in body["candidates"]] == [SEED_ID]
+    assert body["candidates"][0]["r6_gate"]["reuse_count"] == 0

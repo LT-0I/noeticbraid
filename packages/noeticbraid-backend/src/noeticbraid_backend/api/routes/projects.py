@@ -42,6 +42,8 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="task prompt is required")
     settings = get_settings(request)
     root = _project_root(request)
+    store = _store(request)
+    source_refs = task.source_refs or ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"]
     try:
         result = run_omc_debate_loop(
             {
@@ -50,13 +52,14 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
                 "trigger": "task_card",
                 "risk_hint": "high",
                 "required_capabilities": ["planning", "adversary", "source_audit", "convergence"],
-                "source_refs": task.source_refs
-                or ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"],
+                "source_refs": source_refs,
                 "description": task.prompt,
             },
             state_root=root,
             artifact_root=root / ".omx" / "artifacts",
             omc_sources=settings.omc_sources,
+            store=store,
+            raw_task_card_source_refs=list(source_refs),
             mock_invocations=True,
         )
     except OMCKnowledgeExtractionError as exc:
@@ -87,7 +90,7 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
             }
             for event_type in result.get("ledger_event_types", [])
         ]
-    stored_candidate = _store(request).upsert_candidate(candidate, run_records=run_records)
+    stored_candidate = store.upsert_candidate(candidate, run_records=run_records)
     markdown_ref = public_artifact_ref(str(result.get("artifact_paths", {}).get("convergence_markdown", "")))
     return OMCProjectTaskResponse(
         project_id=PROJECT_ID,

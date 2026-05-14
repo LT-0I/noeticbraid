@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,10 +19,42 @@ DEFAULT_UPGRADE_RULE = (
     "explicit user adoption OR reuse >=3 times with at least one independently "
     "checkable ledger run; not rejected is never sufficient"
 )
+SEED_HELP_LESSON_ADOPTED_AT = datetime(2026, 5, 12, tzinfo=timezone.utc)
+
+
+def _seed_help_lesson() -> dict[str, Any]:
+    seed = {
+        "candidate_id": "memory_omc_help_lesson",
+        "project_id": PROJECT_ID,
+        "source_sdd_ids": ["SDD-D2-01", "SDD-D2-02"],
+        "summary": (
+            "Seed lesson: OMC `omc help` slash command catalogue is the canonical entry "
+            "for absorbing NoeticBraid program memory."
+        ),
+        "status": "adopted",
+        "upgrade_rule": DEFAULT_UPGRADE_RULE,
+        "adopted_at": SEED_HELP_LESSON_ADOPTED_AT.isoformat().replace("+00:00", "Z"),
+        "adopted_by": "system_seed",
+        "run_record_ref": "run_seed_omc_help_lesson",
+        "reuse_evidence_refs": [],
+        "artifact_refs": [".omx/artifacts/candidate-adoption-memory_omc_help_lesson-seed.md"],
+        "source_refs": ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"],
+        "r6_gate": R6GateState(
+            reuse_count=0,
+            ledger_evidence_refs=[],
+            adopted_at=None,
+            expires_at=SEED_HELP_LESSON_ADOPTED_AT + timedelta(days=R6_GATE_DEFAULT_TTL_DAYS),
+        ).model_dump(mode="json"),
+    }
+    return CandidateLesson.model_validate(seed).model_dump(mode="json")
+
+
+SEED_HELP_LESSON = _seed_help_lesson()
 
 
 def _default_state() -> dict[str, Any]:
     return {
+        "_seed_initialized": False,
         "project": {
             "project_id": PROJECT_ID,
             "title": PROJECT_TITLE,
@@ -80,6 +113,29 @@ def _default_state() -> dict[str, Any]:
     }
 
 
+def _inject_seed(state: dict[str, Any]) -> dict[str, Any]:
+    """Add the demo seed lesson once per store lifecycle and mark the state."""
+
+    seed = deepcopy(SEED_HELP_LESSON)
+    candidates = state.setdefault("candidates", [])
+    existing_seed = next((item for item in candidates if item.get("candidate_id") == seed["candidate_id"]), None)
+    if existing_seed is None:
+        candidates.append(seed)
+        existing_seed = seed
+
+    adopted_history = state.setdefault("adopted_history", [])
+    if not any(item.get("candidate_id") == seed["candidate_id"] for item in adopted_history):
+        adopted_history.append(deepcopy(existing_seed))
+
+    project = state.setdefault("project", {})
+    project["candidate_refs"] = sorted({*project.get("candidate_refs", []), seed["candidate_id"]})
+    project["adopted_candidate_refs"] = sorted({*project.get("adopted_candidate_refs", []), seed["candidate_id"]})
+    if seed.get("run_record_ref"):
+        project["run_refs"] = sorted({*project.get("run_refs", []), seed["run_record_ref"]})
+    state["_seed_initialized"] = True
+    return state
+
+
 class OMCProjectStore:
     """Small JSON-backed store for demo project state and test fixtures."""
 
@@ -90,13 +146,17 @@ class OMCProjectStore:
     def load(self) -> dict[str, Any]:
         if not self.path.exists():
             state = _default_state()
-            WorkspaceProject.model_validate(state["project"])
-            return state
+        else:
+            try:
+                state = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                state = _default_state()
+        if state.get("_seed_initialized") is not True:
+            state = _inject_seed(state)
         try:
-            state = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            state = _default_state()
-        WorkspaceProject.model_validate(state["project"])
+            WorkspaceProject.model_validate(state["project"])
+        except KeyError as exc:
+            raise ValueError("OMC project state missing project") from exc
         return state
 
     def save(self, state: dict[str, Any]) -> None:
@@ -133,6 +193,11 @@ class OMCProjectStore:
         state["candidates"] = candidates
         project = state["project"]
         project["candidate_refs"] = sorted({*project.get("candidate_refs", []), candidate["candidate_id"]})
+        if candidate.get("status") in {"adopted", "confirmed"}:
+            adopted = [item for item in state.get("adopted_history", []) if item["candidate_id"] != candidate["candidate_id"]]
+            adopted.append(candidate)
+            state["adopted_history"] = adopted
+            project["adopted_candidate_refs"] = sorted({*project.get("adopted_candidate_refs", []), candidate["candidate_id"]})
         if candidate.get("run_record_ref"):
             project["run_refs"] = sorted({*project.get("run_refs", []), candidate["run_record_ref"]})
         if run_records:
@@ -230,4 +295,13 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-__all__ = ["DEFAULT_UPGRADE_RULE", "OMCProjectStore", "PROJECT_ID", "PROJECT_TITLE", "candidate_from_d2_result", "public_artifact_ref"]
+__all__ = [
+    "DEFAULT_UPGRADE_RULE",
+    "OMCProjectStore",
+    "PROJECT_ID",
+    "PROJECT_TITLE",
+    "SEED_HELP_LESSON",
+    "SEED_HELP_LESSON_ADOPTED_AT",
+    "candidate_from_d2_result",
+    "public_artifact_ref",
+]

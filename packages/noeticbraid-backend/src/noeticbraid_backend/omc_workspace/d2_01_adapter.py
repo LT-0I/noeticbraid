@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .adoption import artifact_dir
+from .adoption import artifact_dir, record_reuse
+from .lesson_matcher import find_matching_lessons
 from .omc_knowledge_extractor import ExtractionResult, Section, extract_omc_knowledge
+from .project_store import OMCProjectStore, candidate_from_d2_result
 
 LOCAL_METADATA_SOURCE_REF = "source_omc_local_metadata"
 NARRATIVE_ARTIFACT_REF = "artifact_omc_knowledge_extraction"
@@ -21,6 +26,8 @@ def run_omc_debate_loop(
     state_root: Path,
     artifact_root: Path,
     omc_sources: list[tuple[Path, str]],
+    store: OMCProjectStore,
+    raw_task_card_source_refs: list[str],
     mock_invocations: bool = True,
 ) -> dict[str, Any]:
     """Call the D2-01 public API without modifying SP-B internals."""
@@ -43,7 +50,6 @@ def run_omc_debate_loop(
         mock_invocations=mock_invocations,
         provider_mode=False,
     )
-    compact_d2_records = _compact_d2_ledger_records(result)
     public_artifact_refs = _public_extraction_artifact_refs(extraction, project_root=project_root)
     candidate_source_refs = _candidate_source_refs(result["candidate"].get("source_refs", []), extraction.outline)
     candidate_artifact_refs = list(dict.fromkeys([*result["candidate"].get("artifact_refs", []), *public_artifact_refs]))
@@ -62,10 +68,24 @@ def run_omc_debate_loop(
         result.setdefault("artifact_paths", {})["omx_exec_enrichment"] = extraction.live_artifact_ref
     result["artifact_refs"] = list(dict.fromkeys([*result.get("artifact_refs", []), *public_artifact_refs]))
 
+    original_run_id = _run_id_from_result(result)
+    unique_run_id = _unique_submit_run_id(original_run_id, store)
+    if unique_run_id != original_run_id:
+        _rewrite_current_debate_ledger_run_id(result, original_run_id=original_run_id, unique_run_id=unique_run_id)
+    _apply_submit_run_id(result, unique_run_id)
+    new_candidate = candidate_from_d2_result(result)
+    matches = find_matching_lessons(
+        store,
+        raw_task_card_source_refs,
+        exclude_candidate_id=new_candidate["candidate_id"],
+    )
+
+    compact_d2_records = _compact_d2_ledger_records(result)
     extraction_records = _extraction_ledger_records(
         result,
         extraction=extraction,
         public_artifact_refs=public_artifact_refs,
+        reuse_lesson_refs=[match["candidate_id"] for match in matches],
     )
     if extraction_records:
         append_ledger_records(state_root, extraction_records)
@@ -74,7 +94,74 @@ def run_omc_debate_loop(
         *result.get("ledger_event_types", []),
         *[record["event_type"] for record in extraction_records],
     ]
+    reused_lesson_refs: list[str] = []
+    for match in matches:
+        record_reuse(match["candidate_id"], unique_run_id, store=store)
+        reused_lesson_refs.append(match["candidate_id"])
+    result["reused_lesson_refs"] = reused_lesson_refs
     return result
+
+
+def _run_id_from_result(result: dict[str, Any]) -> str:
+    return result.get("run_record_ref") or result.get("route", {}).get("run_refs", [None])[0] or f"run_{result['task_id'].removeprefix('task_')}"
+
+
+def _apply_submit_run_id(result: dict[str, Any], run_id: str) -> None:
+    route = result.setdefault("route", {})
+    route["run_refs"] = [run_id, *[ref for ref in route.get("run_refs", [])[1:] if ref != run_id]]
+    result["run_record_ref"] = run_id
+
+
+def _unique_submit_run_id(base_run_id: str, store: OMCProjectStore) -> str:
+    used = _used_run_ids(store)
+    if base_run_id not in used:
+        return base_run_id
+    while True:
+        timestamp_slug = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        candidate = f"{base_run_id}_{timestamp_slug}"
+        if candidate not in used:
+            return candidate
+        time.sleep(1.0)
+
+
+def _used_run_ids(store: OMCProjectStore) -> set[str]:
+    state = store.load()
+    used: set[str] = set()
+    for record in state.get("run_records", []):
+        run_id = record.get("run_id")
+        if run_id:
+            used.add(str(run_id))
+    for candidate in [*state.get("candidates", []), *state.get("adopted_history", [])]:
+        run_ref = candidate.get("run_record_ref")
+        if run_ref:
+            used.add(str(run_ref))
+        r6_gate = candidate.get("r6_gate") or {}
+        if isinstance(r6_gate, dict):
+            used.update(str(ref) for ref in r6_gate.get("ledger_evidence_refs", []))
+    used.update(str(ref) for ref in state.get("project", {}).get("run_refs", []))
+    return used
+
+
+def _rewrite_current_debate_ledger_run_id(result: dict[str, Any], *, original_run_id: str, unique_run_id: str) -> None:
+    ledger_value = result.get("artifact_paths", {}).get("ledger_jsonl")
+    event_count = len(result.get("ledger_event_types", []))
+    if not ledger_value or event_count <= 0:
+        raise ValueError("cannot rewrite D2 ledger run_id without ledger path and event count")
+    ledger_path = Path(ledger_value)
+    lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    if len(lines) < event_count:
+        raise ValueError("D2 ledger has fewer rows than the current submit event count")
+    prefix = lines[:-event_count]
+    current_rows = [json.loads(line) for line in lines[-event_count:]]
+    if any(row.get("run_id") != original_run_id for row in current_rows):
+        raise ValueError("latest D2 ledger rows do not match the original submit run_id")
+    for row in current_rows:
+        row["run_id"] = unique_run_id
+    rewritten = [
+        *prefix,
+        *[json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for row in current_rows],
+    ]
+    ledger_path.write_text("\n".join(rewritten) + "\n", encoding="utf-8")
 
 
 def _task_card_with_local_source(task_card: dict[str, Any]) -> dict[str, Any]:
@@ -139,6 +226,7 @@ def _extraction_ledger_records(
     *,
     extraction: ExtractionResult,
     public_artifact_refs: list[str],
+    reuse_lesson_refs: list[str],
 ) -> list[dict[str, Any]]:
     candidate = result["candidate"]
     run_id = result.get("route", {}).get("run_refs", [None])[0] or f"run_{result['task_id'].removeprefix('task_')}"
@@ -146,6 +234,7 @@ def _extraction_ledger_records(
     source_refs = [LOCAL_METADATA_SOURCE_REF]
     created_at = candidate.get("created_at")
     narrative_public_ref = public_artifact_refs[0]
+    reuse_advice = _reuse_routing_advice(reuse_lesson_refs)
     records: list[dict[str, Any]] = [
         {
             "run_id": run_id,
@@ -156,7 +245,7 @@ def _extraction_ledger_records(
             "model_refs": model_refs,
             "source_refs": source_refs,
             "artifact_refs": [NARRATIVE_ARTIFACT_REF],
-            "routing_advice": f"SDD-D3-01 deterministic OMC narrative artifact: {narrative_public_ref}",
+            "routing_advice": f"SDD-D3-01 deterministic OMC narrative artifact: {narrative_public_ref}{reuse_advice}",
             "status": "recorded",
         }
     ]
@@ -177,6 +266,13 @@ def _extraction_ledger_records(
             }
         )
     return records
+
+
+def _reuse_routing_advice(reuse_lesson_refs: list[str]) -> str:
+    if not reuse_lesson_refs:
+        return ""
+    markers = [f"SDD-D4-01 reuse evidence: {lesson_id}" for lesson_id in reuse_lesson_refs]
+    return "; " + "; ".join(markers)
 
 
 def _route_model_refs(result: dict[str, Any]) -> list[str]:
