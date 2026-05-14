@@ -12,6 +12,76 @@ from ._runlog import emit_runlog_event
 
 T = TypeVar("T")
 
+
+def _verify_upstream_compat() -> None:
+    """Module-load drift check. Called automatically at import time from
+    `noeticbraid.tools.notebooklm_rpc._client` module body.
+
+    Raises `NotebookLMPoolStateError(f"upstream API drift: {check_name}")` if
+    upstream signatures drift from v0.4.1. First failed check wins.
+
+    Checks (10 total):
+        - notebooklm.NotebookLMClient.from_storage is a coroutine function
+        - hasattr(notebooklm.NotebookLMClient, "__aexit__")
+        - hasattr(notebooklm, "AuthError")
+        - hasattr(notebooklm, "RateLimitError")
+        - hasattr(notebooklm, "ServerError")
+        - hasattr(notebooklm, "NotebookNotFoundError")
+        - hasattr(notebooklm, "SourceNotFoundError")
+        - hasattr(notebooklm, "NotebookLMError")
+        - hasattr(notebooklm, "AuthTokens")
+        - inspect.iscoroutinefunction(notebooklm.AuthTokens.from_storage)
+
+    Testing posture (NORMATIVE): tests verify drift detection by:
+        1. importing `noeticbraid.tools.notebooklm_rpc` once normally (module
+           load → _verify_upstream_compat passes against real upstream)
+        2. `monkeypatch.setattr(notebooklm, "RateLimitError", ...)` (or delattr)
+           to simulate drift
+        3. directly call `_verify_upstream_compat()` again and assert it raises
+        4. monkeypatch teardown restores upstream
+
+    DO NOT attempt to "monkeypatch _verify_upstream_compat to no-op BEFORE import"
+    — that path is impossible because the function is defined and called in the
+    same module body.
+    """
+
+    checks: tuple[tuple[str, Callable[[], bool]], ...] = (
+        (
+            "NotebookLMClient.from_storage",
+            lambda: inspect.iscoroutinefunction(
+                getattr(getattr(notebooklm, "NotebookLMClient", None), "from_storage", None)
+            ),
+        ),
+        (
+            "NotebookLMClient.__aexit__",
+            lambda: hasattr(getattr(notebooklm, "NotebookLMClient", None), "__aexit__"),
+        ),
+        ("AuthError", lambda: hasattr(notebooklm, "AuthError")),
+        ("RateLimitError", lambda: hasattr(notebooklm, "RateLimitError")),
+        ("ServerError", lambda: hasattr(notebooklm, "ServerError")),
+        ("NotebookNotFoundError", lambda: hasattr(notebooklm, "NotebookNotFoundError")),
+        ("SourceNotFoundError", lambda: hasattr(notebooklm, "SourceNotFoundError")),
+        ("NotebookLMError", lambda: hasattr(notebooklm, "NotebookLMError")),
+        ("AuthTokens", lambda: hasattr(notebooklm, "AuthTokens")),
+        (
+            "AuthTokens.from_storage",
+            lambda: inspect.iscoroutinefunction(
+                getattr(getattr(notebooklm, "AuthTokens", None), "from_storage", None)
+            ),
+        ),
+    )
+    for check_name, check in checks:
+        try:
+            passed = check()
+        except AttributeError:
+            passed = False
+        if not passed:
+            raise NotebookLMPoolStateError(f"upstream API drift: {check_name}")
+
+
+_verify_upstream_compat()  # called once at module load, before upstream name alias binding
+
+
 _ROTATION_TRIGGER_TYPES: tuple[type[BaseException], ...] = (
     notebooklm.AuthError,
     notebooklm.RateLimitError,
@@ -219,62 +289,3 @@ async def run_with_pool(
 
         pool.mark_success(spec.account_id)
         return result
-
-
-def _verify_upstream_compat() -> None:
-    """Module-load drift check. Called automatically at import time from
-    `noeticbraid.tools.notebooklm_rpc._client` module body.
-
-    Raises `NotebookLMPoolStateError(f"upstream API drift: {check_name}")` if
-    upstream signatures drift from v0.4.1. First failed check wins.
-
-    Checks (10 total):
-        - notebooklm.NotebookLMClient.from_storage is a coroutine function
-        - hasattr(notebooklm.NotebookLMClient, "__aexit__")
-        - hasattr(notebooklm, "AuthError")
-        - hasattr(notebooklm, "RateLimitError")
-        - hasattr(notebooklm, "ServerError")
-        - hasattr(notebooklm, "NotebookNotFoundError")
-        - hasattr(notebooklm, "SourceNotFoundError")
-        - hasattr(notebooklm, "NotebookLMError")
-        - hasattr(notebooklm, "AuthTokens")
-        - inspect.iscoroutinefunction(notebooklm.AuthTokens.from_storage)
-
-    Testing posture (NORMATIVE): tests verify drift detection by:
-        1. importing `noeticbraid.tools.notebooklm_rpc` once normally (module
-           load → _verify_upstream_compat passes against real upstream)
-        2. `monkeypatch.setattr(notebooklm, "RateLimitError", ...)` (or delattr)
-           to simulate drift
-        3. directly call `_verify_upstream_compat()` again and assert it raises
-        4. monkeypatch teardown restores upstream
-
-    DO NOT attempt to "monkeypatch _verify_upstream_compat to no-op BEFORE import"
-    — that path is impossible because the function is defined and called in the
-    same module body.
-    """
-
-    checks: tuple[tuple[str, bool], ...] = (
-        (
-            "NotebookLMClient.from_storage",
-            inspect.iscoroutinefunction(getattr(notebooklm.NotebookLMClient, "from_storage", None)),
-        ),
-        ("NotebookLMClient.__aexit__", hasattr(notebooklm.NotebookLMClient, "__aexit__")),
-        ("AuthError", hasattr(notebooklm, "AuthError")),
-        ("RateLimitError", hasattr(notebooklm, "RateLimitError")),
-        ("ServerError", hasattr(notebooklm, "ServerError")),
-        ("NotebookNotFoundError", hasattr(notebooklm, "NotebookNotFoundError")),
-        ("SourceNotFoundError", hasattr(notebooklm, "SourceNotFoundError")),
-        ("NotebookLMError", hasattr(notebooklm, "NotebookLMError")),
-        ("AuthTokens", hasattr(notebooklm, "AuthTokens")),
-        (
-            "AuthTokens.from_storage",
-            hasattr(notebooklm, "AuthTokens")
-            and inspect.iscoroutinefunction(getattr(notebooklm.AuthTokens, "from_storage", None)),
-        ),
-    )
-    for check_name, passed in checks:
-        if not passed:
-            raise NotebookLMPoolStateError(f"upstream API drift: {check_name}")
-
-
-_verify_upstream_compat()  # called once at module load
