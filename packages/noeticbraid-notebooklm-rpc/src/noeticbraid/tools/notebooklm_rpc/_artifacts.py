@@ -28,32 +28,34 @@ class ArtifactKind(str, Enum):
 
 
 ARTIFACT_KIND_TO_TAG: dict[ArtifactKind, str] = {
-    ArtifactKind.AUDIO: "noeticbraid/notebooklm/audio",
-    ArtifactKind.VIDEO: "noeticbraid/notebooklm/video",
-    ArtifactKind.CINEMATIC_VIDEO: "noeticbraid/notebooklm/cinematic-video",
-    ArtifactKind.REPORT: "noeticbraid/notebooklm/report",
-    ArtifactKind.STUDY_GUIDE: "noeticbraid/notebooklm/study-guide",
-    ArtifactKind.QUIZ: "noeticbraid/notebooklm/quiz",
-    ArtifactKind.FLASHCARDS: "noeticbraid/notebooklm/flashcards",
-    ArtifactKind.INFOGRAPHIC: "noeticbraid/notebooklm/infographic",
-    ArtifactKind.SLIDE_DECK: "noeticbraid/notebooklm/slide-deck",
-    ArtifactKind.DATA_TABLE: "noeticbraid/notebooklm/data-table",
-    ArtifactKind.MIND_MAP: "noeticbraid/notebooklm/mind-map",
+    # frozen contract — tests assert exact dict literal
+    ArtifactKind.AUDIO:            "noeticbraid/notebooklm/audio",
+    ArtifactKind.VIDEO:            "noeticbraid/notebooklm/video",
+    ArtifactKind.CINEMATIC_VIDEO:  "noeticbraid/notebooklm/cinematic-video",
+    ArtifactKind.REPORT:           "noeticbraid/notebooklm/report",
+    ArtifactKind.STUDY_GUIDE:      "noeticbraid/notebooklm/study-guide",
+    ArtifactKind.QUIZ:             "noeticbraid/notebooklm/quiz",
+    ArtifactKind.FLASHCARDS:       "noeticbraid/notebooklm/flashcards",
+    ArtifactKind.INFOGRAPHIC:      "noeticbraid/notebooklm/infographic",
+    ArtifactKind.SLIDE_DECK:       "noeticbraid/notebooklm/slide-deck",
+    ArtifactKind.DATA_TABLE:       "noeticbraid/notebooklm/data-table",
+    ArtifactKind.MIND_MAP:         "noeticbraid/notebooklm/mind-map",
 }
 
 
 KIND_TO_DOWNLOAD_METHOD: dict[ArtifactKind, str] = {
-    ArtifactKind.AUDIO: "download_audio",
-    ArtifactKind.VIDEO: "download_video",
-    ArtifactKind.CINEMATIC_VIDEO: "download_video",
-    ArtifactKind.REPORT: "download_report",
-    ArtifactKind.STUDY_GUIDE: "download_report",
-    ArtifactKind.QUIZ: "download_quiz",
-    ArtifactKind.FLASHCARDS: "download_flashcards",
-    ArtifactKind.INFOGRAPHIC: "download_infographic",
-    ArtifactKind.SLIDE_DECK: "download_slide_deck",
-    ArtifactKind.DATA_TABLE: "download_data_table",
-    ArtifactKind.MIND_MAP: "download_mind_map",
+    # frozen NB-kind → upstream method name
+    ArtifactKind.AUDIO:            "download_audio",
+    ArtifactKind.VIDEO:            "download_video",
+    ArtifactKind.CINEMATIC_VIDEO:  "download_video",
+    ArtifactKind.REPORT:           "download_report",
+    ArtifactKind.STUDY_GUIDE:      "download_report",
+    ArtifactKind.QUIZ:             "download_quiz",
+    ArtifactKind.FLASHCARDS:       "download_flashcards",
+    ArtifactKind.INFOGRAPHIC:      "download_infographic",
+    ArtifactKind.SLIDE_DECK:       "download_slide_deck",
+    ArtifactKind.DATA_TABLE:       "download_data_table",
+    ArtifactKind.MIND_MAP:         "download_mind_map",
 }
 
 
@@ -163,7 +165,68 @@ async def wait_then_download(
     poll_interval: Optional[float] = None,
     download_kwargs: Optional[dict[str, Any]] = None,
 ) -> Path:
-    """Block until task_id completes, then invoke the named download method."""
+    """Block until task_id completes, then invoke the named download method.
+
+    Args:
+        client:               upstream NotebookLMClient (typically via account_op)
+        notebook_id:          target notebook
+        task_id:              the task_id returned from any client.artifacts.generate_*
+                              (in notebooklm-py 0.4.1 this is identical to artifact_id)
+        download_method_name: one of: download_audio, download_video, download_report,
+                              download_quiz, download_flashcards, download_infographic,
+                              download_slide_deck, download_data_table.
+                              (mind_map handled by dedicated helper; do NOT pass
+                              "download_mind_map" here — it requires note_id not task_id.
+                              NORMATIVE design decision (R-5): wait_then_download
+                              intentionally does NOT runtime-reject "download_mind_map";
+                              callers MUST use generate_and_download_mind_map. This is a
+                              deliberate trust-the-caller boundary to avoid scope creep.)
+                              Validated at runtime via getattr; raises ValueError if absent.
+        output_path:          absolute or relative path where file is written
+        timeout:              forwarded to wait_for_completion
+        poll_interval:        forwarded if not None
+        download_kwargs:      optional extra kwargs for the download call.
+                              Forbidden keys: {"notebook_id", "output_path",
+                              "artifact_id"} — these are populated by this helper
+                              from its own arguments. Caller attempting to override
+                              any of them raises NotebookLMSerializationError
+                              (error_class="forbidden_download_kwarg_override").
+
+    Returns:
+        output_path as Path. (Upstream download_* returns str; helper normalizes.)
+
+    Raises:
+        notebooklm.NotebookLMError (or subclass) on wait/download failure — caller
+            (typically a `run_with_pool` closure) propagates for pool rotation.
+        ValueError if download_method_name not present on client.artifacts.
+        NotebookLMSerializationError on caller error (kwarg override; final
+            status != "completed").
+
+    Implementation:
+        1. final = await client.artifacts.wait_for_completion(
+               notebook_id, task_id, timeout=timeout, poll_interval=poll_interval,
+           )
+        2. if final.status != "completed":
+               raise NotebookLMSerializationError(
+                   error_class="wait_not_completed",
+                   detail=f"task {task_id}: status={final.status}, error={final.error}",
+               )
+        3. download = getattr(client.artifacts, download_method_name, None)
+           if not callable(download):
+               raise ValueError(f"client.artifacts has no method {download_method_name!r}")
+        4. forbidden = {"notebook_id", "output_path", "artifact_id"}
+           if download_kwargs and (overlap := forbidden & set(download_kwargs)):
+               raise NotebookLMSerializationError(
+                   error_class="forbidden_download_kwarg_override",
+                   detail=f"keys {sorted(overlap)} reserved",
+               )
+        5. kwargs = {"notebook_id": notebook_id,
+                     "output_path": str(output_path),
+                     "artifact_id": task_id}
+           kwargs.update(download_kwargs or {})
+           returned = await download(**kwargs)
+        6. return Path(returned)
+    """
     final = await client.artifacts.wait_for_completion(
         notebook_id,
         task_id,
@@ -328,6 +391,27 @@ async def generate_and_download_report(
     timeout: float = 300.0,
     poll_interval: Optional[float] = None,
 ) -> "tuple[notebooklm.GenerationStatus, Path]":
+    """Implementation analogous to audio; KIND_TO_DOWNLOAD_METHOD[REPORT]="download_report".
+
+    NORMATIVE upstream-default policy (R-5):
+        Upstream `client.artifacts.generate_report` indexes its internal
+        format_configs dict by `report_format`; forwarding `report_format=None`
+        breaks default report generation in 0.4.1. Therefore this helper MUST
+        omit the `report_format` kwarg when caller passes None, letting upstream
+        apply its own default (`ReportFormat.BRIEFING_DOC`). Implementation
+        sketch:
+
+            kwargs = dict(source_ids=source_ids, language=language,
+                          custom_prompt=custom_prompt,
+                          extra_instructions=extra_instructions)
+            if report_format is not None:
+                kwargs["report_format"] = report_format
+            status = await client.artifacts.generate_report(notebook_id, **kwargs)
+            ...
+
+        Test gad-others-report covers this: caller passing report_format=None
+        triggers upstream default; passing an explicit ReportFormat passes it through.
+    """
     status = await client.artifacts.generate_report(
         notebook_id,
         **_without_none(
@@ -363,6 +447,17 @@ async def generate_and_download_study_guide(
     timeout: float = 300.0,
     poll_interval: Optional[float] = None,
 ) -> "tuple[notebooklm.GenerationStatus, Path]":
+    """Uses upstream client.artifacts.generate_study_guide to generate,
+    KIND_TO_DOWNLOAD_METHOD[STUDY_GUIDE]=="download_report" to download.
+    (Study guides are persisted as report-type artifacts upstream.)
+
+    NORMATIVE upstream-default policy (R-5):
+        Same kwarg-omission discipline as generate_and_download_report:
+        helpers MUST omit any kwarg whose caller-provided value is None,
+        so upstream defaults are not overridden by None. Apply consistently
+        across all 10 composite helpers that forward Optional kwargs to
+        upstream `generate_*` methods.
+    """
     status = await client.artifacts.generate_study_guide(
         notebook_id,
         **_without_none(
