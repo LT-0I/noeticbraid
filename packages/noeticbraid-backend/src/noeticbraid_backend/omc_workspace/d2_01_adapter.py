@@ -10,10 +10,6 @@ from typing import Any
 from .adoption import artifact_dir
 from .omc_knowledge_extractor import ExtractionResult, Section, extract_omc_knowledge
 
-DEFAULT_OMC_SOURCE_PATHS = (
-    Path.home() / ".claude" / "CLAUDE.md",
-    Path.home() / ".claude" / "RTK.md",
-)
 LOCAL_METADATA_SOURCE_REF = "source_omc_local_metadata"
 NARRATIVE_ARTIFACT_REF = "artifact_omc_knowledge_extraction"
 LIVE_ARTIFACT_REF = "artifact_omx_exec_omc_knowledge"
@@ -24,6 +20,7 @@ def run_omc_debate_loop(
     *,
     state_root: Path,
     artifact_root: Path,
+    omc_sources: list[tuple[Path, str]],
     mock_invocations: bool = True,
 ) -> dict[str, Any]:
     """Call the D2-01 public API without modifying SP-B internals."""
@@ -33,7 +30,7 @@ def run_omc_debate_loop(
 
     project_root = Path(state_root)
     extraction = extract_omc_knowledge(
-        list(DEFAULT_OMC_SOURCE_PATHS),
+        omc_sources,
         live=os.getenv("NOETICBRAID_OMC_EXTRACT_LIVE") == "1",
         artifact_root=artifact_dir(project_root),
     )

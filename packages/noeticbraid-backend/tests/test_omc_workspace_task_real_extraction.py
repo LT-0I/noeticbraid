@@ -19,30 +19,26 @@ for path in (
         sys.path.insert(0, str(path))
 
 from noeticbraid_backend.app import create_app
-from noeticbraid_backend.omc_workspace import d2_01_adapter
 from noeticbraid_backend.settings import Settings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-SOURCE_PATHS = (
-    FIXTURES / "omc_source_claude_md_sample.md",
-    FIXTURES / "omc_source_rtk_md_sample.md",
-)
+FIXTURE_OMC_SOURCES = [
+    (FIXTURES / "omc_source_claude_md_sample.md", "tests/fixtures/omc_source_claude_md_sample.md"),
+    (FIXTURES / "omc_source_rtk_md_sample.md", "tests/fixtures/omc_source_rtk_md_sample.md"),
+]
 
 
 def _client(tmp_path: Path) -> TestClient:
-    return TestClient(create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None)))
+    return TestClient(
+        create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None, omc_sources=FIXTURE_OMC_SOURCES))
+    )
 
 
 def _task_card() -> dict[str, object]:
     return json.loads((FIXTURES / "omc_task_card.json").read_text(encoding="utf-8"))
 
 
-def _patch_sources(monkeypatch) -> None:
-    monkeypatch.setattr(d2_01_adapter, "DEFAULT_OMC_SOURCE_PATHS", SOURCE_PATHS)
-
-
 def test_submit_omc_ingest_task_returns_real_summary(monkeypatch, tmp_path: Path) -> None:
-    _patch_sources(monkeypatch)
     monkeypatch.delenv("NOETICBRAID_OMC_EXTRACT_LIVE", raising=False)
 
     response = _client(tmp_path).post("/api/projects/omc-ingest/tasks", json=_task_card())
@@ -56,7 +52,6 @@ def test_submit_omc_ingest_task_returns_real_summary(monkeypatch, tmp_path: Path
 
 
 def test_submit_omc_ingest_task_writes_narrative_artifact(monkeypatch, tmp_path: Path) -> None:
-    _patch_sources(monkeypatch)
     monkeypatch.delenv("NOETICBRAID_OMC_EXTRACT_LIVE", raising=False)
 
     body = _client(tmp_path).post("/api/projects/omc-ingest/tasks", json=_task_card()).json()

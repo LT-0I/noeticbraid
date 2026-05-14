@@ -6,14 +6,14 @@
 
 ## Sources
 
-- ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:cc266f5bcbbfacc9
-- ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_rtk_md_sample.md:9fe007d9d7ca790f
+- tests/fixtures/omc_source_claude_md_sample.md:cc266f5bcbbfacc9
+- tests/fixtures/omc_source_rtk_md_sample.md:9fe007d9d7ca790f
 
 ## Sections
 
 ### oh-my-claudecode - Intelligent Multi-Agent Orchestration
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:4-8
+- source: tests/fixtures/omc_source_claude_md_sample.md:4-8
 
 ```
 # oh-my-claudecode - Intelligent Multi-Agent Orchestration
@@ -25,7 +25,7 @@ Coordinate specialized agents, tools, and skills so work is completed accurately
 
 ### operating_principles
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:9-15
+- source: tests/fixtures/omc_source_claude_md_sample.md:9-15
 
 ```
 <operating_principles>
@@ -39,7 +39,7 @@ Coordinate specialized agents, tools, and skills so work is completed accurately
 
 ### delegation_rules
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:16-21
+- source: tests/fixtures/omc_source_claude_md_sample.md:16-21
 
 ```
 <delegation_rules>
@@ -52,7 +52,7 @@ Route code to `executor` (use `model=opus` for complex work). Uncertain SDK usag
 
 ### model_routing
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:22-26
+- source: tests/fixtures/omc_source_claude_md_sample.md:22-26
 
 ```
 <model_routing>
@@ -64,7 +64,7 @@ Direct writes OK for: `~/.claude/**`, `.omc/**`, `.claude/**`, `CLAUDE.md`, `AGE
 
 ### skills
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:27-34
+- source: tests/fixtures/omc_source_claude_md_sample.md:27-34
 
 ```
 <skills>
@@ -79,7 +79,7 @@ Detailed agent catalog, tools, team pipeline, commit protocol, and full skills r
 
 ### verification
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:35-39
+- source: tests/fixtures/omc_source_claude_md_sample.md:35-39
 
 ```
 <verification>
@@ -91,7 +91,7 @@ If verification fails, keep iterating.
 
 ### execution_protocols
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:40-46
+- source: tests/fixtures/omc_source_claude_md_sample.md:40-46
 
 ```
 <execution_protocols>
@@ -105,7 +105,7 @@ Before concluding: zero pending tasks, tests passing, verifier evidence collecte
 
 ### hooks_and_context
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:47-52
+- source: tests/fixtures/omc_source_claude_md_sample.md:47-52
 
 ```
 <hooks_and_context>
@@ -118,7 +118,7 @@ Kill switches: `DISABLE_OMC`, `OMC_SKIP_HOOKS` (comma-separated).
 
 ### cancellation
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:53-56
+- source: tests/fixtures/omc_source_claude_md_sample.md:53-56
 
 ```
 <cancellation>
@@ -129,7 +129,7 @@ Kill switches: `DISABLE_OMC`, `OMC_SKIP_HOOKS` (comma-separated).
 
 ### worktree_paths
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:57-60
+- source: tests/fixtures/omc_source_claude_md_sample.md:57-60
 
 ```
 <worktree_paths>
@@ -140,7 +140,7 @@ State: `.omc/state/`, `.omc/state/sessions/{sessionId}/`, `.omc/notepad.md`, `.o
 
 ### Setup
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_claude_md_sample.md:61-66
+- source: tests/fixtures/omc_source_claude_md_sample.md:61-66
 
 ```
 ## Setup
@@ -153,7 +153,7 @@ Say "setup omc" or run `/oh-my-claudecode:omc-setup`.
 
 ### RTK - Rust Token Killer
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_rtk_md_sample.md:1-4
+- source: tests/fixtures/omc_source_rtk_md_sample.md:1-4
 
 ```
 # RTK - Rust Token Killer
@@ -164,7 +164,7 @@ Say "setup omc" or run `/oh-my-claudecode:omc-setup`.
 
 ### Meta Commands (always use rtk directly)
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_rtk_md_sample.md:5-13
+- source: tests/fixtures/omc_source_rtk_md_sample.md:5-13
 
 ```
 ## Meta Commands (always use rtk directly)
@@ -179,7 +179,7 @@ rtk proxy <cmd>       # Execute raw command without filtering (for debugging)
 
 ### Installation Verification
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_rtk_md_sample.md:14-23
+- source: tests/fixtures/omc_source_rtk_md_sample.md:14-23
 
 ```
 ## Installation Verification
@@ -194,7 +194,7 @@ which rtk             # Verify correct binary
 
 ### Hook-Based Usage
 
-- source: ~/workspace/noeticmind/noeticbraid/packages/noeticbraid-backend/tests/fixtures/omc_source_rtk_md_sample.md:24-29
+- source: tests/fixtures/omc_source_rtk_md_sample.md:24-29
 
 ```
 ## Hook-Based Usage

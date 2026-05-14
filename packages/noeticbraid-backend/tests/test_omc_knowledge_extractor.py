@@ -32,6 +32,11 @@ SOURCE_PATHS = [
     FIXTURES / "omc_source_claude_md_sample.md",
     FIXTURES / "omc_source_rtk_md_sample.md",
 ]
+SOURCE_REFS = [
+    "tests/fixtures/omc_source_claude_md_sample.md",
+    "tests/fixtures/omc_source_rtk_md_sample.md",
+]
+SOURCES = list(zip(SOURCE_PATHS, SOURCE_REFS, strict=True))
 FIXED_NOW = datetime(2026, 5, 13, tzinfo=timezone.utc)
 
 
@@ -43,17 +48,24 @@ def test_extract_any_missing_source_raises(tmp_path: Path) -> None:
     existing = tmp_path / "exists.md"
     existing.write_text("# Present\n", encoding="utf-8")
     missing = tmp_path / "missing.md"
+    existing_ref = "tests/fixtures/exists.md"
+    missing_ref = "tests/fixtures/missing.md"
 
     with pytest.raises(OMCKnowledgeExtractionError) as exc_info:
-        extract_omc_knowledge([existing, missing], live=False, artifact_root=tmp_path / "artifacts")
+        extract_omc_knowledge(
+            [(existing, existing_ref), (missing, missing_ref)],
+            live=False,
+            artifact_root=tmp_path / "artifacts",
+        )
 
-    assert exc_info.value.missing == [missing]
-    assert str(missing) in str(exc_info.value)
+    assert exc_info.value.missing == [missing_ref]
+    assert missing_ref in str(exc_info.value)
+    assert existing_ref not in str(exc_info.value)
 
 
 def test_extract_deterministic_golden(tmp_path: Path) -> None:
-    first = extract_omc_knowledge(SOURCE_PATHS, live=False, artifact_root=tmp_path / "first", extracted_at=FIXED_NOW)
-    second = extract_omc_knowledge(SOURCE_PATHS, live=False, artifact_root=tmp_path / "second", extracted_at=FIXED_NOW)
+    first = extract_omc_knowledge(SOURCES, live=False, artifact_root=tmp_path / "first", extracted_at=FIXED_NOW)
+    second = extract_omc_knowledge(SOURCES, live=False, artifact_root=tmp_path / "second", extracted_at=FIXED_NOW)
     golden = (FIXTURES / "omc_narrative_artifact_golden.md").read_text(encoding="utf-8")
 
     first_text = _artifact_path(first.narrative_artifact_ref).read_text(encoding="utf-8")
@@ -71,7 +83,7 @@ def test_extract_deterministic_golden(tmp_path: Path) -> None:
 
 
 def test_extract_section_titles_cover_known_omc_headers(tmp_path: Path) -> None:
-    result = extract_omc_knowledge(SOURCE_PATHS, live=False, artifact_root=tmp_path, extracted_at=FIXED_NOW)
+    result = extract_omc_knowledge(SOURCES, live=False, artifact_root=tmp_path, extracted_at=FIXED_NOW)
     titles = [section.title for section in result.outline]
 
     assert any("operating_principles" in title for title in titles)
@@ -89,7 +101,7 @@ def test_live_mode_skipped_without_env(monkeypatch: pytest.MonkeyPatch, tmp_path
     monkeypatch.setattr(extractor.subprocess, "run", fail_if_called)
 
     result = extract_omc_knowledge(
-        SOURCE_PATHS,
+        SOURCES,
         live=os.getenv(LIVE_ENV) == "1",
         artifact_root=tmp_path,
         extracted_at=FIXED_NOW,
@@ -105,7 +117,7 @@ def test_live_mode_subprocess_failure_raises(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setattr(extractor.subprocess, "run", fail_run)
 
     with pytest.raises(OMCLiveEnrichmentError) as exc_info:
-        extract_omc_knowledge(SOURCE_PATHS, live=True, artifact_root=tmp_path, extracted_at=FIXED_NOW)
+        extract_omc_knowledge(SOURCES, live=True, artifact_root=tmp_path, extracted_at=FIXED_NOW)
 
     assert "returned non-zero exit status 2" in str(exc_info.value)
     assert not list(tmp_path.glob("omc-knowledge-extraction-*.md"))

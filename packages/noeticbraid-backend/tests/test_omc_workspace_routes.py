@@ -21,10 +21,16 @@ from noeticbraid_backend.app import create_app
 from noeticbraid_backend.settings import Settings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FIXTURE_OMC_SOURCES = [
+    (FIXTURES / "omc_source_claude_md_sample.md", "tests/fixtures/omc_source_claude_md_sample.md"),
+    (FIXTURES / "omc_source_rtk_md_sample.md", "tests/fixtures/omc_source_rtk_md_sample.md"),
+]
 
 
 def _client(tmp_path: Path) -> TestClient:
-    return TestClient(create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None)))
+    return TestClient(
+        create_app(Settings(state_dir=tmp_path / "state", dpapi_blob_path=None, omc_sources=FIXTURE_OMC_SOURCES))
+    )
 
 
 def _task_card() -> dict[str, object]:

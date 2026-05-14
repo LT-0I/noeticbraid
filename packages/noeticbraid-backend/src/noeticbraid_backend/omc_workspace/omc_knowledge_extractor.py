@@ -20,9 +20,9 @@ LIVE_INSTRUCTION = "用 NoeticBraid v3.2 §10.1 lesson 形态总结：返回 L1�
 class OMCKnowledgeExtractionError(RuntimeError):
     """Raised when required OMC source files cannot be read."""
 
-    def __init__(self, *, missing: Iterable[Path]) -> None:
-        self.missing = [Path(path) for path in missing]
-        joined = ", ".join(str(path) for path in self.missing)
+    def __init__(self, *, missing: Iterable[str]) -> None:
+        self.missing = [str(ref) for ref in missing]
+        joined = ", ".join(self.missing)
         super().__init__(f"OMC source missing: {joined}")
 
 
@@ -62,7 +62,7 @@ class _SourceDocument:
 
 
 def extract_omc_knowledge(
-    source_paths: list[Path],
+    sources: list[tuple[Path, str]],
     *,
     live: bool,
     artifact_root: Path,
@@ -74,15 +74,15 @@ def extract_omc_knowledge(
     fail fast before the Phase A narrative artifact is persisted.
     """
 
-    paths = [Path(path).expanduser() for path in source_paths]
-    missing = [path for path in paths if not path.exists()]
+    resolved_sources = [(Path(path).expanduser(), source_ref) for path, source_ref in sources]
+    missing = [source_ref for path, source_ref in resolved_sources if not path.exists()]
     if missing:
         raise OMCKnowledgeExtractionError(missing=missing)
 
     moment = _ensure_utc_seconds(extracted_at or datetime.now(timezone.utc))
-    documents = [_read_source(path) for path in paths]
+    documents = [_read_source(path, source_ref) for path, source_ref in resolved_sources]
     outline = _build_outline(documents)
-    source_hashes = {str(document.path): document.sha16 for document in documents}
+    source_hashes = {document.source_ref: document.sha16 for document in documents}
     summary = _summary(documents, outline, live=live)
 
     artifact_root = Path(artifact_root)
@@ -110,12 +110,12 @@ def extract_omc_knowledge(
     )
 
 
-def _read_source(path: Path) -> _SourceDocument:
+def _read_source(path: Path, source_ref: str) -> _SourceDocument:
     data = path.read_bytes()
     text = data.decode("utf-8")
     return _SourceDocument(
         path=path,
-        source_ref=_home_relative_posix(path),
+        source_ref=source_ref,
         text=text,
         lines=text.splitlines(),
         sha16=hashlib.sha256(data).hexdigest()[:16],
@@ -250,18 +250,6 @@ def _live_prompt(*, outline: list[Section], documents: list[_SourceDocument], so
         ],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-
-
-def _home_relative_posix(path: Path) -> str:
-    resolved = path.expanduser().resolve()
-    home = Path.home().resolve()
-    try:
-        relative = resolved.relative_to(home)
-    except ValueError:
-        return resolved.as_posix()
-    if not relative.parts:
-        return "~"
-    return f"~/{relative.as_posix()}"
 
 
 def _ensure_utc_seconds(value: datetime) -> datetime:

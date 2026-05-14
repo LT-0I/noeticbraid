@@ -40,6 +40,7 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
 
     if not task.prompt.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="task prompt is required")
+    settings = get_settings(request)
     root = _project_root(request)
     try:
         result = run_omc_debate_loop(
@@ -55,6 +56,7 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
             },
             state_root=root,
             artifact_root=root / ".omx" / "artifacts",
+            omc_sources=settings.omc_sources,
             mock_invocations=True,
         )
     except OMCKnowledgeExtractionError as exc:
