@@ -44,10 +44,18 @@ D5_02_NAMES = {
     "generate_and_download_mind_map",
 }
 
+D5_03_NAMES = {
+    "NotebookLMLifecycleError",
+    "NOTEBOOK_TAG",
+    "notebook_to_source_record",
+    "share_notebook_with_user",
+    "set_notebook_public_with_view_level",
+}
 
-def test_public_api_has_33_names():
-    assert len(rpc.__all__) == 33
-    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES
+
+def test_public_api_has_38_names():
+    assert len(rpc.__all__) == 38
+    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES
 
 
 def test_d5_01_names_byte_equal_in_all():
@@ -78,4 +86,4 @@ def test_d5_01_pool_tests_collected_alongside_d5_02():
     assert callable(rpc.run_with_pool)
     assert rpc.POOL_CONFIG_SCHEMA["type"] == "object"
     assert rpc.POOL_STATE_SCHEMA["type"] == "object"
-    assert len(rpc.__all__) == 33
+    assert len(rpc.__all__) == 38

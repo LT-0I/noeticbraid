@@ -65,3 +65,26 @@ class NotebookLMSerializationError(NotebookLMPoolError):
         self.error_class = error_class
         self.detail = detail
         super().__init__(f"{error_class}: {detail}")
+
+
+# === D5-03 addition (append-only) ===
+
+class NotebookLMLifecycleError(NotebookLMPoolError):
+    """Raised when notebook lifecycle / sharing composite helper validates fails
+    OR notebook_to_source_record() serializer validation fails.
+
+    Attributes:
+        error_class: one of (frozen enumeration; tests assert exact set):
+            "invalid_notebook_id"
+            "title_empty"
+            "naive_captured_at"
+            "invalid_run_id"
+            "invalid_content_hash"
+            "invalid_email"
+            "empty_notebook_id"
+        detail: human-readable explanation
+    """
+    def __init__(self, *, error_class: str, detail: str):
+        self.error_class = error_class
+        self.detail = detail
+        super().__init__(f"{error_class}: {detail}")

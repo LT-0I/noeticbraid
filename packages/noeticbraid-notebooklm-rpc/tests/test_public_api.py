@@ -42,8 +42,13 @@ def test_public_api_exactly_matches_spec():
         "generate_and_download_slide_deck",
         "generate_and_download_data_table",
         "generate_and_download_mind_map",
+        "NotebookLMLifecycleError",
+        "NOTEBOOK_TAG",
+        "notebook_to_source_record",
+        "share_notebook_with_user",
+        "set_notebook_public_with_view_level",
     }
-    assert len(rpc.__all__) == 33
+    assert len(rpc.__all__) == 38
 
 
 def test_no_playwright_imported():

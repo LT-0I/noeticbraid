@@ -1,6 +1,6 @@
-"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer.
+"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle.
 
-Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01 + SDD-D5-02.
+Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01, SDD-D5-02, SDD-D5-03.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from ._errors import (
     NotebookLMAccountUnavailableError,
     NotebookLMPoolStateError,
     NotebookLMSerializationError,
+    NotebookLMLifecycleError,
 )
 from ._runlog import emit_runlog_event, PoolEventNDJSONSchema
 from ._config_schema import POOL_CONFIG_SCHEMA, POOL_STATE_SCHEMA
@@ -42,6 +43,14 @@ from ._artifacts import (
     generate_and_download_slide_deck,
     generate_and_download_data_table,
     generate_and_download_mind_map,
+)
+
+# D5-03 notebook lifecycle + sharing surface
+from ._lifecycle import (
+    NOTEBOOK_TAG,
+    notebook_to_source_record,
+    share_notebook_with_user,
+    set_notebook_public_with_view_level,
 )
 
 __all__ = [
@@ -89,5 +98,12 @@ __all__ = [
     "generate_and_download_slide_deck",
     "generate_and_download_data_table",
     "generate_and_download_mind_map",
+    # D5-03 Error (1)
+    "NotebookLMLifecycleError",
+    # D5-03 Notebook lifecycle + sharing surface (4)
+    "NOTEBOOK_TAG",
+    "notebook_to_source_record",
+    "share_notebook_with_user",
+    "set_notebook_public_with_view_level",
 ]
-assert len(__all__) == 33  # spec-locked: 16 (D5-01) + 17 (D5-02)
+assert len(__all__) == 38  # spec-locked: 16 (D5-01) + 17 (D5-02) + 5 (D5-03)
