@@ -33,7 +33,11 @@ def _default_state() -> dict[str, Any]:
                 "label": "吸收 OMC task card",
                 "endpoint": "/api/projects/omc-ingest/tasks",
             },
-            "external_reference_refs": ["source_omc_repo", "source_omc_debate_loop_docs"],
+            "external_reference_refs": [
+                "source_omc_repo",
+                "source_omc_debate_loop_docs",
+                "source_omc_local_metadata",
+            ],
             "candidate_refs": [],
             "adopted_candidate_refs": [],
             "capability_refs": [
@@ -56,6 +60,12 @@ def _default_state() -> dict[str, Any]:
                 "title": "D2-01 OMC debate-loop public outlet",
                 "url": "docs/OMC_DEBATE_LOOP.md",
                 "mode": "link-only",
+            },
+            {
+                "source_ref": "source_omc_local_metadata",
+                "title": "Local OMC metadata snapshots",
+                "url": "~/.claude/CLAUDE.md + ~/.claude/RTK.md",
+                "mode": "read-only-local",
             },
         ],
         "task_card": {

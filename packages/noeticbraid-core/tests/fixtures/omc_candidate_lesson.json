@@ -3,14 +3,25 @@
   "contract_version": "1.3.0",
   "candidate_id": "memory_omc_ingest_debate_loop",
   "project_id": "omc-ingest",
-  "source_sdd_ids": ["SDD-D2-01", "SDD-D2-02"],
-  "summary": "OMC ingestion debate produced a program-memory candidate for the manual demo slice.",
+  "source_sdd_ids": [
+    "SDD-D2-01",
+    "SDD-D2-02"
+  ],
+  "summary": "Extracted 15 sections from 2 OMC source files (sha256: omc_source_claude_md_sample.md=cc266f5bcbbfacc9, omc_source_rtk_md_sample.md=9fe007d9d7ca790f); covers: oh-my-claudecode - Intelligent Multi-Agent Orchestration, operating_principles, delegation_rules, ...",
   "status": "candidate",
   "upgrade_rule": "explicit user adoption OR reuse >=3 times with at least one independently checkable ledger run; not rejected is never sufficient",
   "adopted_at": null,
   "adopted_by": null,
   "run_record_ref": "run_omc_ingest_demo",
   "reuse_evidence_refs": [],
-  "artifact_refs": ["artifact_convergence_markdown"],
-  "source_refs": ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"]
+  "artifact_refs": [
+    "artifact_convergence_markdown",
+    ".omx/artifacts/omc-knowledge-extraction-20260513T000000Z.md"
+  ],
+  "source_refs": [
+    "source_project_definition_v3_2",
+    "source_ai_invocation_reference",
+    "source_omc_metadata",
+    "source_omc_local_metadata"
+  ]
 }

@@ -15,6 +15,7 @@ from noeticbraid_backend.contracts import (
 )
 from noeticbraid_backend.omc_workspace.adoption import adopt_candidate
 from noeticbraid_backend.omc_workspace.d2_01_adapter import run_omc_debate_loop
+from noeticbraid_backend.omc_workspace.omc_knowledge_extractor import OMCKnowledgeExtractionError, OMCLiveEnrichmentError
 from noeticbraid_backend.omc_workspace.project_store import OMCProjectStore, PROJECT_ID, candidate_from_d2_result, public_artifact_ref
 
 router = APIRouter(prefix="/api", tags=["projects"])
@@ -40,21 +41,30 @@ async def submit_omc_ingest_task(request: Request, task: OMCProjectTaskRequest) 
     if not task.prompt.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="task prompt is required")
     root = _project_root(request)
-    result = run_omc_debate_loop(
-        {
-            "task_id": "task_omc_ingest",
-            "title": task.title,
-            "trigger": "task_card",
-            "risk_hint": "high",
-            "required_capabilities": ["planning", "adversary", "source_audit", "convergence"],
-            "source_refs": task.source_refs
-            or ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"],
-            "description": task.prompt,
-        },
-        state_root=root,
-        artifact_root=root / ".omx" / "artifacts",
-        mock_invocations=True,
-    )
+    try:
+        result = run_omc_debate_loop(
+            {
+                "task_id": "task_omc_ingest",
+                "title": task.title,
+                "trigger": "task_card",
+                "risk_hint": "high",
+                "required_capabilities": ["planning", "adversary", "source_audit", "convergence"],
+                "source_refs": task.source_refs
+                or ["source_project_definition_v3_2", "source_ai_invocation_reference", "source_omc_metadata"],
+                "description": task.prompt,
+            },
+            state_root=root,
+            artifact_root=root / ".omx" / "artifacts",
+            mock_invocations=True,
+        )
+    except OMCKnowledgeExtractionError as exc:
+        missing = ", ".join(str(path) for path in exc.missing)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"OMC source missing: {missing}") from exc
+    except OMCLiveEnrichmentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OMC live enrichment failed: {exc.reason}",
+        ) from exc
     candidate = candidate_from_d2_result(result)
     run_records = list(result.get("ledger_records", []))
     # D2-01 exposes event types and writes JSONL; keep route-visible records compact when the adapter
