@@ -37,3 +37,31 @@ class NotebookLMAccountUnavailableError(NotebookLMPoolError):
 
 class NotebookLMPoolStateError(NotebookLMPoolError):
     """Raised when pool.json or pool-state.json fails JSON Schema validation or file IO."""
+
+
+# === D5-02 addition (append-only) ===
+
+class NotebookLMSerializationError(NotebookLMPoolError):
+    """Raised when artifact_to_source_record() validation fails OR when a
+    composite helper's caller misuse / upstream-drift assertion fails.
+
+    Attributes:
+        error_class: one of (frozen enumeration; tests assert exact set):
+            "invalid_artifact_id"
+            "invalid_kind"
+            "naive_captured_at"
+            "local_path_missing"
+            "invalid_content_hash"
+            "invalid_run_id"
+            "title_empty"
+            "wait_not_completed"
+            "forbidden_download_kwarg_override"
+            "upstream_mind_map_shape_mismatch"
+            "mind_map_no_note_id"
+        detail: human-readable explanation
+    """
+
+    def __init__(self, *, error_class: str, detail: str):
+        self.error_class = error_class
+        self.detail = detail
+        super().__init__(f"{error_class}: {detail}")

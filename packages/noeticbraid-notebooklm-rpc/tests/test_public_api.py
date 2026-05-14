@@ -25,8 +25,25 @@ def test_public_api_exactly_matches_spec():
         "PoolEventNDJSONSchema",
         "POOL_CONFIG_SCHEMA",
         "POOL_STATE_SCHEMA",
+        "NotebookLMSerializationError",
+        "artifact_to_source_record",
+        "ArtifactKind",
+        "ARTIFACT_KIND_TO_TAG",
+        "KIND_TO_DOWNLOAD_METHOD",
+        "wait_then_download",
+        "generate_and_download_audio",
+        "generate_and_download_video",
+        "generate_and_download_cinematic_video",
+        "generate_and_download_report",
+        "generate_and_download_study_guide",
+        "generate_and_download_quiz",
+        "generate_and_download_flashcards",
+        "generate_and_download_infographic",
+        "generate_and_download_slide_deck",
+        "generate_and_download_data_table",
+        "generate_and_download_mind_map",
     }
-    assert len(rpc.__all__) == 16
+    assert len(rpc.__all__) == 33
 
 
 def test_no_playwright_imported():

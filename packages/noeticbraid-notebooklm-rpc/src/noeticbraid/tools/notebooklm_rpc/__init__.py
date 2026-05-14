@@ -1,6 +1,6 @@
-"""NoeticBraid NotebookLM RPC wrapper + multi-account pool.
+"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer.
 
-Pins notebooklm-py==0.4.1 (MIT).
+Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01 + SDD-D5-02.
 """
 
 from __future__ import annotations
@@ -19,9 +19,30 @@ from ._errors import (
     NotebookLMQuotaExceededError,
     NotebookLMAccountUnavailableError,
     NotebookLMPoolStateError,
+    NotebookLMSerializationError,
 )
 from ._runlog import emit_runlog_event, PoolEventNDJSONSchema
 from ._config_schema import POOL_CONFIG_SCHEMA, POOL_STATE_SCHEMA
+
+# D5-02 artifacts surface
+from ._artifacts import (
+    artifact_to_source_record,
+    ArtifactKind,
+    ARTIFACT_KIND_TO_TAG,
+    KIND_TO_DOWNLOAD_METHOD,
+    wait_then_download,
+    generate_and_download_audio,
+    generate_and_download_video,
+    generate_and_download_cinematic_video,
+    generate_and_download_report,
+    generate_and_download_study_guide,
+    generate_and_download_quiz,
+    generate_and_download_flashcards,
+    generate_and_download_infographic,
+    generate_and_download_slide_deck,
+    generate_and_download_data_table,
+    generate_and_download_mind_map,
+)
 
 __all__ = [
     # Upstream re-exports (2)
@@ -46,5 +67,27 @@ __all__ = [
     # Schemas (2)
     "POOL_CONFIG_SCHEMA",
     "POOL_STATE_SCHEMA",
+    # D5-02 Error (1)
+    "NotebookLMSerializationError",
+    # D5-02 Serializer (1)
+    "artifact_to_source_record",
+    # D5-02 Artifact taxonomy (3)
+    "ArtifactKind",
+    "ARTIFACT_KIND_TO_TAG",
+    "KIND_TO_DOWNLOAD_METHOD",
+    # D5-02 Generic helper (1)
+    "wait_then_download",
+    # D5-02 Composite generators (11 — 10 via wait_then_download + 1 special mind_map)
+    "generate_and_download_audio",
+    "generate_and_download_video",
+    "generate_and_download_cinematic_video",
+    "generate_and_download_report",
+    "generate_and_download_study_guide",
+    "generate_and_download_quiz",
+    "generate_and_download_flashcards",
+    "generate_and_download_infographic",
+    "generate_and_download_slide_deck",
+    "generate_and_download_data_table",
+    "generate_and_download_mind_map",
 ]
-assert len(__all__) == 16  # spec-locked
+assert len(__all__) == 33  # spec-locked: 16 (D5-01) + 17 (D5-02)
