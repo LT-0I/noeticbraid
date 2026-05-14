@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-14T12:00:00+00:00",
+  "accounts": {
+    "test-alice": {
+      "used_today": 1,
+      "quota_reset_at": "2026-05-15T00:00:00+00:00",
+      "last_429_at": null,
+      "last_captcha_at": null,
+      "last_login_required_at": null,
+      "cool_down_until": null,
+      "last_success_at": "2026-05-14T11:30:00+00:00",
+      "consecutive_failures": 0
+    },
+    "test-bob": {
+      "used_today": 0,
+      "quota_reset_at": "2026-05-15T00:00:00+00:00",
+      "last_429_at": null,
+      "last_captcha_at": null,
+      "last_login_required_at": null,
+      "cool_down_until": null,
+      "last_success_at": "2026-05-14T10:00:00+00:00",
+      "consecutive_failures": 0
+    },
+    "test-carol": {
+      "used_today": 2,
+      "quota_reset_at": "2026-05-15T00:00:00+00:00",
+      "last_429_at": null,
+      "last_captcha_at": null,
+      "last_login_required_at": null,
+      "cool_down_until": null,
+      "last_success_at": null,
+      "consecutive_failures": 0
+    }
+  }
+}

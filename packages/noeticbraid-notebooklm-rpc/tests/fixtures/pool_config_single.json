@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "account_id": "test-alice",
+      "storage_state_path": "/tmp/test-alice-storage.json",
+      "daily_quota": 5,
+      "quota_reset_tz": "UTC",
+      "label": "Test Alice"
+    }
+  ]
+}

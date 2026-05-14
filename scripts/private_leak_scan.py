@@ -197,6 +197,11 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         frozenset({"raw_token", "token_hash", "dpapi_blob"}),
         "SP-E outbound notifier tests pass synthetic marker keys/text to assert OutboundNotifier redacts payload + refs before delivery",
     ),
+    AllowlistRule(
+        "packages/noeticbraid-notebooklm-rpc/**",
+        frozenset({"account_id"}),
+        "SDD-D5-01 NotebookLM RPC pool exposes account_id as a public non-secret account selector field in schemas, fixtures, and tests",
+    ),
 )
 
 LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (

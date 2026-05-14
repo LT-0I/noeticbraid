@@ -1,4 +1,8 @@
 # NoeticBraid SP-H NotebookLM Bridge
+> **DEPRECATED**: This browser-automation bridge is replaced by
+> `noeticbraid-notebooklm-rpc` (SDD-D5-01). It will be removed in
+> 0.5.0 / SDD-D5-04. New code must not import from this package.
+> See `../noeticbraid-notebooklm-rpc/README.md` for migration.
 
 NoeticBraid SP-H is the NotebookLM Bridge feature package. It accepts vetted URL/text sources from upstream SP-A Radar or SP-G Evolution, drives a user-authorized NotebookLM notebook through an injected SP-C2 browser session, pulls generated Briefing Doc / FAQ outputs, and serializes generated output into strict `SourceRecord 1.0.0` dictionaries for downstream SP-B use.
 

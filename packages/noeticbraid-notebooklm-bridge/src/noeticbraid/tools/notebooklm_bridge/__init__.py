@@ -18,6 +18,14 @@ from ._protocols import BrowserSession
 from ._runlog import redact_str
 from ._serializer import to_source_records
 
+import warnings
+warnings.warn(
+    "noeticbraid-notebooklm-bridge is deprecated and will be removed in 0.5.0 (SDD-D5-04). "
+    "Migrate to noeticbraid-notebooklm-rpc.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 __all__ = [
     "BrowserSession",
     "NotebookLMBridgeError",

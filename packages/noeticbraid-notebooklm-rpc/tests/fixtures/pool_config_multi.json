@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "accounts": [
+    {"account_id": "test-alice", "storage_state_path": "/tmp/test-alice-storage.json", "daily_quota": 3},
+    {"account_id": "test-bob",   "storage_state_path": "/tmp/test-bob-storage.json",   "daily_quota": 3},
+    {"account_id": "test-carol", "storage_state_path": "/tmp/test-carol-storage.json", "daily_quota": 3}
+  ],
+  "selection_policy": "least_recent_success",
+  "cool_down_seconds": {
+    "rate_limited": 60,
+    "login_required": 600,
+    "captcha": 1200,
+    "server_error_streak": 30
+  }
+}
