@@ -11,7 +11,7 @@ from .renderer import MarkdownRenderer, RenderedNote
 from .resources import CONTRACT_VERSION, SCHEMA_VERSION, load_schema
 from .settings import WritePolicySettings, default_settings
 from .writer import VaultWriter, WritePolicyViolation, WriteResult
-from ._ingest import ingest_serialized_records, ingest_source_record, IngestSummary
+from ._ingest import ingest_serialized_records, ingest_source_record, IngestSummary, ingest_side_note
 
 __version__ = "0.1.0"
 
@@ -38,4 +38,5 @@ __all__ = [
     "ingest_source_record",
     "IngestSummary",
     "ingest_serialized_records",
+    "ingest_side_note",
 ]

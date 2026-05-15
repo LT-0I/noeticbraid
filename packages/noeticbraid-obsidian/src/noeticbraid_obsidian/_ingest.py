@@ -178,3 +178,82 @@ def ingest_serialized_records(
         else:
             dry_run += 1
     return IngestSummary(written, skipped, dry_run, tuple(collected))
+
+
+# ── D6-03 追加 ──────────────────────────────────────────────────────────────
+
+
+def ingest_side_note(
+    record: dict[str, Any],
+    *,
+    vault_root: Path | str,
+    settings: WritePolicySettings | None = None,
+    body: str = "",
+    project: str = "default",
+) -> WriteResult:
+    """Validate a SideNote dict via render_side_note and ingest it as a create-only record.
+
+    结构镜像 D6-01 `ingest_source_record`，但**无 jsonschema 步**：side_note 的输入
+    权威契约是 `render_side_note` 自身（§1.1 裁决；side_note.schema.json 是离 render
+    路径的 1.3.0 frontmatter wrapper，与 §11.b.S 2.0.0 输入/输出均不兼容）。
+
+    NORMATIVE 行为：
+    1. rendered = MarkdownRenderer().render_side_note(record, body=body)
+       —— 这是**唯一验证门**：render_side_note 对全部 §11.b.S 必填字段
+          (note_id / created_at / linked_source_refs / evidence_source /
+           note_type / confidence / tone_constraint / user_response_channel /
+           user_response) 以 _require/_validate_enum/_require_exact_string/
+          _require_all_response_channels 强制；缺失/非法/`evidence_source !=
+          linked_source_refs`/tone 字面量不符/channel 缺项 → 透传 RenderError
+          （不吞、不重写、不放宽——§11.b.S 红线由既有 renderer 强制）
+    2. record_id = rendered.frontmatter["note_id"]
+       —— 取**已验证** frontmatter（render 已 _require note_id），非原始 record
+    3. date = rendered.frontmatter["created_at"][:10]
+       —— 已验证 created_at；须可被 resolve_path._date_parts 的
+          `^\\d{4}-\\d{2}-\\d{2}$` + date.fromisoformat 严格接受，否则
+          透传 PathPolicyError（不重写）
+    4. writer = VaultWriter(vault_root, settings or default_settings())
+       —— 与 D6-01 同：vault_root 必传（dry_run 也需）；env 不在本函数内解析
+          （caller 责任，与 D6-01 一致）
+    5. return writer.write_stable_record("side_note", record_id, rendered,
+                                         date=date, project=project)
+
+    红线保证（全部由既有组件自动施加，本函数零新策略）：
+    - R-3 §7.1：resolve_path("side_note", ...) 把路径**硬锁**在
+      `{ns}/20_episodic_memory/20_ai_observations/side_notes/{year}/{month}/`
+      （AI 观察子树，与用户原始记录子树 `20_episodic_memory/10_user_raw/` 物理分离）；
+      ModeEnforcer 对任何以 `{ns}/20_episodic_memory/10_user_raw/` 开头的路径
+      **无条件拒写**（不论 nb_type）；_validate_id(note_id) 以 `^[A-Za-z0-9_:-]+$`
+      拒 path-fragment；_date_parts 拒非 YYYY-MM-DD。
+      → AI 写旁注**永远落 20_ai_observations/side_notes/，永不触碰用户原文**。
+    - R-4 §7.2：settings.default_write_mode 默认 dry_run（不落盘，返回 preview）；
+      non_generated_overwrite_allowed=False 硬锁 → 已存在 note_id 二次 ingest 必
+      raise WritePolicyViolation（create-only，绝不覆盖已写出的旁注）。
+    - §11.b.S metadata/tone 安全：由 render_side_note 在步骤 1 强制。
+
+    vault_root 信任边界（沿用 D6-01 round-2 MINOR-2）：vault_root 是 caller 提供的
+    可信 vault 根；R-3 是「vault-相对路径」保证。本函数不证明 root 语义身份。
+
+    Args:
+        record: 一个 `render_side_note` 可接受的 §11.b.S SideNote dict（contract
+                2.0.0 输入形状）。**不是** D1-02 detector 的 CandidateB1SideNote
+                （形状不同，需独立序列化器——见 §非目标），**也不是** 1.3.0
+                frontmatter-wrapper schema 的实例。
+        vault_root: 可信 vault 根（必传；dry_run 也需）。
+        settings: 写策略；None → default_settings()（dry_run 默认）。
+        body: 旁注正文（透传 render_side_note 的 Decision Notes 区），默认 ""。
+        project: 透传 write_stable_record 的 project 分区，默认 "default"。
+
+    Returns:
+        WriteResult：relative_path / absolute_path / written / dry_run / preview_text。
+
+    Raises:
+        RenderError: 任一 §11.b.S 必填缺失/非法（透传；唯一验证门）。
+        PathPolicyError: note_id 非法 或 created_at[:10] 非 YYYY-MM-DD（透传）。
+        WritePolicyViolation: note_id 已存在（create-only；透传）。
+    """
+    rendered = MarkdownRenderer().render_side_note(record, body=body)
+    record_id = rendered.frontmatter["note_id"]
+    date = rendered.frontmatter["created_at"][:10]
+    writer = VaultWriter(vault_root, settings or default_settings())
+    return writer.write_stable_record("side_note", record_id, rendered, date=date, project=project)
