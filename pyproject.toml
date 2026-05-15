@@ -12,7 +12,6 @@ members = [
   "packages/noeticbraid-obsidian",
   "packages/noeticbraid-runtime",
   "packages/noeticbraid-backend",
-  "packages/noeticbraid-notebooklm-bridge",
   "packages/noeticbraid-workflow-scheduler",
   "packages/noeticbraid-notebooklm-rpc"
 ]
@@ -24,7 +23,6 @@ pythonpath = [
   "packages/noeticbraid-obsidian/src",
   "packages/noeticbraid-runtime/src",
   "packages/noeticbraid-backend/src",
-  "packages/noeticbraid-notebooklm-bridge/src",
   "packages/noeticbraid-workflow-scheduler/src",
   "packages/noeticbraid-notebooklm-rpc/src"
 ]

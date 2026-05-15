@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`noeticbraid-notebooklm-rpc` wraps the pinned upstream `notebooklm-py==0.4.1` client with NoeticBraid multi-account pool semantics. It replaces the browser-automation `noeticbraid-notebooklm-bridge` package for new NotebookLM integrations.
+`noeticbraid-notebooklm-rpc` wraps the pinned upstream `notebooklm-py==0.4.1` client with NoeticBraid multi-account pool semantics. It replaces the prior browser-automation NotebookLM integration approach (now removed).
 
 ## Risk warning
 

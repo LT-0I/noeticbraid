@@ -250,3 +250,10 @@ edited or removed.
 
 - side observation 3: SP-E 是 SP 系列首个 stdlib-only 模块 (无 jsonschema 依赖) — schema 校验由 cards.py FROZEN_TASK_TYPES + FROZEN_APPROVAL_LEVELS frozen tuple 自校 + workflow_card.schema.json 静态文件保留作 reference. 这是 noeticbraid 项目 dependency surface 最小化的一次实践.
 
+
+## SDD-D5-07 — delete noeticbraid-notebooklm-bridge (2026-05-14)
+- action: removed `packages/noeticbraid-notebooklm-bridge/` (browser-automation v0.3.0, ~1769 LOC, 24 tests, 0 consumers) fully replaced by D5-01..06 RPC route (notebooklm-py==0.4.1, __all__ 55)
+- root pyproject.toml: removed bridge from [tool.uv.workspace] members + [tool.pytest.ini_options] pythonpath (8 → 7 packages)
+- rpc README line 5: dangling bridge package-name reference de-referenced (doc-only)
+- R-6 exemption: authorized retirement — 0 consumers (grep-verified), not a cross-package frozen contract, browser-automation route rejected by owner; rollback = single-commit revert
+- test impact: 6-package metered total 1124 → 1100 (−24 bridge tests); RPC __all__ unchanged at 55
