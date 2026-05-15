@@ -9,7 +9,9 @@ description = "SP-D Obsidian vault hub: policy-checked Markdown rendering and lo
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-dependencies = []
+dependencies = [
+  "jsonschema>=4.0,<5.0",
+]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

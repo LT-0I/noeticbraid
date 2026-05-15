@@ -11,6 +11,7 @@ from .renderer import MarkdownRenderer, RenderedNote
 from .resources import CONTRACT_VERSION, SCHEMA_VERSION, load_schema
 from .settings import WritePolicySettings, default_settings
 from .writer import VaultWriter, WritePolicyViolation, WriteResult
+from ._ingest import ingest_source_record
 
 __version__ = "0.1.0"
 
@@ -34,4 +35,5 @@ __all__ = [
     "preserve_manual_notes",
     "render_markdown",
     "resolve_path",
+    "ingest_source_record",
 ]
