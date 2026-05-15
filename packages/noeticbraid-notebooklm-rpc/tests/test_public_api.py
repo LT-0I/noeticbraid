@@ -47,8 +47,16 @@ def test_public_api_exactly_matches_spec():
         "notebook_to_source_record",
         "share_notebook_with_user",
         "set_notebook_public_with_view_level",
+        "NotebookLMSourceError",
+        "SOURCE_TYPE_TO_TAG",
+        "SOURCE_TYPE_TO_RECORD_TYPE",
+        "source_to_source_record",
+        "add_file_and_serialize",
+        "add_url_and_serialize",
+        "add_drive_and_serialize",
+        "add_text_and_serialize",
     }
-    assert len(rpc.__all__) == 38
+    assert len(rpc.__all__) == 46
 
 
 def test_no_playwright_imported():

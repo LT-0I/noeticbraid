@@ -1,6 +1,6 @@
-"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle.
+"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle + sources lifecycle.
 
-Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01, SDD-D5-02, SDD-D5-03.
+Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01, SDD-D5-02, SDD-D5-03, SDD-D5-04.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from ._errors import (
     NotebookLMPoolStateError,
     NotebookLMSerializationError,
     NotebookLMLifecycleError,
+    NotebookLMSourceError,
 )
 from ._runlog import emit_runlog_event, PoolEventNDJSONSchema
 from ._config_schema import POOL_CONFIG_SCHEMA, POOL_STATE_SCHEMA
@@ -51,6 +52,17 @@ from ._lifecycle import (
     notebook_to_source_record,
     share_notebook_with_user,
     set_notebook_public_with_view_level,
+)
+
+# D5-04 sources surface
+from ._sources import (
+    SOURCE_TYPE_TO_TAG,
+    SOURCE_TYPE_TO_RECORD_TYPE,
+    source_to_source_record,
+    add_file_and_serialize,
+    add_url_and_serialize,
+    add_drive_and_serialize,
+    add_text_and_serialize,
 )
 
 __all__ = [
@@ -105,5 +117,15 @@ __all__ = [
     "notebook_to_source_record",
     "share_notebook_with_user",
     "set_notebook_public_with_view_level",
+    # D5-04 Error (1)
+    "NotebookLMSourceError",
+    # D5-04 sources surface (7)
+    "SOURCE_TYPE_TO_TAG",
+    "SOURCE_TYPE_TO_RECORD_TYPE",
+    "source_to_source_record",
+    "add_file_and_serialize",
+    "add_url_and_serialize",
+    "add_drive_and_serialize",
+    "add_text_and_serialize",
 ]
-assert len(__all__) == 38  # spec-locked: 16 (D5-01) + 17 (D5-02) + 5 (D5-03)
+assert len(__all__) == 46  # spec-locked: 16 (D5-01) + 17 (D5-02) + 5 (D5-03) + 8 (D5-04)

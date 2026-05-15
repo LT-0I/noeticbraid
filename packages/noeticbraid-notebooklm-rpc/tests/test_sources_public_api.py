@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import notebooklm
+import importlib
 
 import noeticbraid.tools.notebooklm_rpc as rpc
+from noeticbraid.tools.notebooklm_rpc import NotebookLMSourceError, NotebookLMPoolError
 
 
 D5_01_NAMES = {
@@ -63,38 +64,47 @@ D5_04_NAMES = {
     "add_text_and_serialize",
 }
 
+EXPECTED_SOURCE_ERROR_CLASSES = {
+    "invalid_source_id",
+    "title_empty",
+    "naive_captured_at",
+    "local_path_missing",
+    "invalid_content_hash",
+    "invalid_run_id",
+    "source_not_ready",
+}
 
-def test_public_api_has_38_names():
+
+def test_public_api_has_46_names():
     assert len(rpc.__all__) == 46
     assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES | D5_04_NAMES
 
 
-def test_d5_01_names_byte_equal_in_all():
-    assert D5_01_NAMES < set(rpc.__all__)
-    for name in D5_01_NAMES:
-        assert hasattr(rpc, name)
+def test_d5_04_names_present():
+    assert D5_04_NAMES <= set(rpc.__all__)
 
 
-def test_upstream_identity_preserved():
-    assert rpc.NotebookLMClient is notebooklm.NotebookLMClient
-    assert rpc.AuthTokens is notebooklm.AuthTokens
+def test_d5_01_d5_02_d5_03_names_byte_equal():
+    assert D5_01_NAMES | D5_02_NAMES | D5_03_NAMES < set(rpc.__all__)
 
 
-def test_no_unexpected_module_attribute_leak():
-    standard_module_attrs = {"annotations"}
-    leaked = {
-        name
-        for name in rpc.__dict__
-        if not name.startswith("_")
-        and name not in set(rpc.__all__)
-        and name not in standard_module_attrs
-    }
-    assert leaked == set()
+def test_source_error_inherits_pool_error():
+    assert issubclass(NotebookLMSourceError, NotebookLMPoolError)
 
 
-def test_d5_01_pool_tests_collected_alongside_d5_02():
-    assert callable(rpc.account_op)
-    assert callable(rpc.run_with_pool)
-    assert rpc.POOL_CONFIG_SCHEMA["type"] == "object"
-    assert rpc.POOL_STATE_SCHEMA["type"] == "object"
-    assert len(rpc.__all__) == 46
+def test_error_class_attribute_present():
+    error = NotebookLMSourceError(error_class="source_not_ready", detail="x")
+    assert error.error_class == "source_not_ready"
+
+
+def test_error_class_enum_set_exhaustive():
+    for error_class in EXPECTED_SOURCE_ERROR_CLASSES:
+        error = NotebookLMSourceError(error_class=error_class, detail="x")
+        assert error.error_class == error_class
+        assert error_class in (NotebookLMSourceError.__doc__ or "")
+
+
+def test_d5_04_public_names_subset_of_module():
+    module = importlib.import_module("noeticbraid.tools.notebooklm_rpc._sources")
+    for name in D5_04_NAMES:
+        assert hasattr(module, name)

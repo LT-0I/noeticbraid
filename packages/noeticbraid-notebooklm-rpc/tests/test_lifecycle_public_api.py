@@ -61,6 +61,17 @@ D5_03_NAMES = {
     "set_notebook_public_with_view_level",
 }
 
+D5_04_NAMES = {
+    "NotebookLMSourceError",
+    "SOURCE_TYPE_TO_TAG",
+    "SOURCE_TYPE_TO_RECORD_TYPE",
+    "source_to_source_record",
+    "add_file_and_serialize",
+    "add_url_and_serialize",
+    "add_drive_and_serialize",
+    "add_text_and_serialize",
+}
+
 EXPECTED_ERROR_CLASSES = {
     "invalid_notebook_id",
     "title_empty",
@@ -79,8 +90,8 @@ class Stub:
 
 
 def test_public_api_has_38_names():
-    assert len(rpc.__all__) == 38
-    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES
+    assert len(rpc.__all__) == 46
+    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES | D5_04_NAMES
 
 
 def test_d5_03_names_present():

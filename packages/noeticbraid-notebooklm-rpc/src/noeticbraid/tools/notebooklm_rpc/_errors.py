@@ -88,3 +88,26 @@ class NotebookLMLifecycleError(NotebookLMPoolError):
         self.error_class = error_class
         self.detail = detail
         super().__init__(f"{error_class}: {detail}")
+
+
+# === D5-04 addition (append-only) ===
+
+class NotebookLMSourceError(NotebookLMPoolError):
+    """Raised when source serializer validation fails OR when source composite
+    helper detects upstream/runtime drift.
+
+    Attributes:
+        error_class: one of (frozen enumeration; tests assert exact set):
+            "invalid_source_id"
+            "title_empty"
+            "naive_captured_at"
+            "local_path_missing"
+            "invalid_content_hash"
+            "invalid_run_id"
+            "source_not_ready"
+        detail: human-readable explanation
+    """
+    def __init__(self, *, error_class: str, detail: str):
+        self.error_class = error_class
+        self.detail = detail
+        super().__init__(f"{error_class}: {detail}")
