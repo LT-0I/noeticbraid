@@ -147,3 +147,19 @@ class NotebookLMChatError(NotebookLMPoolError):
         super().__init__(detail or error_class)
         self.error_class = error_class
         self.detail = detail
+
+
+class NotebookLMArtifactLifecycleError(NotebookLMPoolError):
+    """Artifact-lifecycle composite errors (composite-level only; upstream
+    revise_slide / wait_for_completion / get / artifact_to_source_record errors are transparent).
+
+    error_class enum (4 values):
+    - empty_notebook_id                 (composite input is empty)
+    - empty_artifact_id                 (composite input is empty)
+    - revision_failed                   (wait_for_completion returned is_failed status)
+    - artifact_not_found_after_revision (get after revision returned None)
+    """
+    def __init__(self, *, error_class: str, detail: str = "") -> None:
+        super().__init__(detail or error_class)
+        self.error_class = error_class
+        self.detail = detail

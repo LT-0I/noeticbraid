@@ -1,4 +1,4 @@
-"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle + sources lifecycle + notes/chat composites.
+"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle + sources lifecycle + notes/chat composites + artifact-lifecycle composite.
 
 Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01, SDD-D5-02, SDD-D5-03, SDD-D5-04.
 """
@@ -24,6 +24,7 @@ from ._errors import (
     NotebookLMSourceError,
     NotebookLMNoteError,
     NotebookLMChatError,
+    NotebookLMArtifactLifecycleError,
 )
 from ._runlog import emit_runlog_event, PoolEventNDJSONSchema
 from ._config_schema import POOL_CONFIG_SCHEMA, POOL_STATE_SCHEMA
@@ -76,6 +77,9 @@ from ._notes import (
 )
 from ._chat import (
     ask_and_save_as_note,
+)
+from ._artifact_lifecycle import (
+    revise_slide_and_serialize,
 )
 
 __all__ = [
@@ -149,5 +153,9 @@ __all__ = [
     "create_note_and_serialize",
     "update_note_and_serialize",
     "ask_and_save_as_note",
+    # D5-06 Error (1)
+    "NotebookLMArtifactLifecycleError",
+    # D5-06 artifact-lifecycle composite (1)
+    "revise_slide_and_serialize",
 ]
-assert len(__all__) == 53  # D5-04 46 + D5-05 7 (2 errors + 1 tag + 1 serializer + 3 composites)
+assert len(__all__) == 55  # D5-05 53 + D5-06 2 (1 error + 1 composite)

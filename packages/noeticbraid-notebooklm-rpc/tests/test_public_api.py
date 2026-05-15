@@ -62,8 +62,10 @@ def test_public_api_exactly_matches_spec():
         "create_note_and_serialize",
         "update_note_and_serialize",
         "ask_and_save_as_note",
+        "NotebookLMArtifactLifecycleError",
+        "revise_slide_and_serialize",
     }
-    assert len(rpc.__all__) == 53
+    assert len(rpc.__all__) == 55
 
 
 def test_no_playwright_imported():

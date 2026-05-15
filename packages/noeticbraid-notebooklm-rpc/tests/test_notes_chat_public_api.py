@@ -76,6 +76,11 @@ D5_05_NAMES = {
     "ask_and_save_as_note",
 }
 
+D5_06_NAMES = {
+    "NotebookLMArtifactLifecycleError",
+    "revise_slide_and_serialize",
+}
+
 NOTE_ERROR_CLASSES = {
     "invalid_note_id",
     "empty_notebook_id",
@@ -96,8 +101,8 @@ CHAT_ERROR_CLASSES = {
 
 
 def test_public_api_has_53_names():
-    assert len(rpc.__all__) == 53
-    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES | D5_04_NAMES | D5_05_NAMES
+    assert len(rpc.__all__) == 55
+    assert set(rpc.__all__) == D5_01_NAMES | D5_02_NAMES | D5_03_NAMES | D5_04_NAMES | D5_05_NAMES | D5_06_NAMES
 
 
 def test_d5_05_names_present():
