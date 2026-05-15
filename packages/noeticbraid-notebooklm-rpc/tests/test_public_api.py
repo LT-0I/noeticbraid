@@ -55,8 +55,15 @@ def test_public_api_exactly_matches_spec():
         "add_url_and_serialize",
         "add_drive_and_serialize",
         "add_text_and_serialize",
+        "NotebookLMNoteError",
+        "NotebookLMChatError",
+        "NOTE_TAG",
+        "note_to_source_record",
+        "create_note_and_serialize",
+        "update_note_and_serialize",
+        "ask_and_save_as_note",
     }
-    assert len(rpc.__all__) == 46
+    assert len(rpc.__all__) == 53
 
 
 def test_no_playwright_imported():

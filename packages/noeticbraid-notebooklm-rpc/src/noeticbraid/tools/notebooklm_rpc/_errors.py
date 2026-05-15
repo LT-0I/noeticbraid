@@ -111,3 +111,39 @@ class NotebookLMSourceError(NotebookLMPoolError):
         self.error_class = error_class
         self.detail = detail
         super().__init__(f"{error_class}: {detail}")
+
+
+# === D5-05 addition (append-only) ===
+
+class NotebookLMNoteError(NotebookLMPoolError):
+    """Note serializer / composite errors.
+
+    error_class enum (9 values):
+    - invalid_note_id        (id does not match ^[A-Za-z0-9_]+$ or length exceeds 128)
+    - empty_notebook_id      (composite input is empty)
+    - empty_note_id          (update composite input is empty)
+    - note_not_found         (get returns None after update)
+    - title_empty            (override fallback remains empty)
+    - naive_captured_at      (captured_at has no tzinfo)
+    - local_path_missing     (local_path does not exist)
+    - invalid_content_hash   (does not match ^sha256:[0-9a-f]{64}$)
+    - invalid_run_id         (does not match ^run_[A-Za-z0-9_]+$)
+    """
+    def __init__(self, *, error_class: str, detail: str = "") -> None:
+        super().__init__(detail or error_class)
+        self.error_class = error_class
+        self.detail = detail
+
+
+class NotebookLMChatError(NotebookLMPoolError):
+    """Chat composite errors (composite-level only; upstream chat.ask errors are transparent).
+
+    error_class enum (3 values):
+    - empty_notebook_id      (composite input is empty)
+    - empty_question         (composite input is empty)
+    - empty_ask_answer       (upstream AskResult.answer is empty)
+    """
+    def __init__(self, *, error_class: str, detail: str = "") -> None:
+        super().__init__(detail or error_class)
+        self.error_class = error_class
+        self.detail = detail

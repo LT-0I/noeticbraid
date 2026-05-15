@@ -1,4 +1,4 @@
-"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle + sources lifecycle.
+"""NoeticBraid NotebookLM RPC wrapper + multi-account pool + artifacts serializer + notebook lifecycle + sources lifecycle + notes/chat composites.
 
 Pins notebooklm-py==0.4.1 (MIT). See SDD-D5-01, SDD-D5-02, SDD-D5-03, SDD-D5-04.
 """
@@ -22,6 +22,8 @@ from ._errors import (
     NotebookLMSerializationError,
     NotebookLMLifecycleError,
     NotebookLMSourceError,
+    NotebookLMNoteError,
+    NotebookLMChatError,
 )
 from ._runlog import emit_runlog_event, PoolEventNDJSONSchema
 from ._config_schema import POOL_CONFIG_SCHEMA, POOL_STATE_SCHEMA
@@ -63,6 +65,17 @@ from ._sources import (
     add_url_and_serialize,
     add_drive_and_serialize,
     add_text_and_serialize,
+)
+
+# D5-05 notes/chat composites surface
+from ._notes import (
+    NOTE_TAG,
+    note_to_source_record,
+    create_note_and_serialize,
+    update_note_and_serialize,
+)
+from ._chat import (
+    ask_and_save_as_note,
 )
 
 __all__ = [
@@ -127,5 +140,14 @@ __all__ = [
     "add_url_and_serialize",
     "add_drive_and_serialize",
     "add_text_and_serialize",
+    # D5-05 Errors (2)
+    "NotebookLMNoteError",
+    "NotebookLMChatError",
+    # D5-05 notes/chat surface (5)
+    "NOTE_TAG",
+    "note_to_source_record",
+    "create_note_and_serialize",
+    "update_note_and_serialize",
+    "ask_and_save_as_note",
 ]
-assert len(__all__) == 46  # spec-locked: 16 (D5-01) + 17 (D5-02) + 5 (D5-03) + 8 (D5-04)
+assert len(__all__) == 53  # D5-04 46 + D5-05 7 (2 errors + 1 tag + 1 serializer + 3 composites)
