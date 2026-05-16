@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -98,6 +99,30 @@ def test_token_budget_uses_char_four_heuristic_and_strict_cap() -> None:
     too_small = enforce_token_budget([first, second], 1)
     assert too_small.results == ()
     assert too_small.meta.dropped == 2
+
+
+def test_recall_ranker_text_similarity_matches_js_whitespace_split_parity() -> None:
+    empty_dup = dedup_results(
+        [
+            _result("empty-a", 1.0, ""),
+            _result("empty-b", 0.9, ""),
+        ],
+        cosine_threshold=0.85,
+        max_type_ratio=1.0,
+    )
+    assert [item.slug for item in empty_dup] == ["empty-a"]
+
+    assert set(re.split(r"\s+", " a".lower())) == {"", "a"}
+
+    leading_whitespace = dedup_results(
+        [
+            _result("leading", 1.0, " a"),
+            _result("plain", 0.9, "a"),
+        ],
+        cosine_threshold=0.85,
+        max_type_ratio=1.0,
+    )
+    assert [item.slug for item in leading_whitespace] == ["leading", "plain"]
 
 
 def test_dedup_pipeline_caps_pages_and_guarantees_compiled_truth() -> None:

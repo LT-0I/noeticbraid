@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import re
 from datetime import UTC, datetime
 from typing import Literal, Mapping, Sequence
 
@@ -141,10 +142,10 @@ def _dedup_by_text_similarity(
 ) -> list[RecallResult]:
     kept: list[RecallResult] = []
     for item in results:
-        item_words = set(item.chunk_text.lower().split())
+        item_words = set(re.split(r"\s+", item.chunk_text.lower()))
         too_similar = False
         for kept_item in kept:
-            kept_words = set(kept_item.chunk_text.lower().split())
+            kept_words = set(re.split(r"\s+", kept_item.chunk_text.lower()))
             union = item_words | kept_words
             jaccard = len(item_words & kept_words) / len(union) if union else 0
             if jaccard > threshold:

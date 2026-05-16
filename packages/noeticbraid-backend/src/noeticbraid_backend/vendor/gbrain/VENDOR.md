@@ -17,3 +17,5 @@
 Deduplication, token-budget, and PII/eval scrubber behavior are ported into noeticbraid_backend.memory.recall_ranker and noeticbraid_backend.privacy.scrub.
 
 The production adapter is pure Python, additive, and does not introduce Node, Rust, network, or new runtime dependency requirements.
+
+recall_ranker.py mirrors gbrain dedup split(/\s+/) with re.split(r"\s+", …) so empty and leading-whitespace chunk_text preserve JS token parity.
