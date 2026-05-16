@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import os
+import secrets
+import stat
 from pathlib import Path
 
 from noeticbraid_backend.auth.dpapi import DpapiBlob
@@ -41,4 +44,77 @@ class CredentialVault:
         path.write_bytes(blob.ciphertext)
 
 
-__all__ = ["CredentialVault"]
+def load_or_create_local_startup_secret(secret_path: Path) -> bytes | None:
+    """Load or create a fail-closed portable startup secret."""
+
+    create_fd: int | None = None
+    load_fd: int | None = None
+    try:
+        path = Path(secret_path)
+        parent = path.parent
+        try:
+            parent_stat = os.stat(parent)
+        except FileNotFoundError:
+            os.makedirs(parent, mode=0o700, exist_ok=True)
+            os.chmod(parent, 0o700)
+            parent_stat = os.stat(parent)
+        if not stat.S_ISDIR(parent_stat.st_mode):
+            return None
+        if parent_stat.st_uid != os.geteuid():
+            return None
+        if stat.S_IMODE(parent_stat.st_mode) & 0o022 != 0:
+            return None
+
+        try:
+            create_fd = os.open(
+                path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                0o600,
+            )
+            secret = secrets.token_urlsafe(32).encode()
+            os.write(create_fd, secret)
+            os.fchmod(create_fd, 0o600)
+        except FileExistsError:
+            pass
+        finally:
+            if create_fd is not None:
+                try:
+                    os.close(create_fd)
+                finally:
+                    create_fd = None
+
+        load_fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        secret_stat = os.fstat(load_fd)
+        if not stat.S_ISREG(secret_stat.st_mode):
+            return None
+        if stat.S_IMODE(secret_stat.st_mode) & 0o077 != 0:
+            return None
+        if secret_stat.st_uid != os.geteuid():
+            return None
+
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(load_fd, 4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        secret = b"".join(chunks)
+        if not secret.strip():
+            return None
+        return secret
+    except Exception:
+        return None
+    finally:
+        if create_fd is not None:
+            try:
+                os.close(create_fd)
+            except OSError:
+                pass
+        if load_fd is not None:
+            try:
+                os.close(load_fd)
+            except OSError:
+                pass
+
+
+__all__ = ["CredentialVault", "load_or_create_local_startup_secret"]

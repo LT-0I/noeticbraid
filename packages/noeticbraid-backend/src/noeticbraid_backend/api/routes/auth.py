@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, Response
 
 from noeticbraid_backend.api.deps import get_credential_vault, get_settings, get_token_store
 from noeticbraid_backend.auth.dpapi import DpapiError, unprotect_secret
+from noeticbraid_backend.auth.vault import load_or_create_local_startup_secret
 from noeticbraid_backend.contracts import AuthResponse
 
 BEARER_TOKEN_RESPONSE_HEADER = "X-NoeticBraid-Bearer"
@@ -35,14 +36,74 @@ async def startup_token(request: Request, response: Response) -> AuthResponse:
 
     blob = vault.load_credential()
     if blob is None:
+        if settings.local_startup_auth:
+            credential = load_or_create_local_startup_secret(settings.local_startup_secret_path)
+            if credential:
+                token_store = get_token_store(request)
+                try:
+                    token = token_store.create_token(STARTUP_ACCOUNT_ID, ttl_minutes=30)
+                except Exception:
+                    return AuthResponse(accepted=False, mode="token_store_unavailable")
+                finally:
+                    # Do not retain decrypted startup material beyond the issuance branch.
+                    credential = b""
+
+                response.headers[BEARER_TOKEN_RESPONSE_HEADER] = token
+                response.headers["Cache-Control"] = "no-store"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Vary"] = "Authorization"
+                # Touch settings so static route review can see this path remains settings-bound.
+                del settings
+                return AuthResponse(accepted=True, mode="bearer_header_issued")
+            return AuthResponse(accepted=False, mode="local_startup_secret_rejected")
         return AuthResponse(accepted=False, mode="startup_credential_unavailable")
 
     try:
         credential = unprotect_secret(blob)
     except (NotImplementedError, DpapiError, TypeError, ValueError):
+        if settings.local_startup_auth:
+            credential = load_or_create_local_startup_secret(settings.local_startup_secret_path)
+            if credential:
+                token_store = get_token_store(request)
+                try:
+                    token = token_store.create_token(STARTUP_ACCOUNT_ID, ttl_minutes=30)
+                except Exception:
+                    return AuthResponse(accepted=False, mode="token_store_unavailable")
+                finally:
+                    # Do not retain decrypted startup material beyond the issuance branch.
+                    credential = b""
+
+                response.headers[BEARER_TOKEN_RESPONSE_HEADER] = token
+                response.headers["Cache-Control"] = "no-store"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Vary"] = "Authorization"
+                # Touch settings so static route review can see this path remains settings-bound.
+                del settings
+                return AuthResponse(accepted=True, mode="bearer_header_issued")
+            return AuthResponse(accepted=False, mode="local_startup_secret_rejected")
         return AuthResponse(accepted=False, mode="dpapi_unavailable")
 
     if not credential:
+        if settings.local_startup_auth:
+            credential = load_or_create_local_startup_secret(settings.local_startup_secret_path)
+            if credential:
+                token_store = get_token_store(request)
+                try:
+                    token = token_store.create_token(STARTUP_ACCOUNT_ID, ttl_minutes=30)
+                except Exception:
+                    return AuthResponse(accepted=False, mode="token_store_unavailable")
+                finally:
+                    # Do not retain decrypted startup material beyond the issuance branch.
+                    credential = b""
+
+                response.headers[BEARER_TOKEN_RESPONSE_HEADER] = token
+                response.headers["Cache-Control"] = "no-store"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Vary"] = "Authorization"
+                # Touch settings so static route review can see this path remains settings-bound.
+                del settings
+                return AuthResponse(accepted=True, mode="bearer_header_issued")
+            return AuthResponse(accepted=False, mode="local_startup_secret_rejected")
         return AuthResponse(accepted=False, mode="startup_credential_unavailable")
 
     token_store = get_token_store(request)

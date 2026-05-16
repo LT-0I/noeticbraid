@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 STATE_DIR_ENV = "NOETICBRAID_STATE_DIR"
 DPAPI_BLOB_PATH_ENV = "NOETICBRAID_DPAPI_BLOB_PATH"
+LOCAL_STARTUP_AUTH_ENV = "NOETICBRAID_LOCAL_STARTUP_AUTH"
 OMC_SOURCES_ENV = "NOETICBRAID_OMC_SOURCES"
 
 
@@ -31,6 +32,7 @@ class Settings(BaseModel):
 
     state_dir: Path = Field(default_factory=lambda: Path("state"))
     dpapi_blob_path: Path | None = None
+    local_startup_auth: bool = False
     omc_sources: list[tuple[Path, str]] = Field(default_factory=_default_omc_sources)
 
     @field_validator("state_dir", mode="before")
@@ -60,7 +62,16 @@ class Settings(BaseModel):
             dpapi_blob_path: Path | None = Path(explicit_blob)
         else:
             dpapi_blob_path = None
-        kwargs: dict[str, object] = {"state_dir": state_dir, "dpapi_blob_path": dpapi_blob_path}
+        raw_local_startup_auth = os.environ.get(LOCAL_STARTUP_AUTH_ENV)
+        local_startup_auth = (
+            raw_local_startup_auth is not None
+            and raw_local_startup_auth.strip().lower() in {"1", "true"}
+        )
+        kwargs: dict[str, object] = {
+            "state_dir": state_dir,
+            "dpapi_blob_path": dpapi_blob_path,
+            "local_startup_auth": local_startup_auth,
+        }
         if OMC_SOURCES_ENV in os.environ:
             kwargs["omc_sources"] = _parse_omc_sources(os.environ[OMC_SOURCES_ENV])
         return cls(**kwargs)
@@ -70,6 +81,12 @@ class Settings(BaseModel):
         """Return `{state_dir}/auth/tokens.sqlite`."""
 
         return self.state_dir / "auth" / "tokens.sqlite"
+
+    @property
+    def local_startup_secret_path(self) -> Path:
+        """Return `{state_dir}/auth/startup_secret`."""
+
+        return self.state_dir / "auth" / "startup_secret"
 
     @property
     def approval_queue_path(self) -> Path:
