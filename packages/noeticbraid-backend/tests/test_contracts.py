@@ -33,6 +33,7 @@ def test_contract_v1_4_0_minor_bump_preserves_frozen_routes() -> None:
         "WorkspaceThreads",
         "ApprovalQueue",
         "AccountPoolDraft",
+        "AccountStatusDetail",
         "RunLedgerRuns",
         "Task",
         "RunRecord",

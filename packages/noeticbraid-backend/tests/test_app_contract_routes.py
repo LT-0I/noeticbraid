@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: E402
 """Contract route smoke tests for frozen Phase 1.2 v1.2.0 paths."""
 
 from __future__ import annotations
@@ -84,6 +85,13 @@ EXPECTED_TARGET_OPERATIONS = {
         "account_pool_api_account_pool_get",
         "AccountPoolDraft",
     ),
+    "/api/account/status": (
+        "get",
+        ["account"],
+        "Account status detail",
+        "account_status_api_account_status_get",
+        "AccountStatusDetail",
+    ),
     "/api/ledger/runs": ("get", ["ledger"], "List run records", "ledger_runs_api_ledger_runs_get", "RunLedgerRuns"),
     "/api/ledger/runs/aggregate": (
         "get",
@@ -141,6 +149,13 @@ EXPECTED_TARGET_OPERATIONS = {
         "capability_health_check_api_capabilities_id_health_check_post",
         "CapabilityHealthCheckResponse",
     ),
+}
+
+EXPECTED_ACCOUNT_STATUS_ROUTE_SPEC = {
+    "method": "GET",
+    "path": "/api/account/status",
+    "summary": "Account status detail",
+    "response_schema": "AccountStatusDetail",
 }
 
 EXPECTED_FIXTURES = {
@@ -339,8 +354,9 @@ def test_ledger_route_skips_corrupted_jsonl_without_500(tmp_path: Path) -> None:
 
 def test_openapi_has_contract_paths_and_expected_response_schemas(tmp_path: Path) -> None:
     schema = _client(tmp_path).app.openapi()
-    assert set(schema["paths"].keys()) == {spec["path"] for spec in CONTRACT_1_3_ROUTE_SPECS}
-    for spec in CONTRACT_1_3_ROUTE_SPECS:
+    route_specs = (*CONTRACT_1_3_ROUTE_SPECS, EXPECTED_ACCOUNT_STATUS_ROUTE_SPEC)
+    assert set(schema["paths"].keys()) == {spec["path"] for spec in route_specs}
+    for spec in route_specs:
         operation = schema["paths"][spec["path"]][spec["method"].lower()]
         assert operation["summary"] == spec["summary"]
         ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
@@ -394,6 +410,7 @@ def test_contract_schema_names_include_frozen_and_d2_02_additions() -> None:
         "WorkspaceThreads",
         "ApprovalQueue",
         "AccountPoolDraft",
+        "AccountStatusDetail",
         "RunLedgerRuns",
         "Task",
         "RunRecord",
@@ -428,6 +445,7 @@ def test_openapi_components_contain_all_contract_schemas(tmp_path: Path) -> None
     assert "status" in components["HealthResponse"]["properties"]
     assert "accepted" in components["AuthResponse"]["properties"]
     assert "profiles" in components["AccountPoolDraft"]["properties"]
+    assert "accounts" in components["AccountStatusDetail"]["properties"]
     assert "runs" in components["RunLedgerRuns"]["properties"]
     assert "threads" in components["WorkspaceThreads"]["properties"]
     assert "approvals" in components["ApprovalQueue"]["properties"]

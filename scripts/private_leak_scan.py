@@ -202,6 +202,11 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         frozenset({"account_id"}),
         "SDD-D5-01 NotebookLM RPC pool exposes account_id as a public non-secret account selector field in schemas, fixtures, and tests",
     ),
+    AllowlistRule(
+        "scripts/notebooklm_pool.py",
+        frozenset({"account_id"}),
+        "NotebookLM pool helper emits account_id as a public non-secret account selector field; no private data",
+    ),
 )
 
 LINE_ALLOWLIST_RULES: tuple[MarkerLineAllowlistRule, ...] = (

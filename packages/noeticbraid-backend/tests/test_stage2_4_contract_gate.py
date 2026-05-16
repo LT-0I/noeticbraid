@@ -45,6 +45,7 @@ EXPECTED_RUNTIME_PATHS = (
     "/api/capabilities/{id}/health-check",
     "/api/approval/queue",
     "/api/account/pool",
+    "/api/account/status",
     "/api/ledger/runs",
     "/api/ledger/runs/aggregate",
 )
@@ -55,6 +56,7 @@ EXPECTED_SCHEMAS = {
     "WorkspaceThreads",
     "ApprovalQueue",
     "AccountPoolDraft",
+    "AccountStatusDetail",
     "RunLedgerRuns",
     "Task",
     "RunRecord",

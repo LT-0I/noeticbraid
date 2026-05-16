@@ -181,6 +181,12 @@ class AccountPoolDraft(_FrozenBaseModel):
     profiles: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class AccountStatusDetail(_FrozenBaseModel):
+    """Read-only first-batch account status response."""
+
+    accounts: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class RunLedgerRuns(_FrozenBaseModel):
     """Run ledger fixture response."""
 
@@ -382,6 +388,7 @@ ALL_SCHEMA_NAMES: tuple[str, ...] = (
     "WorkspaceThreads",
     "ApprovalQueue",
     "AccountPoolDraft",
+    "AccountStatusDetail",
     "RunLedgerRuns",
     "Task",
     "RunRecord",
@@ -426,6 +433,7 @@ __all__ = [
     "WorkspaceThreads",
     "ApprovalQueue",
     "AccountPoolDraft",
+    "AccountStatusDetail",
     "RunLedgerRuns",
     "OMCProjectTaskRequest",
     "OMCProjectTaskResponse",

@@ -149,7 +149,16 @@ EXPECTED_RUNTIME_ROUTES: tuple[dict[str, object], ...] = (
         "operation_id": "capability_health_check_api_capabilities_id_health_check_post",
         "response_schema": "CapabilityHealthCheckResponse",
     },
-    *EXPECTED_ROUTES[4:],
+    *EXPECTED_ROUTES[4:6],
+    {
+        "path": "/api/account/status",
+        "method": "get",
+        "tag": "account",
+        "summary": "Account status detail",
+        "operation_id": "account_status_api_account_status_get",
+        "response_schema": "AccountStatusDetail",
+    },
+    *EXPECTED_ROUTES[6:],
 )
 
 EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
@@ -174,7 +183,9 @@ EXPECTED_SCHEMA_NAMES: tuple[str, ...] = (
 )
 
 EXPECTED_RUNTIME_SCHEMA_NAMES: tuple[str, ...] = (
-    *EXPECTED_SCHEMA_NAMES,
+    *EXPECTED_SCHEMA_NAMES[:6],
+    "AccountStatusDetail",
+    *EXPECTED_SCHEMA_NAMES[6:],
     "WorkspaceProject",
     "CapabilityRegistryEntry",
     "CapabilityHealthResult",
@@ -196,6 +207,7 @@ EXPECTED_WRAPPER_FIELDS: dict[str, tuple[str, ...]] = {
     "WorkspaceThreads": ("threads",),
     "ApprovalQueue": ("approvals",),
     "AccountPoolDraft": ("profiles",),
+    "AccountStatusDetail": ("accounts",),
     "RunLedgerRuns": ("runs",),
 }
 
@@ -425,6 +437,8 @@ def _assert_frozen_contract(contract_text: str) -> tuple[str, ...]:
         _fail(f"frozen schema-name set mismatch: missing={sorted(missing)}, extra={sorted(extra)}")
 
     for schema_name, expected_fields in EXPECTED_WRAPPER_FIELDS.items():
+        if schema_name not in EXPECTED_SCHEMA_NAMES:
+            continue
         actual_fields = _schema_property_names_from_yaml(contract_text, schema_name)
         if actual_fields != expected_fields:
             _fail(f"frozen {schema_name} field order mismatch: actual={actual_fields}, expected={expected_fields}")
