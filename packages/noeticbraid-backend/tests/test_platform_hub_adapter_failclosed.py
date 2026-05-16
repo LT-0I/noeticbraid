@@ -24,7 +24,7 @@ from noeticbraid_backend.platform.orchestration import hub_adapter
 def test_hub_adapter_ok_response_is_redacted_and_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     secret = "sk-test_abcdefghijklmnop"
 
-    def fake_dispatch(op: str, params: dict[str, Any]) -> dict[str, Any]:
+    def fake_dispatch(op: str, params: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
         assert op == "webai_chatgpt_send_prompt"
         assert params["profile"] == "chatgpt"
         return {"ok": True, "response_text": f"model returned {secret}"}
@@ -52,7 +52,7 @@ def test_hub_adapter_structured_refusals_are_blocked(
     raw: dict[str, Any],
     status: str,
 ) -> None:
-    monkeypatch.setattr(hub_adapter._automation, "dispatch_web_ai", lambda _op, _params: raw)
+    monkeypatch.setattr(hub_adapter._automation, "dispatch_web_ai", lambda _op, _params, **_kwargs: raw)
 
     result = hub_adapter.dispatch("webai_chatgpt_send_prompt", {"profile": "chatgpt", "prompt": "hi"})
 

@@ -45,10 +45,10 @@ def test_dispatcher_sequences_hub_call_artifact_and_ledger_parity(
     monkeypatch.setenv("NOETICBRAID_PLATFORM_DATA_ROOT", str(tmp_path / "platform-data"))
     account = "beta_user_01"
     task = create_task(account, task_id="task_dispatch", title="Draft safely", modality_targets=["text"])
-    calls: list[tuple[str, dict[str, Any]]] = []
+    calls: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
 
-    def fake_dispatch(op: str, params: dict[str, Any]) -> dict[str, Any]:
-        calls.append((op, params))
+    def fake_dispatch(op: str, params: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+        calls.append((op, params, kwargs))
         return {"outcome": "ok", "status": "ok", "payload": {"ok": True, "response_text": "safe draft"}}
 
     monkeypatch.setattr(hub_adapter, "dispatch", fake_dispatch)
@@ -57,6 +57,7 @@ def test_dispatcher_sequences_hub_call_artifact_and_ledger_parity(
 
     assert calls and calls[0][0] == "webai_chatgpt_send_prompt"
     assert calls[0][1]["profile"] == "chatgpt"
+    assert calls[0][2] == {"account": account, "task_id": "task_dispatch"}
     assert [event.type for event in events].count("ai_delta") == 1
     assert [event.type for event in events].count("artifact") == 1
     assert events[-1].payload["message"] == "delivered"
@@ -80,7 +81,7 @@ def test_dispatcher_cancel_token_blocks_before_dispatch(
     cancel = asyncio.Event()
     cancel.set()
 
-    monkeypatch.setattr(hub_adapter, "dispatch", lambda _op, _params: pytest.fail("dispatch must not run"))
+    monkeypatch.setattr(hub_adapter, "dispatch", lambda *_args, **_kwargs: pytest.fail("dispatch must not run"))
 
     events = _collect(Dispatcher(account=account, user_text="cancel", cancel_event=cancel), task)
 
@@ -101,7 +102,7 @@ def test_dispatcher_max_step_bound_blocks_without_hub_call(
         title="Too many",
         modality_targets=["text", "document"],
     )
-    monkeypatch.setattr(hub_adapter, "dispatch", lambda _op, _params: pytest.fail("dispatch must not run"))
+    monkeypatch.setattr(hub_adapter, "dispatch", lambda *_args, **_kwargs: pytest.fail("dispatch must not run"))
 
     events = _collect(Dispatcher(account=account, user_text="two outputs", max_steps=1), task)
 
@@ -117,7 +118,7 @@ def test_dispatcher_unreachable_modality_blocks_without_fake_artifact(
     monkeypatch.setenv("NOETICBRAID_PLATFORM_DATA_ROOT", str(tmp_path / "platform-data"))
     account = "beta_user_04"
     task = create_task(account, task_id="task_image", title="Image", modality_targets=["image"])
-    monkeypatch.setattr(hub_adapter, "dispatch", lambda _op, _params: pytest.fail("dispatch must not run"))
+    monkeypatch.setattr(hub_adapter, "dispatch", lambda *_args, **_kwargs: pytest.fail("dispatch must not run"))
 
     events = _collect(Dispatcher(account=account, user_text="make an image"), task)
 

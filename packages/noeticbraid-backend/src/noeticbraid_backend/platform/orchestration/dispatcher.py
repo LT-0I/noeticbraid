@@ -4,19 +4,19 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 
 from noeticbraid_backend.memory.recall_ranker import RecallResult, rank_recall_results
 from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat
 from noeticbraid_backend.omc_workspace.web_ai_hub_client import sanitize_error_msg
 from noeticbraid_backend.orchestration import artifacts, ledger_contracts, verification_tier
+from noeticbraid_backend.platform.artifacts import store as artifact_store
 from noeticbraid_backend.platform.ledger.events import (
     LedgerEvent,
     ai_call_event,
-    artifact_produced_event,
     cross_validation_event,
 )
 from noeticbraid_backend.platform.ledger.writer import append_event, ledger_path_for
@@ -162,8 +162,12 @@ class Dispatcher:
                     current.task_id,
                     {"message": f"dispatching {step.modality}", "step": index, "total": total},
                 )
-                hub_result = await self._dispatch_step(step)
-                safe_payload = hub_adapter.redact_hub_response(hub_result.get("payload", hub_result))
+                hub_result = await self._dispatch_step(step, task_id=current.task_id)
+                safe_payload = _redact_hub_payload(
+                    self.account,
+                    current.task_id,
+                    hub_result.get("payload", hub_result),
+                )
                 gate_status = str(hub_result.get("status") or safe_payload.get("status") or "unknown")
                 ai_ledger = append_event(
                     self.account,
@@ -280,10 +284,16 @@ class Dispatcher:
             artifact_extension=route.artifact_extension,
         )
 
-    async def _dispatch_step(self, step: PlanStep) -> dict[str, Any]:
+    async def _dispatch_step(self, step: PlanStep, *, task_id: str) -> dict[str, Any]:
         try:
             return await asyncio.wait_for(
-                asyncio.to_thread(hub_adapter.dispatch, step.op, dict(step.params_template)),
+                asyncio.to_thread(
+                    hub_adapter.dispatch,
+                    step.op,
+                    dict(step.params_template),
+                    account=self.account,
+                    task_id=task_id,
+                ),
                 timeout=compat.AUTOMATION_TIMEOUT_SECONDS,
             )
         except TimeoutError:
@@ -308,27 +318,66 @@ class Dispatcher:
         yield Event("blocked", current.task_id, {"modality": modality or "task", "reason": safe_reason})
 
     def _write_artifact(self, task: Task, step: PlanStep, payload: dict[str, Any], *, index: int) -> LedgerEvent:
-        rel_path = f"tasks/{task.task_id}/artifacts/{index:02d}-{step.modality}.{step.artifact_extension}"
-        artifact_path = resolve_user_path(self.account, rel_path)
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        content = _artifact_content(step.modality, payload)
-        encoded = content.encode("utf-8")
-        artifact_path.write_bytes(encoded)
-        artifact_path.chmod(0o600)
-        return append_event(
+        artifact_store.persist(
             self.account,
-            artifact_produced_event(
-                task.task_id,
-                modality=step.modality,
-                rel_path=rel_path,
-                sha256=hashlib.sha256(encoded).hexdigest(),
-                bytes_count=len(encoded),
-            ),
+            task.task_id,
+            step.modality,
+            _artifact_bytes_or_path(self.account, task.task_id, step, payload, index=index),
         )
+        return _read_last_ledger_event(self.account, task.task_id)
 
     @staticmethod
     def _ledger_event(event: LedgerEvent) -> Event:
         return Event("ledger", event.task_id, event.to_json_dict())
+
+
+def _redact_hub_payload(account: str, task_id: str, payload: object) -> dict[str, Any]:
+    return hub_adapter.redact_hub_response(
+        payload,
+        task_id=task_id,
+        validated_artifact_path=_payload_artifact_path(account, task_id, payload),
+    )
+
+
+def _payload_artifact_path(account: str, task_id: str, payload: object) -> Path | None:
+    if not isinstance(payload, dict):
+        return None
+    path_value = payload.get("path")
+    if not isinstance(path_value, str) or not path_value.strip():
+        return None
+    normalized = path_value.replace("\\", "/")
+    if not normalized.startswith(f"tasks/{task_id}/artifacts/"):
+        return None
+    try:
+        artifact_path = resolve_user_path(account, path_value)
+    except ValueError:
+        return None
+    if artifact_path.is_file():
+        return artifact_path
+    return None
+
+
+def _artifact_bytes_or_path(
+    account: str,
+    task_id: str,
+    step: PlanStep,
+    payload: dict[str, Any],
+    *,
+    index: int,
+) -> bytes | Path:
+    path_value = payload.get("path")
+    if isinstance(path_value, str) and path_value.strip():
+        try:
+            artifact_path = resolve_user_path(account, path_value)
+        except ValueError:
+            artifact_path = None
+        else:
+            expected_prefix = f"tasks/{task_id}/artifacts/"
+            if path_value.replace("\\", "/").startswith(expected_prefix) and artifact_path.is_file():
+                return artifact_path
+
+    content = _artifact_content(step.modality, payload)
+    return content.encode("utf-8")
 
 
 def _artifact_content(modality: str, payload: dict[str, Any]) -> str:

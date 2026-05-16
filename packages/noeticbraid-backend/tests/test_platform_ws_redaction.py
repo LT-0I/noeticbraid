@@ -41,7 +41,7 @@ def test_ws_ai_delta_and_ledger_are_redacted(
     create_task(account, task_id="task_ws_redact", title="Redact", modality_targets=["text"])
     secret = "sk-test_abcdefghijklmnop"
 
-    def fake_dispatch(_op: str, _params: dict[str, Any]) -> dict[str, Any]:
+    def fake_dispatch(_op: str, _params: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
         return {
             "outcome": "ok",
             "status": "ok",
