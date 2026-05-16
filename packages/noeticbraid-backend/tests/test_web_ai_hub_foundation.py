@@ -364,6 +364,7 @@ def test_build_hub_env_scrubs_browser_executable_and_auto_confirm_without_mutati
     environ = {
         compat.CDP_HOST_ENV: "10.0.0.2",
         compat.CDP_PORT_ENV: "9444",
+        compat.CDP_ALLOW_NONLOOPBACK_ENV: "1",
         "WAH_BROWSER_EXECUTABLE": "/usr/bin/chrome",
         "WAH_AUTO_CONFIRM": "1",
         "KEEP": "yes",
@@ -420,6 +421,10 @@ def test_decision_order_short_circuits_env_allowlist_path_digest_probe_then_cdp(
     assert events == []
 
     monkeypatch.setattr(compat, "PINNED_HUB_EXEC_DIGEST", "different")
+    assert "exec closure" in automation.web_ai_hub_gate(PAGEFUL_OP, environ=_env(hub))["reason"]
+    assert events == []
+
+    monkeypatch.setattr(compat, "PINNED_HUB_EXEC_DIGEST", "0" * 64 if digest != "0" * 64 else "1" * 64)
     assert "exec closure" in automation.web_ai_hub_gate(PAGEFUL_OP, environ=_env(hub))["reason"]
     assert events == ["digest"]
 
