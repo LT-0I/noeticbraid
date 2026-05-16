@@ -87,7 +87,13 @@ def _error_dict(error_type: str, message: object, *, exit_code: int | None = Non
     return payload
 
 
-def run_hub_command(args: list[str], *, hub_path: Path, timeout: int = 15) -> dict[str, Any]:
+def run_hub_command(
+    args: list[str],
+    *,
+    hub_path: Path,
+    timeout: int = 15,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Run the hub CLI with argv-list subprocess semantics and parse JSON stdout.
 
     Failures are represented as sanitized dictionaries instead of exceptions so
@@ -95,14 +101,16 @@ def run_hub_command(args: list[str], *, hub_path: Path, timeout: int = 15) -> di
     """
 
     argv = ["node", str(_cli_path(Path(hub_path))), *args]
+    run_kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "timeout": timeout,
+        "check": False,
+        "text": True,
+    }
+    if env is not None:
+        run_kwargs["env"] = env
     try:
-        completed = subprocess.run(
-            argv,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
-            text=True,
-        )
+        completed = subprocess.run(argv, **run_kwargs)
     except subprocess.TimeoutExpired:
         return _error_dict("timeout", f"hub command timed out after {timeout} seconds")
     except FileNotFoundError as exc:
