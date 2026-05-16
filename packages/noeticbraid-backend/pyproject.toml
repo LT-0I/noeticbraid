@@ -16,6 +16,7 @@ dependencies = [
 noeticbraid = "noeticbraid_backend.cli.__main__:main"
 
 [project.optional-dependencies]
+platform = ["faster-whisper>=1,<2"]
 dev = [
     "pytest>=7.4",
     "httpx>=0.24",
