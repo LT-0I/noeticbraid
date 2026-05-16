@@ -158,6 +158,11 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         "platform seed test asserts account_id mapping; synthetic test, no secret",
     ),
     AllowlistRule(
+        "packages/noeticbraid-backend/src/noeticbraid_backend/vendor/**",
+        frozenset(MARKERS),
+        "third-party reference source vendored verbatim under MIT/Apache-2.0; no NoeticBraid secret material; not executed",
+    ),
+    AllowlistRule(
         "packages/noeticbraid-backend/src/noeticbraid_backend/api/routes/dashboard.py",
         frozenset({"account_id", "raw_token", "token_hash", "dpapi_blob", "credential_path", "profile_path", "profile_dir"}),
         "dashboard sanitizer denies these marker names from public summaries",
