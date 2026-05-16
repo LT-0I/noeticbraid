@@ -31,6 +31,7 @@ QUERY_MAX_CHARS = PROMPT_MAX_CHARS
 UPLOAD_FILE_MAX_BYTES = 33_554_432
 UPLOAD_FILE_MAX_COUNT_CLAUDE = 3
 UPLOAD_FILE_MAX_COUNT_DEFAULT = 3
+ARTIFACT_FILE_MAX_BYTES = 268_435_456
 RESPONSE_TEXT_MAX_CHARS = 16384
 SCALAR_MAX_CHARS = 512
 
@@ -71,6 +72,12 @@ RESPONSE_KEY_ALLOWLIST: frozenset[str] = frozenset(
         "results",
         "items",
         "conversationId",
+        "path",
+        "download_filename",
+        "sha256",
+        "size_bytes",
+        "dimensions",
+        "conversation_url",
     }
 )
 
@@ -98,7 +105,15 @@ DISPATCHABLE_D10_03: frozenset[str] = frozenset(
         "webai_gemini_workspace",
     }
 )
-DISPATCHABLE: frozenset[str] = DISPATCHABLE_D10_02 | DISPATCHABLE_D10_03
+DISPATCHABLE_D12: frozenset[str] = frozenset(
+    {
+        "webai_chatgpt_generate_image",
+        "webai_gemini_generate_image",
+        "webai_gemini_generate_video",
+        "webai_gemini_music_generate",
+    }
+)
+DISPATCHABLE: frozenset[str] = DISPATCHABLE_D10_02 | DISPATCHABLE_D10_03 | DISPATCHABLE_D12
 OP_TO_CLI_COMMAND: dict[str, str] = {
     "webai_chatgpt_send_prompt": "webai:chatgpt:send-prompt",
     "webai_claude_send_prompt": "webai:claude:send-prompt",
@@ -116,6 +131,10 @@ OP_TO_CLI_COMMAND: dict[str, str] = {
     "webai_chatgpt_workspace": "webai:chatgpt:workspace",
     "webai_claude_workspace": "webai:claude:workspace",
     "webai_gemini_workspace": "webai:gemini:workspace",
+    "webai_chatgpt_generate_image": "webai:chatgpt:generate-image",
+    "webai_gemini_generate_image": "webai:gemini:generate-image",
+    "webai_gemini_generate_video": "webai:gemini:generate-video",
+    "webai_gemini_music_generate": "webai:gemini:music:generate",
 }
 
 LAUNCH_SAFE_OPERATIONS: frozenset[str] = frozenset(
@@ -138,6 +157,10 @@ PAGEFUL_OPERATIONS: frozenset[str] = frozenset(
         "webai_chatgpt_workspace",
         "webai_claude_workspace",
         "webai_gemini_workspace",
+        "webai_chatgpt_generate_image",
+        "webai_gemini_generate_image",
+        "webai_gemini_generate_video",
+        "webai_gemini_music_generate",
         "browser_read",
     }
 )
@@ -151,6 +174,7 @@ HARD_EXCLUDED_PREFIXES: frozenset[str] = frozenset(
         "workflow_",
         "webai_chatgpt_generate_",
         "webai_claude_generate_",
+        "webai_claude_design_",
         "webai_gemini_generate_",
         "webai_chatgpt_canvas",
         "webai_gemini_canvas",
@@ -169,8 +193,6 @@ HARD_EXCLUDED_NAMES: frozenset[str] = frozenset(
         "site_capture_map",
         "browser_capture_site_map",
         "browser_update_adapter_notes",
-        "webai_gemini_generate_video",
-        "webai_gemini_music_generate",
         "webai_gemini_music_download_track",
         "webai_gemini_music_task_status",
     }
@@ -184,6 +206,8 @@ UPLOAD_FILE_KEYS = frozenset({"profile", "query", "files", "reuse_conversation",
 DEEP_RESEARCH_KEYS = frozenset({"profile", "query", "response_timeout_ms"})
 CONVERSATION_MANAGE_KEYS = frozenset({"profile", "action", "query"})
 WORKSPACE_KEYS = frozenset({"profile", "surface"})
+GENERATE_ARTIFACT_KEYS = frozenset({"profile", "prompt"})
+MUSIC_GENERATE_KEYS = frozenset({"profile", "prompt"})
 CONVERSATION_ACTION_ALLOWLIST_BY_OP: dict[str, frozenset[str]] = {
     "webai_chatgpt_conversation_manage": frozenset({"search", "menu_enumerate", "share"}),
     "webai_claude_conversation_manage": frozenset({"search", "share"}),
@@ -319,10 +343,12 @@ def is_hard_excluded(op) -> bool:
     """Return whether the operation is explicitly hard-excluded by design."""
 
     value = str(op or "")
-    return value in HARD_EXCLUDED_NAMES or any(value.startswith(prefix) for prefix in HARD_EXCLUDED_PREFIXES)
+    return value not in DISPATCHABLE and (
+        value in HARD_EXCLUDED_NAMES or any(value.startswith(prefix) for prefix in HARD_EXCLUDED_PREFIXES)
+    )
 
 
-def validate_request(op, params) -> tuple[list[str] | None, str | None]:
+def validate_request(op, params, *, download_dir: str | None = None) -> tuple[list[str] | None, str | None]:
     """Validate D10-02/D10-03 dispatch params and return a hub CLI argv tail."""
 
     operation = str(op or "")
@@ -334,6 +360,10 @@ def validate_request(op, params) -> tuple[list[str] | None, str | None]:
     if not isinstance(params, dict):
         return (None, "request rejected: params must be an object")
 
+    if operation.endswith("_generate_image") or operation == "webai_gemini_generate_video":
+        return _validate_generate_artifact(command, params, download_dir)
+    if operation == "webai_gemini_music_generate":
+        return _validate_music_generate(command, params)
     if operation == "webai_task_status":
         return _validate_task_status(command, params)
     if operation.endswith("_upload_and_query"):
@@ -502,6 +532,44 @@ def _validate_workspace(operation: str, command: str, params: dict) -> tuple[lis
     return ([command, "--profile", profile, "--surface", surface, "--output-json"], None)
 
 
+def _validate_generate_artifact(
+    command: str,
+    params: dict,
+    download_dir: str | None,
+) -> tuple[list[str] | None, str | None]:
+    if _has_rejected_keys(params, GENERATE_ARTIFACT_KEYS):
+        return (None, "request rejected: unsupported parameter")
+
+    profile, err = _validate_profile(params.get("profile"))
+    if err is not None:
+        return (None, err)
+    prompt, err = _validate_query_text(params.get("prompt"), field_name="prompt")
+    if err is not None:
+        return (None, err)
+    governed_dir, err = _validate_governed_download_dir(download_dir)
+    if err is not None:
+        return (None, err)
+
+    return (
+        [command, "--profile", profile, "--prompt", prompt, "--download-dir", governed_dir, "--output-json"],
+        None,
+    )
+
+
+def _validate_music_generate(command: str, params: dict) -> tuple[list[str] | None, str | None]:
+    if _has_rejected_keys(params, MUSIC_GENERATE_KEYS):
+        return (None, "request rejected: unsupported parameter")
+
+    profile, err = _validate_profile(params.get("profile"))
+    if err is not None:
+        return (None, err)
+    prompt, err = _validate_query_text(params.get("prompt"), field_name="prompt")
+    if err is not None:
+        return (None, err)
+
+    return ([command, "--profile", profile, "--prompt", prompt, "--output-json"], None)
+
+
 def _validate_profile(value) -> tuple[str | None, str | None]:
     if not isinstance(value, str) or PROFILE_RE.fullmatch(value) is None:
         return (None, "request rejected: invalid profile")
@@ -529,6 +597,18 @@ def _validate_response_timeout_flags(params: dict) -> tuple[list[str] | None, st
         clamped = min(180000, max(1000, timeout_ms))
         opt_flags.extend(["--response-timeout-ms", str(clamped)])
     return (opt_flags, None)
+
+
+def _validate_governed_download_dir(value: str | None) -> tuple[str | None, str | None]:
+    if not isinstance(value, str) or not value or len(value) > 4096:
+        return (None, "request rejected: artifact download_dir unavailable")
+    if value.startswith("--"):
+        return (None, "request rejected: artifact download_dir unavailable")
+    if _contains_any_control(value):
+        return (None, "request rejected: artifact download_dir unavailable")
+    if not Path(value).is_absolute():
+        return (None, "request rejected: artifact download_dir unavailable")
+    return (value, None)
 
 
 def _validate_upload_files(operation: str, value) -> tuple[list[str] | None, str | None]:
@@ -603,18 +683,22 @@ __all__ = [
     "CDP_PREFLIGHT_TIMEOUT_SECONDS",
     "CHAT_URL_HOST_ALLOWLIST",
     "ACTION_RE",
+    "ARTIFACT_FILE_MAX_BYTES",
     "CONVERSATION_ACTION_ALLOWLIST_BY_OP",
     "CONVERSATION_MANAGE_KEYS",
     "DEEP_RESEARCH_KEYS",
     "DISPATCHABLE",
     "DISPATCHABLE_D10_02",
     "DISPATCHABLE_D10_03",
+    "DISPATCHABLE_D12",
     "ENUMERATED_OFF_DIST_DEPS",
+    "GENERATE_ARTIFACT_KEYS",
     "HARD_EXCLUDED_NAMES",
     "HARD_EXCLUDED_PREFIXES",
     "HUB_PATH_ENV",
     "LAUNCH_SAFE_OPERATIONS",
     "MIN_HUB_PACKAGE_VERSION",
+    "MUSIC_GENERATE_KEYS",
     "OP_TO_CLI_COMMAND",
     "PAGEFUL_OPERATIONS",
     "PINNED_HUB_EXEC_DIGEST",

@@ -157,7 +157,7 @@ def test_d10_03_constants_are_closed_and_mapped() -> None:
     assert compat.UPLOAD_FILE_MAX_COUNT_CLAUDE == 3
     assert compat.UPLOAD_FILE_MAX_COUNT_DEFAULT == 3
     assert len(compat.DISPATCHABLE_D10_03) == 12
-    assert compat.DISPATCHABLE == compat.DISPATCHABLE_D10_02 | compat.DISPATCHABLE_D10_03
+    assert compat.DISPATCHABLE == compat.DISPATCHABLE_D10_02 | compat.DISPATCHABLE_D10_03 | compat.DISPATCHABLE_D12
 
     assert compat.OP_TO_CLI_COMMAND[UPLOAD_OP] == "webai:chatgpt:upload-and-query"
     assert compat.OP_TO_CLI_COMMAND["webai_claude_deep_research"] == "webai:claude:deep-research"
