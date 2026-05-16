@@ -10,12 +10,7 @@ from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat
 from noeticbraid_backend.omc_workspace.web_ai_hub_client import sanitize_error_msg
 
 BLOCKED_HUB_STATUSES = frozenset({"not_implemented", "HUB_NOT_BUILT", "approval_required", "error"})
-
-
-def redact_hub_response(raw: Any) -> dict[str, Any]:
-    """Re-assert hub response redaction at the platform boundary."""
-
-    return _automation.redact_hub_response(raw)
+redact_hub_response = _automation.redact_hub_response
 
 
 def dispatch(op: str, params: dict[str, Any]) -> dict[str, Any]:

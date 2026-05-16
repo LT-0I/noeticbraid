@@ -18,7 +18,7 @@ for path in (CORE_SRC_ROOT, SRC_ROOT):
 
 PLATFORM_ROOT = SRC_ROOT / "noeticbraid_backend" / "platform"
 HUB_IMPORT = "noeticbraid_backend.omc_workspace.web_ai_hub_automation"
-DISALLOWED_AI_ESCAPE_IMPORT_ROOTS = {"subprocess", "urllib", "httpx", "requests"}
+DISALLOWED_AI_ESCAPE_IMPORT_ROOTS = {"aiohttp", "http", "httpx", "requests", "socket", "subprocess", "urllib"}
 
 
 def _py_files() -> list[Path]:
