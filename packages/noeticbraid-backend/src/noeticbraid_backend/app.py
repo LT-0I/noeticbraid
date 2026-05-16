@@ -148,6 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(account.router)
     app.include_router(ledger.router)
     app.openapi = lambda: _build_custom_openapi(app)
+    importlib.import_module("noeticbraid_backend.platform.mount").maybe_mount_platform(app)
 
     return app
 
