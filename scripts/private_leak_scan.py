@@ -158,6 +158,11 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         "Console read-surface tests seed synthetic forbidden marker names for sanitizer assertions",
     ),
     AllowlistRule(
+        "packages/noeticbraid-backend/tests/test_auth_startup_token_contract.py",
+        frozenset({"raw_token"}),
+        "auth startup-token contract test binds the bearer raw_token to a local var and asserts it is absent from the public JSON body (present only in the response header); raw_token is a synthetic local-variable name, no private data",
+    ),
+    AllowlistRule(
         "packages/noeticbraid-backend/tests/test_capabilities_chatgpt_web.py",
         frozenset({"session_token", "profile_dir"}),
         "SDD-D2-06-hotfix-02 hub consumer:health response sanitizer test enumerates forbidden marker names to assert isdisjoint against response keys; no private data",
