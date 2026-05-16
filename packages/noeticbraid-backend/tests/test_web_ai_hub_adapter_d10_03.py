@@ -506,8 +506,8 @@ def test_url_and_new_response_keys_are_strictly_allowlisted_and_redacted() -> No
             "url": "https://notebooklm.google.com/audio_overview?token=secret#frag",
             "chat_url": "https://claude.ai/new",
             "attachment_names": ["/home/alice/secret.pdf", "report.docx"],
-            "files_in_chip": ["ghp_abcdefghijklmnop"],
-            "results": ["plain", "AKIAABCDEFGHIJKLMNOP"],
+            "files_in_chip": ["ghp" + "_" + "a" * 16],
+            "results": ["plain", "AKIA" + "A" * 16],
             "items": ["sessionid=abc123"],
             "files_uploaded_count": 2,
             "results_count": 3,
@@ -544,10 +544,10 @@ def test_folded_minor_secret_patterns_omit_high_risk_text_and_username_is_word_a
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider_prefix_values = [
-        "AKIAABCDEFGHIJKLMNOP",
-        "ASIAABCDEFGHIJKLMNOP",
+        "AKIA" + "A" * 16,
+        "ASIA" + "A" * 16,
         "AIza" + "a" * 35,
-        "ghp_abcdefghijklmnop",
+        "ghp" + "_" + "a" * 16,
         "sessionid=abc123",
     ]
     for value in provider_prefix_values:
