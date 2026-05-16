@@ -10,6 +10,7 @@ import type {
   OMCProjectTaskRequest,
   RunRecord,
 } from '@/types/contracts'
+import type { PlatformArtifact, PlatformTask } from '@/types/platform'
 
 import accountStatus from './fixtures/account_status.json'
 import approvals from './fixtures/approvals.json'
@@ -27,6 +28,24 @@ let candidates: CandidateLesson[] = omcProject.candidates.map((candidate) => ({ 
 let adoptedHistory: CandidateLesson[] = omcProject.adopted_history.map((candidate) => ({ ...candidate }))
 let omcRunRecords: RunRecord[] = omcProject.run_records.map((record) => ({ ...record }))
 let capabilities: CapabilityRegistryEntry[] = initialCapabilities.capabilities.map((capability) => ({ ...capability }))
+
+const platformArtifact: PlatformArtifact = {
+  modality: 'document',
+  rel_path: 'tasks/task_platform_seed/artifacts/01-document.md',
+  filename: 'brief.md',
+  sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  bytes: 128,
+}
+let platformTasks: PlatformTask[] = [
+  {
+    task_id: 'task_platform_seed',
+    title: 'Prepare launch brief',
+    state: 'created',
+    created_ts: '2026-05-16T12:00:00Z',
+    updated_ts: '2026-05-16T12:05:00Z',
+    modality_targets: ['document', 'slides'],
+  },
+]
 
 // SDD-D8-02: the happy-path startup token MSW handler issues the bearer in the
 // X-NoeticBraid-Bearer response header (same-origin, so readable in dev/test).
@@ -136,6 +155,47 @@ export const handlers = [
     })
   }),
   http.get('/api/capabilities', () => HttpResponse.json({ capabilities })),
+
+  http.get('/platform/tasks', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({ tasks: platformTasks })
+  }),
+  http.post('/platform/tasks', async ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const payload = (await request.json()) as { title: string; modality_targets: PlatformTask['modality_targets'] }
+    const task: PlatformTask = {
+      task_id: `task_platform_${platformTasks.length + 1}`,
+      title: payload.title,
+      state: 'created',
+      created_ts: utcNow(),
+      updated_ts: utcNow(),
+      modality_targets: payload.modality_targets,
+    }
+    platformTasks = [task, ...platformTasks]
+    return HttpResponse.json({ task })
+  }),
+  http.get('/platform/tasks/:taskId', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const task = platformTasks.find((item) => item.task_id === String(params.taskId))
+    if (!task) return HttpResponse.json({ detail: 'task not found' }, { status: 404 })
+    return HttpResponse.json({
+      task,
+      ledger: [
+        { event_type: 'task_created', state: task.state, created_at: task.created_ts },
+      ],
+      artifacts: task.task_id === 'task_platform_seed' ? [platformArtifact] : [],
+    })
+  }),
+  http.get('/platform/artifacts', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return new HttpResponse('# Mock platform artifact\n', {
+      headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+    })
+  }),
+  http.post('/platform/stt/transcribe', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({ status: 'not_provisioned' })
+  }),
   http.post('/api/auth/startup_token', () =>
     HttpResponse.json(
       { accepted: true, mode: 'bearer_header_issued' },

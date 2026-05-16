@@ -564,4 +564,12 @@ describe('console routes', () => {
     expect(screen.queryByText('/external-references')).not.toBeInTheDocument()
     expect(screen.queryByText('/sidenote-tracking')).not.toBeInTheDocument()
   })
+  test('platform route renders task list and appended nav item', async () => {
+    renderAt('/platform')
+    await waitFor(() => expect(screen.getByTestId('platform-root')).toBeInTheDocument())
+    expect(screen.getByTestId('nav-platform')).toHaveTextContent('Platform')
+    expect(screen.getByTestId('platform-task-list')).toHaveTextContent('Prepare launch brief')
+    expect(screen.getByTestId('platform-task-list')).toHaveTextContent('created')
+  })
+
 })
