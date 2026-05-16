@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # ruff: noqa: E402
-"""C6 flag-on platform E2E and D12 trusted-context wiring tests."""
+"""C8 flag-on platform E2E and D12 trusted-context wiring tests."""
 
 from __future__ import annotations
 
@@ -79,21 +79,36 @@ def test_flagged_platform_e2e_delivers_mapped_artifacts_blocks_unmapped_and_cont
         account,
         task_id="task_e2e_deliver",
         title="Deliver mapped modalities",
-        modality_targets=["text", "document", "slides", "poster"],
+        modality_targets=["text", "document", "slides", "poster", "image", "video"],
     )
     blocked_task = create_task(
         account,
         task_id="task_e2e_blocked",
-        title="Block unmapped modality",
-        modality_targets=["image"],
+        title="Block music modality",
+        modality_targets=["music"],
     )
     calls: list[tuple[str, dict[str, Any], dict[str, str | None]]] = []
+    expected_ops = {
+        "text": "webai_chatgpt_send_prompt",
+        "document": "webai_chatgpt_send_prompt",
+        "slides": "webai_chatgpt_send_prompt",
+        "poster": "webai_chatgpt_send_prompt",
+        "image": "webai_chatgpt_generate_image",
+        "video": "webai_gemini_generate_video",
+    }
+    expected_extensions = {"text": "md", "document": "md", "slides": "md", "poster": "md", "image": "png", "video": "mp4"}
 
     def fake_dispatch(op: str, params: dict[str, Any], *, account: str | None = None, task_id: str | None = None) -> dict[str, Any]:
         assert account == "beta_user_04"
         assert task_id == delivered_task.task_id
         modality = _requested_modality(params)
-        rel_path = f"tasks/{task_id}/artifacts/{modality}-hub.md"
+        assert op == expected_ops[modality]
+        if modality in {"image", "video"}:
+            assert set(params) == {"profile", "prompt"}
+        else:
+            assert params.get("reuse_conversation") is False
+            assert set(params) == {"profile", "prompt", "reuse_conversation"}
+        rel_path = f"tasks/{task_id}/artifacts/{modality}-hub.{expected_extensions[modality]}"
         content = f"{modality} artifact\n".encode("utf-8")
         artifact_path = resolve_user_path(account, rel_path)
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,27 +134,42 @@ def test_flagged_platform_e2e_delivers_mapped_artifacts_blocks_unmapped_and_cont
         websocket.send_json({"type": "user_message", "task_id": delivered_task.task_id, "text": "deliver all mapped"})
         delivered_frames = _receive_until_terminal(websocket)
 
-    assert calls and len(calls) == 4
+    assert calls and len(calls) == 6
     assert load_task(account, delivered_task.task_id).state is TaskState.DELIVERED
     assert replay(delivered_task.task_id, account=account) is TaskState.DELIVERED
     delivered_rows = _ledger_rows(account, delivered_task.task_id)
     delivered_ledger_frames = [frame["event"] for frame in delivered_frames if frame.get("type") == "ledger"]
     assert delivered_ledger_frames == delivered_rows[1:]
     artifact_rows = [row for row in delivered_rows if row["type"] == "artifact_produced"]
-    assert [row["payload"]["modality"] for row in artifact_rows] == ["text", "document", "slides", "poster"]
+    assert [row["payload"]["modality"] for row in artifact_rows] == [
+        "text",
+        "document",
+        "slides",
+        "poster",
+        "image",
+        "video",
+    ]
     for row in artifact_rows:
+        modality = row["payload"]["modality"]
+        assert row["payload"]["rel_path"] == (
+            f"tasks/{delivered_task.task_id}/artifacts/{modality}-hub.{expected_extensions[modality]}"
+        )
         assert resolve_user_path(account, row["payload"]["rel_path"]).is_file()
 
     with client.websocket_connect(f"/platform/ws/tasks/{blocked_task.task_id}") as websocket:
         websocket.send_json({"type": "auth", "token": token})
-        websocket.send_json({"type": "user_message", "task_id": blocked_task.task_id, "text": "make an image"})
+        websocket.send_json({"type": "user_message", "task_id": blocked_task.task_id, "text": "make music"})
         blocked_frames = _receive_until_terminal(websocket)
 
     assert blocked_frames[-1]["type"] == "blocked"
-    assert blocked_frames[-1]["modality"] == "image"
+    assert blocked_frames[-1]["modality"] == "music"
+    assert "posture-甲" in blocked_frames[-1]["reason"]
     assert load_task(account, blocked_task.task_id).state is TaskState.BLOCKED
     assert replay(blocked_task.task_id, account=account) is TaskState.BLOCKED
     assert not resolve_user_path(account, f"tasks/{blocked_task.task_id}/artifacts").exists()
+    blocked_rows = _ledger_rows(account, blocked_task.task_id)
+    assert not any(row["type"] == "artifact_produced" for row in blocked_rows)
+    assert sum(row["payload"].get("bytes", 0) for row in blocked_rows if row["type"] == "artifact_produced") == 0
 
     report = contract_gate.run_checks(REPO_ROOT)
     assert report.sidecar_sha256 == FROZEN_SIDECAR_SHA256
@@ -201,7 +231,7 @@ def test_d12_trusted_context_wiring_allows_governed_image_video_artifacts(
         modality=modality,
         op=op,
         vendor="hub",
-        params_template={"profile": "p", "prompt": "make", "reuse_conversation": False},
+        params_template={"profile": "p", "prompt": "make"},
         prompt_text="make",
         artifact_extension=extension,
     )
@@ -213,6 +243,7 @@ def test_d12_trusted_context_wiring_allows_governed_image_video_artifacts(
     basename = f"{modality}-hub.{extension}"
     assert calls[-1]["account"] == account
     assert calls[-1]["task_id"] == task_id
+    assert calls[-1]["params"] == {"profile": "p", "prompt": "make"}
     assert produced.type.value == "artifact_produced"
     assert produced.payload["modality"] == modality
     assert produced.payload["rel_path"] == f"tasks/{task_id}/artifacts/{basename}"

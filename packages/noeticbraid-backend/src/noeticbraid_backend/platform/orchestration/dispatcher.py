@@ -274,7 +274,15 @@ class Dispatcher:
         )
         if context and context != self.user_text.strip():
             prompt = f"{prompt}\n\nRanked context:\n{context}"
-        params = {"profile": route.profile, "prompt": prompt, "reuse_conversation": False}
+        if route.param_kind == "textual":
+            params = {"profile": route.profile, "prompt": prompt, "reuse_conversation": False}
+        elif route.param_kind == "generate":
+            # Generate ops accept ONLY compat.GENERATE_ARTIFACT_KEYS={"profile","prompt"};
+            # the governed --download-dir is injected by dispatch_web_ai from the
+            # C6-§1b dispatcher-trusted account/task_id, never via params.
+            params = {"profile": route.profile, "prompt": prompt}
+        else:  # forward-safety: a new ParamKind must be wired explicitly, not silently coerced
+            raise ValueError(f"unhandled modality param_kind: {route.param_kind!r}")
         return PlanStep(
             modality=route.modality,
             op=route.op,

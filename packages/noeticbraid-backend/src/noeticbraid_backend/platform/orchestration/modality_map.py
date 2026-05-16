@@ -9,6 +9,7 @@ from typing import Literal
 from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat
 
 RouteKind = Literal["route", "blocked"]
+ParamKind = Literal["textual", "generate"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,7 @@ class ModalityRoute:
     profile: str
     artifact_extension: str
     prompt_preamble: str
+    param_kind: ParamKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +40,7 @@ _TEXTUAL_ROUTE = {
     "vendor": "chatgpt",
     "profile": "chatgpt",
     "artifact_extension": "md",
+    "param_kind": "textual",
 }
 
 _MODALITY_ROUTES: dict[str, dict[str, str]] = {
@@ -57,9 +60,28 @@ _MODALITY_ROUTES: dict[str, dict[str, str]] = {
         **_TEXTUAL_ROUTE,
         "prompt_preamble": "Produce poster copy and layout guidance for this NoeticBraid platform task.",
     },
+    "image": {
+        "op": "webai_chatgpt_generate_image",
+        "vendor": "chatgpt",
+        "profile": "chatgpt",
+        "artifact_extension": "png",
+        "param_kind": "generate",
+        "prompt_preamble": "Generate a production-ready image for this NoeticBraid platform task.",
+    },
+    "video": {
+        "op": "webai_gemini_generate_video",
+        # vendor = "gemini" (hub op family); profile = "gemini-9225" is the actual
+        # logged-in Gemini browser profile in the hub's profile registry — the
+        # vendor/profile asymmetry is intentional, do not "normalize" them.
+        "vendor": "gemini",
+        "profile": "gemini-9225",
+        "artifact_extension": "mp4",
+        "param_kind": "generate",
+        "prompt_preamble": "Generate a concise video artifact for this NoeticBraid platform task.",
+    },
 }
 
-_UNREACHABLE_MODALITIES = frozenset({"image", "video", "music"})
+_UNREACHABLE_MODALITIES = frozenset({"music"})
 
 
 def resolve_modality(modality: str) -> ModalityRoute | ModalityBlocked:
@@ -72,7 +94,10 @@ def resolve_modality(modality: str) -> ModalityRoute | ModalityBlocked:
         return ModalityBlocked(
             kind="blocked",
             modality=normalized,
-            reason=f"no compat.DISPATCHABLE hub operation can produce modality {normalized}",
+            reason=(
+                "modality music is admitted but structurally blocked by posture-甲 "
+                "(no operator --confirmed)"
+            ),
         )
     route = _MODALITY_ROUTES.get(normalized)
     if route is None:
@@ -96,7 +121,8 @@ def resolve_modality(modality: str) -> ModalityRoute | ModalityBlocked:
         profile=route["profile"],
         artifact_extension=route["artifact_extension"],
         prompt_preamble=route["prompt_preamble"],
+        param_kind=route["param_kind"],
     )
 
 
-__all__ = ["ModalityBlocked", "ModalityRoute", "RouteKind", "resolve_modality"]
+__all__ = ["ModalityBlocked", "ModalityRoute", "ParamKind", "RouteKind", "resolve_modality"]

@@ -23,6 +23,7 @@ import pytest
 from noeticbraid_backend.platform.ledger.writer import ledger_path_for
 from noeticbraid_backend.platform.orchestration import hub_adapter
 from noeticbraid_backend.platform.orchestration.dispatcher import Dispatcher, Event
+from noeticbraid_backend.platform.orchestration.modality_map import ModalityRoute, resolve_modality
 from noeticbraid_backend.platform.tasks.models import TaskState
 from noeticbraid_backend.platform.tasks.store import create_task, load_task
 
@@ -71,6 +72,31 @@ def test_dispatcher_sequences_hub_call_artifact_and_ledger_parity(
     assert any(row["type"] == "artifact_produced" for row in rows)
 
 
+def test_dispatcher_builds_exact_params_per_route_param_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("NOETICBRAID_PLATFORM_DATA_ROOT", str(tmp_path / "platform-data"))
+    account = "beta_user_07"
+    dispatcher = Dispatcher(account=account, user_text="make the requested artifact")
+
+    text_task = create_task(account, task_id="task_text_params", title="Text params", modality_targets=["text"])
+    text_route = resolve_modality("text")
+    assert isinstance(text_route, ModalityRoute)
+    text_step = dispatcher._step_from_route(text_task, text_route, context="")
+    assert text_step.params_template == {
+        "profile": "chatgpt",
+        "prompt": text_step.prompt_text,
+        "reuse_conversation": False,
+    }
+
+    image_task = create_task(account, task_id="task_image_params", title="Image params", modality_targets=["image"])
+    image_route = resolve_modality("image")
+    assert isinstance(image_route, ModalityRoute)
+    image_step = dispatcher._step_from_route(image_task, image_route, context="")
+    assert image_step.params_template == {"profile": "chatgpt", "prompt": image_step.prompt_text}
+
+
 def test_dispatcher_cancel_token_blocks_before_dispatch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -111,18 +137,19 @@ def test_dispatcher_max_step_bound_blocks_without_hub_call(
     assert load_task(account, "task_bound").state is TaskState.BLOCKED
 
 
-def test_dispatcher_unreachable_modality_blocks_without_fake_artifact(
+def test_dispatcher_music_modality_blocks_without_fake_artifact(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("NOETICBRAID_PLATFORM_DATA_ROOT", str(tmp_path / "platform-data"))
     account = "beta_user_04"
-    task = create_task(account, task_id="task_image", title="Image", modality_targets=["image"])
+    task = create_task(account, task_id="task_music", title="Music", modality_targets=["music"])
     monkeypatch.setattr(hub_adapter, "dispatch", lambda *_args, **_kwargs: pytest.fail("dispatch must not run"))
 
-    events = _collect(Dispatcher(account=account, user_text="make an image"), task)
+    events = _collect(Dispatcher(account=account, user_text="make music"), task)
 
     assert events[-1].type == "blocked"
-    assert events[-1].payload["modality"] == "image"
-    assert "compat.DISPATCHABLE" in events[-1].payload["reason"]
+    assert events[-1].payload["modality"] == "music"
+    assert "posture-甲" in events[-1].payload["reason"]
+    assert "no operator --confirmed" in events[-1].payload["reason"]
     assert not any(event.type == "artifact" for event in events)
