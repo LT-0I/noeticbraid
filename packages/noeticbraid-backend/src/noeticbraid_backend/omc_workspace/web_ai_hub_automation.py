@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -61,7 +62,7 @@ def dispatch_web_ai(operation: str, params, *, environ=os.environ) -> dict[str, 
             return gate
 
         op = str(operation or "")
-        if op not in compat.DISPATCHABLE_D10_02:
+        if op not in compat.DISPATCHABLE:
             return {"status": "not_implemented", "reason": "operation not dispatchable in D10-02"}
 
         argv_tail, err = compat.validate_request(op, params)
@@ -250,9 +251,9 @@ def _redact_response_value(key: str, value: Any) -> Any | None:
     if key in {"response_text", "summary", "message"}:
         text = _strict_redact(str(value))
         return text[: compat.RESPONSE_TEXT_MAX_CHARS]
-    if key == "chat_url":
+    if key in {"chat_url", "url"}:
         return _sanitize_chat_url(value)
-    if key == "conversation_id":
+    if key in {"conversation_id", "conversationId"}:
         text = str(value)
         if "://" in text or not _conversation_id_valid(text):
             return None
@@ -262,11 +263,34 @@ def _redact_response_value(key: str, value: Any) -> Any | None:
         if compat.TASK_ID_RE.fullmatch(text) is None:
             return None
         return text
+    if key == "dialog_opened":
+        if isinstance(value, bool):
+            return value
+        return None
+    if key in {"files_uploaded_count", "results_count"}:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None
+        return value
+    if key in {"attachment_names", "files_in_chip", "results", "items"}:
+        if not isinstance(value, list) or len(value) > 64 or any(not isinstance(item, str) for item in value):
+            return None
+        return [_strict_redact(item)[: compat.SCALAR_MAX_CHARS] for item in value]
     if key in {"ok", "completion_detected", "elapsed_ms", "wait_ms", "reuse_conversation"}:
         if isinstance(value, (bool, int, float)):
             return value
         return None
-    if key in {"status", "errorCode", "error_code", "model_used", "progress_label", "reason", "requiredFor", "required_for"}:
+    if key in {
+        "status",
+        "errorCode",
+        "error_code",
+        "model_used",
+        "progress_label",
+        "reason",
+        "requiredFor",
+        "required_for",
+        "action",
+        "surface",
+    }:
         return sanitize_error_msg(str(value), max_chars=compat.SCALAR_MAX_CHARS)
     return None
 
@@ -281,8 +305,8 @@ def _strict_redact(value: str) -> str:
     if home:
         text = text.replace(home, "[home]")
     username = os.getenv("USER") or os.getenv("USERNAME") or ""
-    if username:
-        text = text.replace(username, "[user]")
+    if len(username) >= 3:
+        text = re.sub(r"\b" + re.escape(username) + r"\b", "[user]", text)
 
     text = compat._EMAIL_RE.sub("[email]", text)
     text = compat._JWT_RE.sub("[redacted]", text)
@@ -290,6 +314,8 @@ def _strict_redact(value: str) -> str:
     text = compat._SECRET_ASSIGNMENT_RE.sub(r"\1\2[redacted]", text)
     text = compat._OAUTH_ASSIGNMENT_RE.sub(r"\1\2[redacted]", text)
     text = compat._COOKIE_PAIR_RE.sub(r"\1=[redacted];", text)
+    text = compat._COOKIE_NOSEMI_RE.sub(r"\1=[redacted]", text)
+    text = compat._PROVIDER_PREFIX_TOKEN_RE.sub("[redacted]", text)
     text = compat._WINDOWS_ABSOLUTE_PATH_RE.sub("[path]", text)
     text = compat._POSIX_ABSOLUTE_PATH_RE.sub("[path]", text)
 
@@ -307,6 +333,10 @@ def _contains_high_risk_secret(value: str) -> bool:
             compat._SECRET_ASSIGNMENT_RE,
             compat._OAUTH_ASSIGNMENT_RE,
             compat._COOKIE_PAIR_RE,
+            compat._PROVIDER_PREFIX_TOKEN_RE,
+            compat._LONG_B64_RUN_RE,
+            compat._LONG_HEX_RUN_RE,
+            compat._COOKIE_NOSEMI_RE,
         )
     )
 

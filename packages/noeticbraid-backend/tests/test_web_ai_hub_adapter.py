@@ -21,7 +21,7 @@ from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat  # noq
 
 LAUNCH_SAFE_OP = "webai_task_status"
 PAGEFUL_OP = "webai_chatgpt_send_prompt"
-NON_DISPATCHABLE_PAGEFUL_OP = "webai_chatgpt_upload_and_query"
+NON_DISPATCHABLE_PAGEFUL_OP = "browser_read"
 
 
 class _FakeCdpResponse:
@@ -442,7 +442,7 @@ def test_redact_hub_response_allowlists_keys_and_strictly_redacts_sensitive_text
     assert "user@example.com" not in result["response_text"]
     assert "[redacted]" in result["response_text"]
     assert result["message"] == "password: [redacted]"
-    assert len(result["summary"]) == compat.RESPONSE_TEXT_MAX_CHARS
+    assert result["summary"] == "[omitted]"
 
     clean = automation.redact_hub_response(
         {
