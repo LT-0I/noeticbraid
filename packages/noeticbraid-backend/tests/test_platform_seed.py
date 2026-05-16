@@ -37,4 +37,4 @@ def test_seed_beta_accounts_writes_private_files_and_is_idempotent(tmp_path: Pat
         assert stat.S_IMODE(token_path.stat().st_mode) == 0o600
         record = store.verify_token(first_issued[account])
         assert record is not None
-        assert getattr(record, "account" "_id") == account
+        assert record.account_id == account

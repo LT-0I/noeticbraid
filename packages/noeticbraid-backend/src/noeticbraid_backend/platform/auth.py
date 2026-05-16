@@ -22,7 +22,7 @@ def require_platform_bearer(authorization_header: str | None, store: TokenStore 
     record = resolved_store.verify_token(presented.strip())
     if record is None:
         raise _unauthorized()
-    return str(getattr(record, "account" "_id"))
+    return str(record.account_id)
 
 
 def _unauthorized() -> HTTPException:

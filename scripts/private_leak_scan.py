@@ -143,6 +143,21 @@ ALLOWLIST_RULES: tuple[AllowlistRule, ...] = (
         "internal token store; raw material is returned once and hashes stay at rest",
     ),
     AllowlistRule(
+        "packages/noeticbraid-backend/src/noeticbraid_backend/platform/auth.py",
+        frozenset({"account_id"}),
+        "platform auth substrate binds the bearer token's account_id pydantic field to map a token to its beta-account workspace; account_id is a non-secret internal column name, never a credential and never emitted in public payloads",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-backend/src/noeticbraid_backend/platform/seed.py",
+        frozenset({"account_id"}),
+        "platform beta-account seeding references the account_id pydantic field to create the 5 internal-test accounts; account_id is a non-secret internal column name, no secret material, seeded tokens are written outside the git tree",
+    ),
+    AllowlistRule(
+        "packages/noeticbraid-backend/tests/test_platform_seed.py",
+        frozenset({"account_id"}),
+        "platform seed test asserts account_id mapping; synthetic test, no secret",
+    ),
+    AllowlistRule(
         "packages/noeticbraid-backend/src/noeticbraid_backend/api/routes/dashboard.py",
         frozenset({"account_id", "raw_token", "token_hash", "dpapi_blob", "credential_path", "profile_path", "profile_dir"}),
         "dashboard sanitizer denies these marker names from public summaries",

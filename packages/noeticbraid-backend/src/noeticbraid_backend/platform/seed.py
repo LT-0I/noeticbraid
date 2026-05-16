@@ -43,7 +43,7 @@ def _read_existing_active_token(store: TokenStore, token_path: Path, account: st
     except OSError:
         return None
     record = store.verify_token(issued)
-    if record is None or getattr(record, "account" "_id") != account:
+    if record is None or record.account_id != account:
         return None
     return issued
 
