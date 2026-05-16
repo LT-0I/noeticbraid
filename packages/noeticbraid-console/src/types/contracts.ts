@@ -336,3 +336,16 @@ export interface AccountStatusEntry {
 export interface AccountStatusResponse {
   accounts: AccountStatusEntry[]
 }
+
+// ============================================================
+// SDD-D8-02 startup bearer bootstrap (frontend view-type only;
+// consumes the already-shipped POST /api/auth/startup_token —
+// no backend contract change). The bearer itself is delivered
+// out-of-band in the X-NoeticBraid-Bearer response header, not
+// in this JSON body.
+// ============================================================
+
+export interface AuthResponse {
+  accepted: boolean
+  mode: string
+}

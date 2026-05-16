@@ -199,5 +199,15 @@
   "snapshot.racing": "Snapshot is converging; state may be momentarily stale.",
   "errors.accounts": "Failed to load account status.",
   "empty.accounts.title": "No accounts to show",
-  "empty.accounts.message": "First-batch end health and login state will appear here once the status endpoint reports them."
+  "empty.accounts.message": "First-batch end health and login state will appear here once the status endpoint reports them.",
+  "auth.unavailable.title": "Account access is unavailable",
+  "auth.unavailable.message": "The console could not obtain a startup credential ({{mode}}). Account status is hidden until the bearer is available; other views keep working.",
+  "auth.mode.bearer_header_issued": "bearer issued",
+  "auth.mode.dpapi_unavailable": "DPAPI unavailable",
+  "auth.mode.startup_credential_unavailable": "startup credential unavailable",
+  "auth.mode.token_store_unavailable": "token store unavailable",
+  "auth.mode.bearer_header_missing": "bearer header missing",
+  "auth.mode.network_unavailable": "network unavailable",
+  "auth.mode.unauthorized": "unauthorized",
+  "auth.mode.unknown": "unknown"
 }

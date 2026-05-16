@@ -5,6 +5,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 
 import './i18n'
 import './styles/global.css'
+import { ensureBearer } from './api/auth'
 import { routeTree } from './routes/routeTree'
 
 async function enableMocking() {
@@ -30,6 +31,9 @@ declare module '@tanstack/react-router' {
 }
 
 enableMocking().then(() => {
+  // Kick off the console-wide bearer bootstrap once at app load. It is
+  // single-flight, so AuthProvider re-uses this same in-flight promise.
+  void ensureBearer()
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>

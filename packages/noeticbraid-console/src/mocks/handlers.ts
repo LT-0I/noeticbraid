@@ -28,6 +28,14 @@ let adoptedHistory: CandidateLesson[] = omcProject.adopted_history.map((candidat
 let omcRunRecords: RunRecord[] = omcProject.run_records.map((record) => ({ ...record }))
 let capabilities: CapabilityRegistryEntry[] = initialCapabilities.capabilities.map((capability) => ({ ...capability }))
 
+// SDD-D8-02: the happy-path startup token MSW handler issues the bearer in the
+// X-NoeticBraid-Bearer response header (same-origin, so readable in dev/test).
+const MOCK_BEARER = 'mock-startup-bearer-token'
+
+function isAuthorized(request: Request): boolean {
+  return request.headers.get('Authorization') === `Bearer ${MOCK_BEARER}`
+}
+
 function utcNow(): string {
   return '2026-05-12T12:30:00Z'
 }
@@ -128,7 +136,20 @@ export const handlers = [
     })
   }),
   http.get('/api/capabilities', () => HttpResponse.json({ capabilities })),
-  http.get('/api/account/status', () => HttpResponse.json(accountStatus)),
+  http.post('/api/auth/startup_token', () =>
+    HttpResponse.json(
+      { accepted: true, mode: 'bearer_header_issued' },
+      { headers: { 'X-NoeticBraid-Bearer': MOCK_BEARER } },
+    ),
+  ),
+  http.get('/api/account/status', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json(accountStatus)
+  }),
+  http.get('/api/account/pool', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json(accountStatus)
+  }),
   http.post('/api/capabilities/:id/health-check', ({ params }) => {
     const capabilityId = String(params.id)
     const capability = capabilities.find((item) => item.capability_id === capabilityId)

@@ -2,6 +2,7 @@ import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import '@/i18n'
+import { AuthProvider } from '@/api/auth-context'
 import { LanguageToggle } from '@/components/ui'
 
 type NavItem = {
@@ -25,6 +26,7 @@ function RootLayout() {
   const { t } = useTranslation()
 
   return (
+    <AuthProvider>
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
         {t('nav.skipToMain')}
@@ -71,6 +73,7 @@ function RootLayout() {
         </main>
       </div>
     </div>
+    </AuthProvider>
   )
 }
 

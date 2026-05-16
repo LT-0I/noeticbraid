@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { AuthUnavailableError, clearBearer, ensureBearer, getBearer } from './auth'
+
 import type {
   AccountStatusResponse,
   ApprovalQueue,
@@ -23,18 +25,41 @@ function requestUrl(url: string): string {
   return new URL(url, window.location.origin).toString()
 }
 
+function withAuth(headers?: HeadersInit): HeadersInit | undefined {
+  const token = getBearer()
+  if (!token) return headers
+  return { ...(headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` }
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(requestUrl(url))
+  const doFetch = () => fetch(requestUrl(url), { headers: withAuth() })
+  let res = await doFetch()
+  if (res.status === 401) {
+    clearBearer()
+    const reboot = await ensureBearer()
+    if (!reboot.ok) throw new AuthUnavailableError(reboot.mode ?? 'unknown')
+    res = await doFetch()
+    if (res.status === 401) throw new AuthUnavailableError('unauthorized')
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
   return (await res.json()) as T
 }
 
 async function postJson<T>(url: string, body?: unknown): Promise<T> {
-  const res = await fetch(requestUrl(url), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  const doFetch = () =>
+    fetch(requestUrl(url), {
+      method: 'POST',
+      headers: withAuth({ 'Content-Type': 'application/json' }),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  let res = await doFetch()
+  if (res.status === 401) {
+    clearBearer()
+    const reboot = await ensureBearer()
+    if (!reboot.ok) throw new AuthUnavailableError(reboot.mode ?? 'unknown')
+    res = await doFetch()
+    if (res.status === 401) throw new AuthUnavailableError('unauthorized')
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
   return (await res.json()) as T
 }
@@ -48,11 +73,9 @@ export const submitOmcTask = (payload: OMCProjectTaskRequest) =>
 export const adoptCandidate = (candidateId: string) =>
   postJson<CandidateAdoptionResponse>(`/api/candidates/${candidateId}/adopt`)
 export const fetchCapabilities = () => fetchJson<CapabilitiesResponse>('/api/capabilities')
-// TODO(D8-02-auth): GET /api/account/status is bearer-protected (same auth as
-// /api/account/pool) per SDD-D8-01. The console currently has no bearer/token
-// mechanism in client.ts (fetchJson is unauthenticated; dev/test use MSW), so
-// no auth header is injected here. When a console-wide bearer mechanism lands,
-// route this call through it instead of inventing a new auth path.
+// GET /api/account/status is bearer-protected (same auth as /api/account/pool)
+// per SDD-D8-01/D8-02. fetchJson now injects the console-wide bearer and
+// re-bootstraps once on 401, so this routes through the authed path.
 export const fetchAccountStatus = () => fetchJson<AccountStatusResponse>('/api/account/status')
 export const healthCheckCapability = (capabilityId: string) =>
   postJson<CapabilityHealthCheckResponse>(`/api/capabilities/${capabilityId}/health-check`)

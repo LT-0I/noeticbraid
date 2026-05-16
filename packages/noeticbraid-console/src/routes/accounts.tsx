@@ -1,6 +1,7 @@
 import { createRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { useAuthState } from '@/api/auth-context'
 import { useAccountStatus } from '@/api/client'
 import {
   AccountHealthBadge,
@@ -21,9 +22,33 @@ function formatUtc(value: string): string {
   return new Date(ms).toISOString().replace('T', ' ').replace('.000Z', 'Z')
 }
 
+function authModeLabel(t: ReturnType<typeof useTranslation>['t'], mode: string): string {
+  const key = `auth.mode.${mode}`
+  const label = t(key)
+  return label === key ? mode : label
+}
+
 function AccountsPage() {
   const { t } = useTranslation()
+  const auth = useAuthState()
   const accounts = useAccountStatus()
+
+  if (auth.status === 'booting') {
+    return <div data-testid="accounts-loading" className="state-panel">{t('state.loading')}</div>
+  }
+  if (auth.status === 'degraded') {
+    return (
+      <section data-testid="accounts-root" className="stack">
+        <PageHeader title={t('routes.accounts.title')} subtitle={t('routes.accounts.subtitle')} />
+        <div data-testid="auth-unavailable" className="state-panel state-panel--error">
+          <EmptyState
+            title={t('auth.unavailable.title')}
+            message={t('auth.unavailable.message', { mode: authModeLabel(t, auth.mode) })}
+          />
+        </div>
+      </section>
+    )
+  }
 
   if (accounts.isLoading) {
     return <div data-testid="accounts-loading" className="state-panel">{t('state.loading')}</div>

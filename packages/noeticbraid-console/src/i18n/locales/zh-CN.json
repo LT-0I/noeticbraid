@@ -198,5 +198,15 @@
   "snapshot.racing": "快照收敛中，状态可能短暂滞后。",
   "errors.accounts": "无法载入账号状态。",
   "empty.accounts.title": "暂无账号状态",
-  "empty.accounts.message": "状态端点返回数据后，首批端点的健康与登录态将显示在此处。"
+  "empty.accounts.message": "状态端点返回数据后，首批端点的健康与登录态将显示在此处。",
+  "auth.unavailable.title": "账号访问不可用",
+  "auth.unavailable.message": "控制台未能获取启动凭据（{{mode}}）。在 bearer 可用前账号状态将被隐藏；其他视图仍可正常使用。",
+  "auth.mode.bearer_header_issued": "已签发 bearer",
+  "auth.mode.dpapi_unavailable": "DPAPI 不可用",
+  "auth.mode.startup_credential_unavailable": "启动凭据不可用",
+  "auth.mode.token_store_unavailable": "令牌存储不可用",
+  "auth.mode.bearer_header_missing": "缺少 bearer 响应头",
+  "auth.mode.network_unavailable": "网络不可用",
+  "auth.mode.unauthorized": "未授权",
+  "auth.mode.unknown": "未知"
 }
