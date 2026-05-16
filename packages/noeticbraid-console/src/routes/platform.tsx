@@ -491,7 +491,10 @@ function ArtifactCard({ artifact }: { artifact: PlatformArtifact }) {
       document.body.append(anchor)
       anchor.click()
       anchor.remove()
-      URL.revokeObjectURL(url)
+      // Defer revoke: revoking synchronously can abort the just-started
+      // download in some browsers because the click-initiated fetch of the
+      // object URL has not necessarily begun by the next statement.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } finally {
       setDownloading(false)
     }
@@ -551,7 +554,9 @@ function ProgressRail({ items }: { items: ProgressItem[] }) {
       ) : (
         <ol className="platform-timeline">
           {items.map((item, index) => {
-            const current = index === items.length - 1 && item.state !== 'complete'
+            // Only a genuinely in-progress last item is "current"; terminal
+            // states (complete/blocked/error) must not keep pulsing.
+            const current = index === items.length - 1 && item.state === 'active'
             return (
               <li key={item.id} className={`platform-timeline-item platform-timeline-item--${item.state}${current ? ' platform-timeline-item--current' : ''}`}>
                 <span className="platform-timeline-dot" aria-hidden="true" />
