@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type {
+  AccountStatusResponse,
   ApprovalQueue,
   CandidateAdoptionResponse,
   CapabilitiesResponse,
@@ -47,6 +48,12 @@ export const submitOmcTask = (payload: OMCProjectTaskRequest) =>
 export const adoptCandidate = (candidateId: string) =>
   postJson<CandidateAdoptionResponse>(`/api/candidates/${candidateId}/adopt`)
 export const fetchCapabilities = () => fetchJson<CapabilitiesResponse>('/api/capabilities')
+// TODO(D8-02-auth): GET /api/account/status is bearer-protected (same auth as
+// /api/account/pool) per SDD-D8-01. The console currently has no bearer/token
+// mechanism in client.ts (fetchJson is unauthenticated; dev/test use MSW), so
+// no auth header is injected here. When a console-wide bearer mechanism lands,
+// route this call through it instead of inventing a new auth path.
+export const fetchAccountStatus = () => fetchJson<AccountStatusResponse>('/api/account/status')
 export const healthCheckCapability = (capabilityId: string) =>
   postJson<CapabilityHealthCheckResponse>(`/api/capabilities/${capabilityId}/health-check`)
 
@@ -96,6 +103,12 @@ export const useCapabilities = () =>
   useQuery({
     queryKey: ['capabilities'],
     queryFn: fetchCapabilities,
+  })
+
+export const useAccountStatus = () =>
+  useQuery({
+    queryKey: ['account', 'status'],
+    queryFn: fetchAccountStatus,
   })
 
 export const useSubmitOmcTask = () => {

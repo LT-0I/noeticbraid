@@ -1,0 +1,44 @@
+{
+  "accounts": [
+    {
+      "capability_id": "cap_claude_code_cli",
+      "display_name": "Claude Code CLI",
+      "provider": "anthropic",
+      "end_type": "cli",
+      "login_state": "logged_in",
+      "health": "ok",
+      "checked_at": "2026-05-12T12:30:00Z",
+      "snapshot_state": "ok"
+    },
+    {
+      "capability_id": "cap_codex_cli",
+      "display_name": "Codex CLI",
+      "provider": "openai",
+      "end_type": "cli",
+      "login_state": "logged_out",
+      "health": "fail",
+      "checked_at": "2026-05-12T12:31:00Z",
+      "snapshot_state": "ok"
+    },
+    {
+      "capability_id": "cap_gemini_cli",
+      "display_name": "Gemini CLI",
+      "provider": "google",
+      "end_type": "cli",
+      "login_state": "unknown",
+      "health": "unknown",
+      "checked_at": "2026-05-12T12:32:00Z",
+      "snapshot_state": "racing"
+    },
+    {
+      "capability_id": "cap_gemini_web",
+      "display_name": "Gemini Web",
+      "provider": "google",
+      "end_type": "web",
+      "login_state": "logged_in",
+      "health": "ok",
+      "checked_at": "2026-05-12T12:33:00Z",
+      "snapshot_state": "racing"
+    }
+  ]
+}

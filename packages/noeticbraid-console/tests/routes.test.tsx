@@ -504,6 +504,57 @@ describe('console routes', () => {
     )
   })
 
+  test('accounts route renders content list from API', async () => {
+    renderAt('/accounts')
+    await waitFor(() => expect(screen.getByTestId('accounts-root')).toBeInTheDocument())
+
+    expect(screen.getByTestId('account-list').querySelectorAll('li')).toHaveLength(4)
+    expect(screen.getByTestId('account-item-cap_claude_code_cli')).toHaveTextContent('Claude Code CLI')
+    expect(screen.getByTestId('account-health-badge-cap_claude_code_cli')).toHaveTextContent('ok')
+    expect(screen.getByTestId('account-health-badge-cap_claude_code_cli').style.color).toBe('green')
+    expect(screen.getByTestId('account-health-badge-cap_codex_cli')).toHaveTextContent('fail')
+    expect(screen.getByTestId('account-health-badge-cap_codex_cli').style.color).toBe('red')
+    expect(screen.getByTestId('account-login-badge-cap_claude_code_cli')).toHaveTextContent('logged in')
+    expect(screen.getByTestId('account-login-badge-cap_codex_cli')).toHaveTextContent('logged out')
+    expect(screen.getByTestId('account-health-badge-cap_gemini_cli')).toHaveTextContent('unknown')
+  })
+
+  test('accounts route omits snapshot row when ok and shows muted hint when racing', async () => {
+    renderAt('/accounts')
+    await waitFor(() => expect(screen.getByTestId('accounts-root')).toBeInTheDocument())
+
+    expect(
+      screen.getByTestId('account-item-cap_claude_code_cli').querySelectorAll('dt'),
+    ).toHaveLength(4)
+    expect(
+      screen.getByTestId('account-item-cap_gemini_cli').querySelectorAll('dt'),
+    ).toHaveLength(5)
+    expect(screen.getByTestId('account-item-cap_gemini_cli')).toHaveTextContent(
+      'Snapshot is converging; state may be momentarily stale.',
+    )
+  })
+
+  test('accounts route shows nav entry and is read-only', async () => {
+    renderAt('/accounts')
+    await waitFor(() => expect(screen.getByTestId('accounts-root')).toBeInTheDocument())
+
+    expect(screen.getByTestId('nav-accounts')).toHaveTextContent('Account Status')
+    expect(screen.getByTestId('accounts-root').querySelectorAll('button')).toHaveLength(0)
+  })
+
+  test('accounts route shows empty state when API returns no accounts', async () => {
+    server.use(http.get('/api/account/status', () => HttpResponse.json({ accounts: [] })))
+    renderAt('/accounts')
+    await waitFor(() => expect(screen.getByTestId('accounts-root')).toBeInTheDocument())
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+  })
+
+  test('accounts route shows loading then error state', async () => {
+    server.use(http.get('/api/account/status', () => new HttpResponse(null, { status: 500 })))
+    renderAt('/accounts')
+    await waitFor(() => expect(screen.getByTestId('accounts-error')).toBeInTheDocument())
+  })
+
   test('does not register external references or sidenote tracking routes', async () => {
     renderAt('/')
     await waitFor(() => expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument())

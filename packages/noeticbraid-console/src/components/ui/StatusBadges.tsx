@@ -1,6 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
-import type { CandidateLesson, CapabilityStatus, R6GateStatus } from '@/types/contracts'
+import type {
+  AccountHealth,
+  AccountLoginState,
+  CandidateLesson,
+  CapabilityStatus,
+  R6GateStatus,
+} from '@/types/contracts'
 
 import { Badge, type BadgeTone } from './Badge'
 
@@ -47,6 +53,61 @@ export function R6GateBadge({ candidate }: { candidate: CandidateLesson }) {
       legacyTextDecoration={badgeStyle.expired ? 'line-through' : undefined}
     >
       {t('routes.omcIngest.r6Gate', { status: t(`status.${status}`) })}
+    </Badge>
+  )
+}
+
+function accountHealthTone(value: AccountHealth): LegacyBadgeStyle {
+  if (value === 'ok') return { tone: 'success', legacyColor: 'green' }
+  if (value === 'fail') return { tone: 'error', legacyColor: 'red' }
+  return { tone: 'neutral', legacyColor: 'gray' }
+}
+
+function accountLoginTone(value: AccountLoginState): LegacyBadgeStyle {
+  if (value === 'logged_in') return { tone: 'success', legacyColor: 'green' }
+  if (value === 'logged_out') return { tone: 'warning', legacyColor: 'gray' }
+  return { tone: 'neutral', legacyColor: 'gray' }
+}
+
+export function AccountHealthBadge({
+  capabilityId,
+  value,
+}: {
+  capabilityId: string
+  value: AccountHealth
+}) {
+  const { t } = useTranslation()
+  const badgeStyle = accountHealthTone(value)
+
+  return (
+    <Badge
+      data-testid={`account-health-badge-${capabilityId}`}
+      tone={badgeStyle.tone}
+      dot={value === 'ok'}
+      legacyColor={badgeStyle.legacyColor}
+    >
+      {t(`health.${value}`)}
+    </Badge>
+  )
+}
+
+export function AccountLoginStateBadge({
+  capabilityId,
+  value,
+}: {
+  capabilityId: string
+  value: AccountLoginState
+}) {
+  const { t } = useTranslation()
+  const badgeStyle = accountLoginTone(value)
+
+  return (
+    <Badge
+      data-testid={`account-login-badge-${capabilityId}`}
+      tone={badgeStyle.tone}
+      legacyColor={badgeStyle.legacyColor}
+    >
+      {t(`loginState.${value}`)}
     </Badge>
   )
 }

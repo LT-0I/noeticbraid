@@ -311,3 +311,28 @@ export interface CapabilityHealthCheckResponse {
   capability: CapabilityRegistryEntry
   result: CapabilityHealthResult
 }
+
+// ============================================================
+// SDD-D8-01 read-only account status (frontend view-type only;
+// consumes the already-shipped GET /api/account/status — no
+// backend contract change)
+// ============================================================
+
+export type AccountLoginState = 'logged_in' | 'logged_out' | 'unknown'
+export type AccountHealth = 'ok' | 'fail' | 'unknown'
+export type AccountSnapshotState = 'ok' | 'racing'
+
+export interface AccountStatusEntry {
+  capability_id: string
+  display_name: string
+  provider: string
+  end_type: CapabilityEndType
+  login_state: AccountLoginState
+  health: AccountHealth
+  checked_at: string
+  snapshot_state: AccountSnapshotState
+}
+
+export interface AccountStatusResponse {
+  accounts: AccountStatusEntry[]
+}

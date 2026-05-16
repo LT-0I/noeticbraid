@@ -1,4 +1,5 @@
 import { rootRoute } from './__root'
+import { accountsRoute } from './accounts'
 import { approvalsRoute } from './approvals'
 import { capabilitiesRoute } from './capabilities'
 import { indexRoute } from './index'
@@ -13,4 +14,5 @@ export const routeTree = rootRoute.addChildren([
   approvalsRoute,
   omcIngestRoute,
   capabilitiesRoute,
+  accountsRoute,
 ])

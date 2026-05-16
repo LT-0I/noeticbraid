@@ -11,6 +11,7 @@ import type {
   RunRecord,
 } from '@/types/contracts'
 
+import accountStatus from './fixtures/account_status.json'
 import approvals from './fixtures/approvals.json'
 import capabilitiesFixture from './fixtures/capabilities.json'
 import dashboardEmpty from './fixtures/dashboard_empty.json'
@@ -127,6 +128,7 @@ export const handlers = [
     })
   }),
   http.get('/api/capabilities', () => HttpResponse.json({ capabilities })),
+  http.get('/api/account/status', () => HttpResponse.json(accountStatus)),
   http.post('/api/capabilities/:id/health-check', ({ params }) => {
     const capabilityId = String(params.id)
     const capability = capabilities.find((item) => item.capability_id === capabilityId)

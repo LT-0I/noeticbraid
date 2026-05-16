@@ -18,6 +18,7 @@ const navItems: readonly NavItem[] = [
   { to: '/approvals', labelKey: 'nav.approvals', testId: 'nav-approvals' },
   { to: '/projects/omc-ingest', labelKey: 'nav.projects', testId: 'nav-projects' },
   { to: '/capabilities', labelKey: 'nav.capabilities', testId: 'nav-capabilities' },
+  { to: '/accounts', labelKey: 'nav.accounts', testId: 'nav-accounts' },
 ]
 
 function RootLayout() {

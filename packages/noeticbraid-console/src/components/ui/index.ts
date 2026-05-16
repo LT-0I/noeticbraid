@@ -6,4 +6,11 @@ export { EmptyState } from './EmptyState'
 export { LanguageToggle } from './LanguageToggle'
 export { PageHeader } from './PageHeader'
 export { Table } from './Table'
-export { CapabilityStatusBadge, R6GateBadge, capabilityTone, r6GateStatus } from './StatusBadges'
+export {
+  AccountHealthBadge,
+  AccountLoginStateBadge,
+  CapabilityStatusBadge,
+  R6GateBadge,
+  capabilityTone,
+  r6GateStatus,
+} from './StatusBadges'
