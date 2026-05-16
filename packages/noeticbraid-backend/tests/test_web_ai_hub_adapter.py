@@ -413,6 +413,7 @@ def test_dispatch_invalid_request_does_not_spawn_after_ready_gate(tmp_path: Path
 def test_redact_hub_response_allowlists_keys_and_strictly_redacts_sensitive_text() -> None:
     dirty = {
         "ok": True,
+        "completion_detected": True,
         "response_text": (
             "sid=abc123456; bearer supersecret api_key=sekret "
             "eyJabc.def.ghi /home/l1u user@example.com"
@@ -586,7 +587,7 @@ def test_dispatch_and_redaction_failure_paths_never_raise(tmp_path: Path, monkey
     }
 
     assert automation.redact_hub_response({}) == {"status": "error"}
-    assert automation.redact_hub_response({"ok": True}) == {"ok": True, "status": "ok"}
+    assert automation.redact_hub_response({"ok": True}) == {"ok": True, "status": "error"}
     assert automation.redact_hub_response({"ok": False}) == {"ok": False, "status": "error"}
 
 

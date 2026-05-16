@@ -503,6 +503,7 @@ def test_url_and_new_response_keys_are_strictly_allowlisted_and_redacted() -> No
     result = automation.redact_hub_response(
         {
             "ok": True,
+            "status": "ok",
             "url": "https://notebooklm.google.com/audio_overview?token=secret#frag",
             "chat_url": "https://claude.ai/new",
             "attachment_names": ["/home/alice/secret.pdf", "report.docx"],
@@ -644,4 +645,4 @@ def test_dispatch_and_redaction_failure_paths_never_raise_for_d10_03(
     assert "secret" not in result["reason"]
     assert len(_dispatch_calls(calls)) == 1
 
-    assert automation.redact_hub_response({"ok": True, "results": [object()]}) == {"ok": True, "status": "ok"}
+    assert automation.redact_hub_response({"ok": True, "results": [object()]}) == {"ok": True, "status": "error"}

@@ -43,7 +43,7 @@ def dispatch(
         validated_artifact_path=_artifact_path_for_redaction(raw, account=account, task_id=task_id),
     )
     status = str(payload.get("status") or "")
-    if payload.get("ok") is not True or status in BLOCKED_HUB_STATUSES:
+    if status != "ok" or status in BLOCKED_HUB_STATUSES:
         return _blocked(payload)
     return {"outcome": "ok", "status": status or "ok", "payload": payload}
 

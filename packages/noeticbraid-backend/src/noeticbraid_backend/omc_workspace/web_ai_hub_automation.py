@@ -317,7 +317,10 @@ def _redact_hub_response(
             result[key] = redacted
 
     if "status" not in result:
-        if result.get("ok") is True:
+        has_error_code = "errorCode" in result or "error_code" in result
+        completed_prompt = result.get("completion_detected") is True and "response_text" in result
+        completed_generate = validated_artifact_path is not None
+        if not has_error_code and (completed_prompt or completed_generate):
             result["status"] = "ok"
         else:
             result["status"] = "error"
@@ -393,6 +396,8 @@ def _redact_response_value(
         "action",
         "surface",
     }:
+        if key in {"errorCode", "error_code"} and value is None:
+            return None
         return sanitize_error_msg(str(value), max_chars=compat.SCALAR_MAX_CHARS)
     return None
 
