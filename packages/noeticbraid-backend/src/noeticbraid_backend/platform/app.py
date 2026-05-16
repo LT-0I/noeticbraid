@@ -10,6 +10,9 @@ def build_platform_app() -> FastAPI:
     """Build the isolated platform sub-app mounted by the main app factory."""
 
     app = FastAPI(title="NoeticBraid Platform", version="0.1.0")
+    from noeticbraid_backend.platform.ws.endpoint import register_platform_ws_routes
+
+    register_platform_ws_routes(app)
 
     @app.get("/health", summary="Platform health check")
     async def platform_health() -> dict[str, str]:

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from noeticbraid_backend.omc_workspace.web_ai_hub_automation import redact_hub_response
+from noeticbraid_backend.platform.orchestration.hub_adapter import redact_hub_response
 from noeticbraid_backend.omc_workspace.web_ai_hub_client import sanitize_error_msg
 from noeticbraid_backend.orchestration.approvals import classify_approval
 from noeticbraid_backend.orchestration.ledger_schema import JsonValue
