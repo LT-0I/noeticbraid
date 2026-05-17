@@ -152,3 +152,88 @@ export type PlatformTranscribeResponse =
   | { status: 'ok'; text: string }
   | { text: string }
   | { status: 'not_provisioned' }
+
+export type ConversationalModality = PlatformModality | 'text' | 'research' | 'code' | 'ppt' | 'web_ai'
+export type RequirementCapabilityStatus = 'supported' | 'unavailable' | 'deferred'
+export type RequirementCoarseState = 'pending' | 'in_progress' | 'done' | 'blocked'
+export type ConversationRole = 'user' | 'assistant'
+export type ConversationKind = 'message' | 'question' | 'answer' | 'coarse_status'
+
+export interface PlatformConversationRow {
+  ts: string
+  role: ConversationRole
+  kind: ConversationKind
+  text: string
+  requirement_id?: string
+}
+
+export interface PlatformCoarseStatusItem {
+  requirement_id: string
+  text: string
+  coarse_state: RequirementCoarseState
+  capability_status: RequirementCapabilityStatus
+  blocked_reason?: string
+}
+
+export interface PlatformCapabilityNotice {
+  modality: ConversationalModality
+  capability_status: RequirementCapabilityStatus
+  reason: string | null
+  reason_zh: string | null
+  reason_en: string | null
+}
+
+export interface PlatformTaskViewResponse {
+  conversation: PlatformConversationRow[]
+  deliverables: PlatformDeliverable[]
+  coarse_status: PlatformCoarseStatusItem[]
+  capability_notice: PlatformCapabilityNotice[]
+}
+
+export interface PlatformConversationCreateResponse {
+  task: PlatformTask
+  view: PlatformTaskViewResponse
+}
+
+export interface PlatformElicitRequest {
+  raw_requirement: string
+}
+
+export interface PlatformConversationTurnRequest {
+  text: string
+}
+
+export interface PlatformRequirementConfirmItem {
+  id: string
+  text: string
+  modality: ConversationalModality
+}
+
+export interface PlatformRequirementConfirmResponse {
+  requirements: {
+    task_id: string
+    schema_version: 1
+    status: 'confirmed'
+    confirmed_at: string
+    requirements: Array<{
+      id: string
+      text: string
+      modality: ConversationalModality
+      capability_status: RequirementCapabilityStatus
+      coarse_state: RequirementCoarseState
+      blocked_reason?: string
+    }>
+  }
+  view: PlatformTaskViewResponse
+}
+
+export interface PlatformCapabilityEntry {
+  modality: ConversationalModality
+  capability_status: RequirementCapabilityStatus
+  reason_zh: string | null
+  reason_en: string | null
+}
+
+export interface PlatformCapabilityRegistryResponse {
+  capabilities: PlatformCapabilityEntry[]
+}

@@ -10,7 +10,7 @@ import type {
   OMCProjectTaskRequest,
   RunRecord,
 } from '@/types/contracts'
-import type { PlatformArtifact, PlatformDeliverable, PlatformTask } from '@/types/platform'
+import type { PlatformArtifact, PlatformDeliverable, PlatformTask, PlatformTaskViewResponse } from '@/types/platform'
 
 import accountStatus from './fixtures/account_status.json'
 import approvals from './fixtures/approvals.json'
@@ -158,6 +158,27 @@ let platformTasks: PlatformTask[] = [
   },
 ]
 
+const emptyTaskView = (): PlatformTaskViewResponse => ({
+  conversation: [],
+  deliverables: [],
+  coarse_status: [],
+  capability_notice: [],
+})
+
+let platformViews: Record<string, PlatformTaskViewResponse> = {
+  task_platform_seed: {
+    conversation: [
+      { ts: '2026-05-16T12:00:00Z', role: 'user', kind: 'message', text: 'Prepare launch brief' },
+      { ts: '2026-05-16T12:01:00Z', role: 'assistant', kind: 'question', text: 'Should this be a document or a slide deck?\n\nSuggested answer: Start with a document brief.' },
+    ],
+    deliverables: [],
+    coarse_status: [
+      { requirement_id: 'req_seed', text: 'Prepare launch brief', coarse_state: 'pending', capability_status: 'supported' },
+    ],
+    capability_notice: [],
+  },
+}
+
 // SDD-D8-02: the happy-path startup token MSW handler issues the bearer in the
 // X-NoeticBraid-Bearer response header (same-origin, so readable in dev/test).
 const MOCK_BEARER = 'mock-startup-bearer-token'
@@ -301,6 +322,31 @@ export const coreHandlers = [
   }),
 ]
 
+function capabilityNoticeFor(modality: string) {
+  if (modality === 'image') {
+    return {
+      modality: 'image' as const,
+      capability_status: 'unavailable' as const,
+      reason: '图像生成目前还达不到，这部分我们暂时做不了。',
+      reason_zh: '图像生成目前还达不到，这部分我们暂时做不了。',
+      reason_en: 'Image generation is not good enough yet, so we cannot do this part for now.',
+    }
+  }
+  return null
+}
+
+function inferMockModality(text: string) {
+  const lowered = text.toLowerCase()
+  if (lowered.includes('image') || lowered.includes('picture') || lowered.includes('图像')) return 'image'
+  if (lowered.includes('video')) return 'video'
+  if (lowered.includes('music') || lowered.includes('song')) return 'music'
+  if (lowered.includes('slide') || lowered.includes('ppt')) return 'slides'
+  if (lowered.includes('research')) return 'research'
+  if (lowered.includes('code')) return 'code'
+  if (lowered.includes('document') || lowered.includes('brief') || lowered.includes('report')) return 'document'
+  return 'text'
+}
+
 export const platformHandlers = [
   http.get('/platform/deliverable', ({ request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
@@ -337,17 +383,94 @@ export const platformHandlers = [
   }),
   http.post('/platform/tasks', async ({ request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
-    const payload = (await request.json()) as { title: string; modality_targets: PlatformTask['modality_targets'] }
+    const payload = (await request.json()) as { title: string; modality_targets?: PlatformTask['modality_targets'] }
     const task: PlatformTask = {
       task_id: `task_platform_${platformTasks.length + 1}`,
       title: payload.title,
       state: 'created',
       created_ts: utcNow(),
       updated_ts: utcNow(),
-      modality_targets: payload.modality_targets,
+      modality_targets: payload.modality_targets ?? [],
     }
     platformTasks = [task, ...platformTasks]
-    return HttpResponse.json({ task })
+    const view = emptyTaskView()
+    platformViews[task.task_id] = view
+    return HttpResponse.json({ task, view })
+  }),
+  http.get('/platform/tasks/:taskId/view', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    if (!platformTasks.some((item) => item.task_id === taskId)) return HttpResponse.json({ detail: 'task not found' }, { status: 404 })
+    return HttpResponse.json(platformViews[taskId] ?? emptyTaskView())
+  }),
+  http.post('/platform/tasks/:taskId/elicit', async ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const payload = (await request.json()) as { raw_requirement: string }
+    const modality = inferMockModality(payload.raw_requirement)
+    const view: PlatformTaskViewResponse = {
+      ...(platformViews[taskId] ?? emptyTaskView()),
+      conversation: [
+        ...(platformViews[taskId]?.conversation ?? []),
+        { ts: utcNow(), role: 'user', kind: 'message', text: payload.raw_requirement },
+        { ts: utcNow(), role: 'assistant', kind: 'question', text: `Should I structure this as ${modality}?\n\nSuggested answer: Yes, structure it as ${modality}.` },
+      ],
+      coarse_status: [
+        { requirement_id: 'req_1', text: payload.raw_requirement, coarse_state: 'pending', capability_status: 'supported' },
+      ],
+    }
+    platformViews[taskId] = view
+    return HttpResponse.json({ view })
+  }),
+  http.post('/platform/tasks/:taskId/conversation', async ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const payload = (await request.json()) as { text: string }
+    const previous = platformViews[taskId] ?? emptyTaskView()
+    const view: PlatformTaskViewResponse = {
+      ...previous,
+      conversation: [
+        ...previous.conversation,
+        { ts: utcNow(), role: 'user', kind: 'answer', text: payload.text },
+        { ts: utcNow(), role: 'assistant', kind: 'message', text: 'I can draft the requirement list now. Please confirm before execution.' },
+      ],
+    }
+    platformViews[taskId] = view
+    return HttpResponse.json({ view })
+  }),
+  http.post('/platform/tasks/:taskId/requirements/confirm', async ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const payload = (await request.json()) as { requirements: Array<{ id: string; text: string; modality: string }> }
+    const notices = payload.requirements.map((item) => capabilityNoticeFor(item.modality)).filter((item): item is NonNullable<ReturnType<typeof capabilityNoticeFor>> => item !== null)
+    const view: PlatformTaskViewResponse = {
+      ...(platformViews[taskId] ?? emptyTaskView()),
+      capability_notice: notices,
+      coarse_status: payload.requirements.map((item) => {
+        const notice = capabilityNoticeFor(item.modality)
+        return {
+          requirement_id: item.id,
+          text: item.text,
+          coarse_state: notice ? 'blocked' : 'pending',
+          capability_status: notice ? notice.capability_status : 'supported',
+          ...(notice ? { blocked_reason: notice.reason ?? undefined } : {}),
+        }
+      }),
+    }
+    platformViews[taskId] = view
+    return HttpResponse.json({ requirements: { task_id: taskId, schema_version: 1, status: 'confirmed', confirmed_at: utcNow(), requirements: payload.requirements }, view })
+  }),
+  http.get('/platform/capabilities', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({
+      capabilities: [
+        { modality: 'text', capability_status: 'supported', reason_zh: null, reason_en: null },
+        { modality: 'document', capability_status: 'supported', reason_zh: null, reason_en: null },
+        { modality: 'research', capability_status: 'supported', reason_zh: null, reason_en: null },
+        { modality: 'code', capability_status: 'supported', reason_zh: null, reason_en: null },
+        { modality: 'image', capability_status: 'unavailable', reason_zh: '图像生成目前还达不到，这部分我们暂时做不了。', reason_en: 'Image generation is not good enough yet, so we cannot do this part for now.' },
+      ],
+    })
   }),
   http.get('/platform/tasks/:taskId', ({ params, request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })

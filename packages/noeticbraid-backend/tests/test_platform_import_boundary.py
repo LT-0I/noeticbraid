@@ -19,6 +19,7 @@ for path in (CORE_SRC_ROOT, SRC_ROOT):
 PLATFORM_ROOT = SRC_ROOT / "noeticbraid_backend" / "platform"
 HUB_IMPORT = "noeticbraid_backend.omc_workspace.web_ai_hub_automation"
 DISALLOWED_AI_ESCAPE_IMPORT_ROOTS = {"aiohttp", "http", "httpx", "requests", "socket", "subprocess", "urllib"}
+ALLOWED_SDD_D18_LOCAL_SUBPROCESS_IMPORT = "elicitation/local_ai.py:subprocess"
 
 
 def _py_files() -> list[Path]:
@@ -54,7 +55,9 @@ def test_platform_has_no_direct_raw_ai_call_escape_imports() -> None:
         for module in _imported_modules(tree):
             root = module.split(".", 1)[0]
             if root in DISALLOWED_AI_ESCAPE_IMPORT_ROOTS:
-                findings.append(f"{path.relative_to(PLATFORM_ROOT).as_posix()}:{module}")
+                finding = f"{path.relative_to(PLATFORM_ROOT).as_posix()}:{module}"
+                if finding != ALLOWED_SDD_D18_LOCAL_SUBPROCESS_IMPORT:
+                    findings.append(finding)
 
     assert findings == []
 

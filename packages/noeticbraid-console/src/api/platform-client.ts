@@ -4,6 +4,13 @@ import { getBearer } from './auth'
 
 import type {
   PlatformDeliverableResponse,
+  PlatformCapabilityRegistryResponse,
+  PlatformConversationCreateResponse,
+  PlatformConversationTurnRequest,
+  PlatformElicitRequest,
+  PlatformRequirementConfirmItem,
+  PlatformRequirementConfirmResponse,
+  PlatformTaskViewResponse,
   PlatformArtifact,
   PlatformCreateTaskRequest,
   PlatformTask,
@@ -80,6 +87,49 @@ export async function fetchPlatformDeliverable(): Promise<PlatformDeliverableRes
   return fetchJson<PlatformDeliverableResponse>('/platform/deliverable')
 }
 
+export async function createConversationalPlatformTask(payload: { title: string }): Promise<PlatformConversationCreateResponse> {
+  return fetchJson<PlatformConversationCreateResponse>('/platform/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: payload.title }),
+  })
+}
+
+export async function elicitPlatformTask(taskId: string, payload: PlatformElicitRequest): Promise<{ view: PlatformTaskViewResponse }> {
+  return fetchJson<{ view: PlatformTaskViewResponse }>(`/platform/tasks/${encodeURIComponent(taskId)}/elicit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function sendPlatformConversation(taskId: string, payload: PlatformConversationTurnRequest): Promise<{ view: PlatformTaskViewResponse }> {
+  return fetchJson<{ view: PlatformTaskViewResponse }>(`/platform/tasks/${encodeURIComponent(taskId)}/conversation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function confirmPlatformRequirements(
+  taskId: string,
+  requirements: PlatformRequirementConfirmItem[],
+): Promise<PlatformRequirementConfirmResponse> {
+  return fetchJson<PlatformRequirementConfirmResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/requirements/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requirements }),
+  })
+}
+
+export async function fetchPlatformTaskView(taskId: string): Promise<PlatformTaskViewResponse> {
+  return fetchJson<PlatformTaskViewResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/view`)
+}
+
+export async function fetchPlatformCapabilities(): Promise<PlatformCapabilityRegistryResponse> {
+  return fetchJson<PlatformCapabilityRegistryResponse>('/platform/capabilities')
+}
+
 export async function transcribePlatformAudio(blob: Blob): Promise<PlatformTranscribeResponse> {
   const form = new FormData()
   form.append('audio', blob, 'voice-input.webm')
@@ -138,6 +188,62 @@ export const useCreatePlatformTask = () => {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks'] })
       void queryClient.setQueryData(['platform', 'tasks', task.task_id], { task })
+    },
+  })
+}
+
+export const usePlatformTaskView = (taskId: string, enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'tasks', taskId, 'view'],
+    queryFn: () => fetchPlatformTaskView(taskId),
+    enabled,
+  })
+
+export const usePlatformCapabilities = (enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'capabilities'],
+    queryFn: fetchPlatformCapabilities,
+    enabled,
+  })
+
+export const useCreateConversationalPlatformTask = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: createConversationalPlatformTask,
+    onSuccess: (response) => {
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks'] })
+      void queryClient.setQueryData(['platform', 'tasks', response.task.task_id, 'view'], response.view)
+      void queryClient.setQueryData(['platform', 'tasks', response.task.task_id], { task: response.task })
+    },
+  })
+}
+
+export const useElicitPlatformTask = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: PlatformElicitRequest) => elicitPlatformTask(taskId, payload),
+    onSuccess: (response) => {
+      void queryClient.setQueryData(['platform', 'tasks', taskId, 'view'], response.view)
+    },
+  })
+}
+
+export const useSendPlatformConversation = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: PlatformConversationTurnRequest) => sendPlatformConversation(taskId, payload),
+    onSuccess: (response) => {
+      void queryClient.setQueryData(['platform', 'tasks', taskId, 'view'], response.view)
+    },
+  })
+}
+
+export const useConfirmPlatformRequirements = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (requirements: PlatformRequirementConfirmItem[]) => confirmPlatformRequirements(taskId, requirements),
+    onSuccess: (response) => {
+      void queryClient.setQueryData(['platform', 'tasks', taskId, 'view'], response.view)
     },
   })
 }

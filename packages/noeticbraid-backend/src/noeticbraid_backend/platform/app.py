@@ -12,6 +12,7 @@ def build_platform_app() -> FastAPI:
     app = FastAPI(title="NoeticBraid Platform", version="0.1.0")
     from noeticbraid_backend.platform.artifacts.endpoint import register_platform_artifact_routes
     from noeticbraid_backend.platform.auth_session.endpoint import register_platform_auth_session_routes
+    from noeticbraid_backend.platform.conversation.endpoint import register_platform_conversational_routes
     from noeticbraid_backend.platform.deliverable.endpoint import register_platform_deliverable_routes
     from noeticbraid_backend.platform.stt.endpoint import register_platform_stt_routes
     from noeticbraid_backend.platform.tasks.endpoint import register_platform_task_routes
@@ -19,6 +20,7 @@ def build_platform_app() -> FastAPI:
 
     register_platform_task_routes(app)
     register_platform_artifact_routes(app)
+    register_platform_conversational_routes(app)
     register_platform_deliverable_routes(app)
     register_platform_auth_session_routes(app)
     register_platform_stt_routes(app)

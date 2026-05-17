@@ -94,7 +94,10 @@ def test_platform_tasks_list_returns_owned_tasks_with_six_key_contract(
     ]
     assert all(set(item) == TASK_KEYS for item in tasks)
     assert "account_id_ref" not in response.text
-    assert client.post("/platform/tasks", headers=_headers(token), json={"title": "No fake"}).status_code == 405
+    # SDD-D18 adds POST /platform/tasks as an additive conversational create route.
+    create_response = client.post("/platform/tasks", headers=_headers(token), json={"title": "No fake"})
+    assert create_response.status_code == 200
+    assert set(create_response.json()["task"]) == TASK_KEYS
 
 
 def test_platform_task_detail_projects_ledger_and_artifacts_without_raw_payload(

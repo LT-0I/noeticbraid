@@ -564,25 +564,114 @@ describe('console routes', () => {
     expect(screen.queryByText('/external-references')).not.toBeInTheDocument()
     expect(screen.queryByText('/sidenote-tracking')).not.toBeInTheDocument()
   })
-  test('platform route renders single deliverable view and appended nav item', async () => {
+  test('platform route renders conversational task panel and appended nav item', async () => {
     renderAt('/platform')
     await waitFor(() => expect(screen.getByTestId('platform-root')).toBeInTheDocument())
     expect(screen.getByTestId('nav-platform')).toHaveTextContent('Platform')
+    expect(screen.getByTestId('platform-new-task-composer')).toHaveTextContent('Describe your task')
+    expect(screen.getByTestId('platform-task-list')).toHaveTextContent('Prepare launch brief')
+    expect(screen.getByText('Legacy deliverable view')).toBeInTheDocument()
+    expect(screen.queryByText('Diagnostics / History')).not.toBeInTheDocument()
+  })
+
+  test('platform task view renders two zones without intermediate-state vocabulary', async () => {
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-conversation-root')).toBeInTheDocument())
+    expect(screen.getByTestId('platform-conversation-zone')).toHaveTextContent('Should this be a document')
+    expect(screen.getByText(/Use suggested answer/)).toBeInTheDocument()
+    expect(screen.getByTestId('platform-deliverables-zone')).toBeInTheDocument()
+    const visible = screen.getByTestId('platform-conversation-root').textContent ?? ''
+    expect(visible).not.toMatch(/ledger|dispatch|critique|internal_reason/i)
+  })
+
+  test('primary conversational deliverables zone hides sha/provenance but keeps the clean filename', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/view', () =>
+        HttpResponse.json({
+          conversation: [
+            { ts: '2026-05-16T12:00:00Z', role: 'user', kind: 'message', text: 'Prepare launch brief' },
+          ],
+          deliverables: [
+            {
+              title: 'NoeticBraid promo material',
+              generated_at: '2026-05-17T06:51:59Z',
+              modalities: [
+                {
+                  modality: 'document',
+                  status: 'delivered',
+                  title: 'NoeticBraid Promo Document',
+                  filename: 'NoeticBraid-Promo-Document.md',
+                  content_type: 'text/markdown; charset=utf-8',
+                  bytes: 128,
+                  sha256: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef0',
+                  download_url: '/platform/deliverable/artifacts/document',
+                  blocked_reason: null,
+                  provenance: {
+                    source_task_id: 'task_promo_smoke_1778967211',
+                    ledgered: true,
+                    kind: 'ai_produced_markdown',
+                    note: 'INTERNAL-PROVENANCE-NOTE-must-not-render',
+                    source_artifact_sha256: 'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebab0',
+                  },
+                },
+              ],
+            },
+          ],
+          coarse_status: [
+            { requirement_id: 'req_seed', text: 'Prepare launch brief', coarse_state: 'pending', capability_status: 'supported' },
+          ],
+          capability_notice: [],
+        }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-conversation-root')).toBeInTheDocument())
+    const zone = screen.getByTestId('platform-deliverables-zone')
+    // Clean human filename still surfaces — the artifact shelf works.
+    expect(zone).toHaveTextContent('NoeticBraid-Promo-Document.md')
+    // SDD-D18 §5 / UI-SPEC v2 hard exclusion: no sha, no provenance note/kind.
+    const zoneText = zone.textContent ?? ''
+    expect(zoneText).not.toMatch(/deadbeef|cafebabe/i)
+    expect(zoneText).not.toContain('INTERNAL-PROVENANCE-NOTE-must-not-render')
+    expect(zoneText).not.toMatch(/ai_produced_markdown|source sha256|sha256/i)
+    expect(zone.querySelector('.deliverable-provenance')).toBeNull()
+  })
+
+  test('platform capability notice renders unavailable modality verbatim', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/view', () =>
+        HttpResponse.json({
+          conversation: [
+            { ts: '2026-05-16T12:00:00Z', role: 'user', kind: 'message', text: 'Need an image' },
+          ],
+          deliverables: [],
+          coarse_status: [
+            { requirement_id: 'req_image', text: 'Need an image', coarse_state: 'blocked', capability_status: 'unavailable', blocked_reason: '图像生成目前还达不到，这部分我们暂时做不了。' },
+          ],
+          capability_notice: [
+            { modality: 'image', capability_status: 'unavailable', reason: '图像生成目前还达不到，这部分我们暂时做不了。', reason_zh: '图像生成目前还达不到，这部分我们暂时做不了。', reason_en: 'Image generation is not good enough yet, so we cannot do this part for now.' },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-capability-notice')).toBeInTheDocument())
+    expect(screen.getByTestId('platform-capability-notice')).toHaveTextContent('Image generation is not good enough yet, so we cannot do this part for now.')
+  })
+
+  test('legacy platform deliverable route keeps the demoted single deliverable view', async () => {
+    renderAt('/platform/_legacy/deliverable')
+    await waitFor(() => expect(screen.getByTestId('platform-root')).toBeInTheDocument())
     expect(screen.getByTestId('deliverable-gallery')).toBeInTheDocument()
     expect(screen.getByTestId('deliverable-gallery').querySelectorAll('[data-testid^="deliverable-tile-"]')).toHaveLength(6)
     expect(screen.getByTestId('deliverable-tile-document')).toHaveTextContent('NoeticBraid-Promo-Document.md')
-    expect(screen.getByTestId('deliverable-tile-slides')).toHaveTextContent('NoeticBraid-Promo-Deck.pptx')
     expect(screen.getByTestId('deliverable-tile-slides')).toHaveTextContent('Converted')
-    expect(screen.getByTestId('deliverable-tile-poster').querySelector('img')).toBeInTheDocument()
-    expect(screen.getByTestId('deliverable-tile-image').querySelector('img')).toBeInTheDocument()
-    expect(screen.getByTestId('deliverable-tile-video').querySelector('video')).toBeInTheDocument()
-    expect(screen.getByTestId('deliverable-tile-image')).toHaveTextContent('hub dispatch timed out')
-    expect(screen.getByTestId('deliverable-tile-music')).toHaveTextContent('Music generation was not attempted')
     expect(screen.getByText('Diagnostics / History')).toBeInTheDocument()
-    expect(screen.queryByTestId('platform-task-list')).not.toBeInTheDocument()
   })
 
-  test('platform deliverable missing fields degrade to defined blocked state', async () => {
+  test('legacy platform deliverable missing fields degrade to defined blocked state', async () => {
     server.use(
       http.get('/platform/deliverable', () =>
         HttpResponse.json({
@@ -595,13 +684,13 @@ describe('console routes', () => {
       ),
     )
 
-    renderAt('/platform')
+    renderAt('/platform/_legacy/deliverable')
     await waitFor(() => expect(screen.getByTestId('deliverable-tile-document')).toBeInTheDocument())
     expect(screen.getByTestId('deliverable-tile-document')).toHaveTextContent('Could not load the promo deliverable view.')
   })
 
-  test('platform history route keeps the demoted task list', async () => {
-    renderAt('/platform/history')
+  test('legacy platform history route keeps the demoted task list', async () => {
+    renderAt('/platform/_legacy/history')
     await waitFor(() => expect(screen.getByTestId('platform-history-root')).toBeInTheDocument())
     expect(screen.getByTestId('platform-task-list')).toHaveTextContent('Prepare launch brief')
     expect(screen.getByTestId('platform-task-list')).toHaveTextContent('created')

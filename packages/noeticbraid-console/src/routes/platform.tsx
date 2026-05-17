@@ -10,15 +10,24 @@ import {
   fetchPlatformArtifactBlob,
   platformAuthFrame,
   transcribePlatformAudio,
+  elicitPlatformTask,
+  useCreateConversationalPlatformTask,
   useCreatePlatformTask,
+  useConfirmPlatformRequirements,
+  useElicitPlatformTask,
   usePlatformDeliverable,
   usePlatformTask,
+  usePlatformTaskView,
   usePlatformTasks,
+  useSendPlatformConversation,
 } from '@/api/platform-client'
 import { Badge, Button, Card, CardBody, CardDescription, CardFooter, CardHeader, CardTitle, EmptyState, PageHeader } from '@/components/ui'
 import type {
+  ConversationalModality,
   DeliverableModality,
   PlatformArtifact,
+  PlatformCoarseStatusItem,
+  PlatformConversationRow,
   PlatformBlockedFrame,
   PlatformDeliverableStatus,
   PlatformLedgerEvent,
@@ -27,6 +36,7 @@ import type {
   PlatformServerFrame,
   PlatformTask,
   PlatformTaskState,
+  PlatformTaskViewResponse,
   TimelineEntry,
 } from '@/types/platform'
 
@@ -379,7 +389,7 @@ function Provenance({ item }: { item: DeliverableModality }) {
   )
 }
 
-function ModalityTile({ item, modality }: { item: DeliverableModality | null; modality: PlatformModality }) {
+function ModalityTile({ item, modality, calm = false }: { item: DeliverableModality | null; modality: PlatformModality; calm?: boolean }) {
   const { t } = useTranslation()
   if (!item) {
     return (
@@ -442,7 +452,10 @@ function ModalityTile({ item, modality }: { item: DeliverableModality | null; mo
             {t('routes.platform.download')}
           </Button>
         ) : null}
-        <Provenance item={item} />
+        {/* SDD-D18 §5 / UI-SPEC v2 hard exclusion: the primary conversational
+            deliverables zone must NOT surface sha/provenance/internal notes.
+            Provenance stays only in the demoted /platform/_legacy/* views. */}
+        {calm ? null : <Provenance item={item} />}
       </CardFooter>
     </Card>
   )
@@ -477,6 +490,362 @@ function timelineFor(items: Array<DeliverableModality | null>, t: (key: string, 
     const tone: TimelineEntry['tone'] = item.status === 'blocked' ? 'blocked' : 'done'
     return { label: `${item.title} · ${t(deliverableStatusLabelKey(item.status))}`, tone }
   })
+}
+
+
+function inferConversationalModality(text: string): ConversationalModality {
+  const lowered = text.toLowerCase()
+  if (/(image|picture|poster|logo|图像|图片|海报)/.test(lowered)) return 'image'
+  if (/(video|mp4|视频)/.test(lowered)) return 'video'
+  if (/(music|song|audio|音乐|歌曲)/.test(lowered)) return 'music'
+  if (/(slides|ppt|pptx|幻灯片)/.test(lowered)) return 'slides'
+  if (/(code|repo|bug|代码|修复)/.test(lowered)) return 'code'
+  if (/(research|analysis|analyze|研究|调研|分析)/.test(lowered)) return 'research'
+  if (/(document|report|brief|doc|文档|报告)/.test(lowered)) return 'document'
+  return 'text'
+}
+
+function capabilityNoticeText(notice: PlatformTaskViewResponse['capability_notice'][number], language: string): string {
+  if (language.startsWith('zh')) return notice.reason_zh ?? notice.reason ?? notice.reason_en ?? ''
+  return notice.reason_en ?? notice.reason ?? notice.reason_zh ?? ''
+}
+
+function latestTaskStatus(task: PlatformTask, t: (key: string) => string): string {
+  return `${t('routes.platform.updated')} ${formatTimestamp(task.updated_ts)} · ${stateLabel(task.state)}`
+}
+
+function ConversationHomeComposer({ disabled }: { disabled?: boolean }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const createTask = useCreateConversationalPlatformTask()
+  const [text, setText] = useState('')
+  const [error, setError] = useState(false)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const raw = text.trim()
+    if (!raw || disabled || createTask.isPending) return
+    setError(false)
+    const title = raw.split(/\n+/)[0]?.slice(0, 80) || t('routes.platform.newTask')
+    try {
+      const response = await createTask.mutateAsync({ title })
+      await elicitPlatformTask(response.task.task_id, { raw_requirement: raw })
+      setText('')
+      void navigate({ to: '/platform/$taskId', params: { taskId: response.task.task_id } })
+    } catch {
+      setError(true)
+    }
+  }
+
+  return (
+    <form className="conversation-home-composer" onSubmit={submit} data-testid="platform-new-task-composer">
+      <label className="form-label" htmlFor="platform-new-task-text">{t('routes.platform.describeTask')}</label>
+      <textarea
+        id="platform-new-task-text"
+        className="platform-composer-input"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={5}
+        placeholder={t('routes.platform.describePlaceholder')}
+      />
+      {error ? <p className="platform-inline-error">{t('errors.platformCreate')}</p> : null}
+      <div className="platform-composer-actions">
+        <Button type="submit" variant="primary" disabled={disabled || !text.trim() || createTask.isPending}>
+          {createTask.isPending ? t('state.loading') : t('routes.platform.newTask')}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function PlatformConversationHome() {
+  const { t } = useTranslation()
+  const auth = useAuthState()
+  const tasks = usePlatformTasks(auth.status === 'ready')
+
+  if (auth.status === 'booting') return <div data-testid="platform-loading" className="state-panel">{t('state.loading')}</div>
+  if (auth.status === 'degraded') return <AuthUnavailable mode={auth.mode} />
+  if (tasks.isLoading) return <div data-testid="platform-loading" className="state-panel">{t('state.loading')}</div>
+  if (tasks.isError) return <div data-testid="platform-error" className="state-panel state-panel--error">{t('errors.platform')}</div>
+
+  const taskList = tasks.data?.tasks ?? []
+
+  return (
+    <section data-testid="platform-root" className="stack platform-page platform-conversation-page">
+      <PageHeader
+        title={t('routes.platform.conversationTitle')}
+        subtitle={t('routes.platform.conversationSubtitle')}
+        actions={<Link to="/platform/_legacy/deliverable" className="platform-backlink">{t('routes.platform.legacyLink')}</Link>}
+      />
+      <Card className="conversation-home-card">
+        <CardBody>
+          <ConversationHomeComposer disabled={auth.status !== 'ready'} />
+        </CardBody>
+      </Card>
+      <section className="stack" aria-labelledby="platform-existing-tasks-title">
+        <div className="item-card__topline">
+          <h2 id="platform-existing-tasks-title" className="item-card__title">{t('routes.platform.existingTasks')}</h2>
+          <span className="text-muted">{taskList.length}</span>
+        </div>
+        {taskList.length === 0 ? (
+          <EmptyState title={t('empty.platform.title')} message={t('empty.platform.message')} />
+        ) : (
+          <div className="platform-task-grid" data-testid="platform-task-list">
+            {taskList.map((task) => (
+              <Link key={task.task_id} to="/platform/$taskId" params={{ taskId: task.task_id }} className="platform-task-card">
+                <Card interactive>
+                  <CardHeader>
+                    <div>
+                      <CardTitle>{task.title}</CardTitle>
+                      <CardDescription>{latestTaskStatus(task, t)}</CardDescription>
+                    </div>
+                    <TaskStateBadge state={task.state} />
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </section>
+  )
+}
+
+function CapabilityNoticeBanner({ notices }: { notices: PlatformTaskViewResponse['capability_notice'] }) {
+  const { i18n, t } = useTranslation()
+  if (notices.length === 0) return null
+  return (
+    <div className="platform-capability-notice" data-testid="platform-capability-notice" role="status">
+      <strong>{t('routes.platform.capabilityNotice')}</strong>
+      <ul>
+        {notices.map((notice) => (
+          <li key={`${notice.modality}-${notice.capability_status}`}>{capabilityNoticeText(notice, i18n.language)}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ConversationTranscript({ rows }: { rows: PlatformConversationRow[] }) {
+  const { t } = useTranslation()
+  if (rows.length === 0) return <p className="platform-chat-empty">{t('routes.platform.chatEmpty')}</p>
+  return (
+    <div className="platform-chat-log" aria-live="polite" aria-relevant="additions text" data-testid="platform-conversation-log">
+      {rows.map((row, index) => {
+        if (row.kind === 'coarse_status') {
+          return <div key={`${row.ts}-${index}`} className="platform-status-line">{row.text}</div>
+        }
+        return (
+          <article key={`${row.ts}-${index}`} className={`platform-chat-message platform-chat-message--${row.role === 'user' ? 'user' : 'assistant'}`}>
+            <span>{row.role === 'user' ? t('routes.platform.you') : t('routes.platform.ai')}</span>
+            <p>{row.text}</p>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
+function ConversationalComposer({ onSend, disabled, suggestion }: { onSend: (text: string) => void; disabled?: boolean; suggestion?: string }) {
+  const { t } = useTranslation()
+  const [text, setText] = useState('')
+
+  function send() {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    onSend(trimmed)
+    setText('')
+  }
+
+  return (
+    <div className="platform-composer">
+      {suggestion ? (
+        <button type="button" className="platform-suggestion" onClick={() => setText(suggestion)}>
+          {t('routes.platform.useSuggestedAnswer')}: {suggestion}
+        </button>
+      ) : null}
+      <label className="sr-only" htmlFor="platform-conversation-input">{t('routes.platform.composerLabel')}</label>
+      <textarea
+        id="platform-conversation-input"
+        className="platform-composer-input"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') send()
+        }}
+        placeholder={t('routes.platform.composerPlaceholder')}
+        rows={3}
+      />
+      <div className="platform-composer-actions">
+        <Button type="button" variant="primary" disabled={disabled || !text.trim()} onClick={send}>{t('routes.platform.send')}</Button>
+      </div>
+    </div>
+  )
+}
+
+function suggestedAnswer(rows: PlatformConversationRow[]): string | undefined {
+  const lastQuestion = [...rows].reverse().find((row) => row.kind === 'question')
+  if (!lastQuestion) return undefined
+  const marker = 'Suggested answer:'
+  const index = lastQuestion.text.indexOf(marker)
+  if (index < 0) return undefined
+  return lastQuestion.text.slice(index + marker.length).trim() || undefined
+}
+
+function RequirementConfirmation({ items, onConfirm, disabled }: { items: PlatformCoarseStatusItem[]; onConfirm: (items: Array<{ id: string; text: string; modality: ConversationalModality }>) => void; disabled?: boolean }) {
+  const { t } = useTranslation()
+  const [drafts, setDrafts] = useState(() => items.map((item) => ({ id: item.requirement_id, text: item.text, modality: inferConversationalModality(item.text) })))
+
+  useEffect(() => {
+    setDrafts(items.map((item) => ({ id: item.requirement_id, text: item.text, modality: inferConversationalModality(item.text) })))
+  }, [items])
+
+  if (items.length === 0) return null
+
+  return (
+    <Card className="platform-requirements-card" data-testid="platform-requirements-confirmation">
+      <CardHeader>
+        <CardTitle>{t('routes.platform.requirementsTitle')}</CardTitle>
+        <CardDescription>{t('routes.platform.requirementsDescription')}</CardDescription>
+      </CardHeader>
+      <CardBody>
+        <div className="platform-requirement-list">
+          {drafts.map((draft, index) => (
+            <div key={draft.id} className="platform-requirement-row">
+              <label className="form-field">
+                <span className="form-label">{t('routes.platform.requirementText')}</span>
+                <input
+                  className="platform-input"
+                  value={draft.text}
+                  onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value, modality: inferConversationalModality(event.target.value) } : item))}
+                />
+              </label>
+              <label className="form-field">
+                <span className="form-label">{t('routes.platform.requirementModality')}</span>
+                <select
+                  className="platform-input"
+                  value={draft.modality}
+                  onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, modality: event.target.value as ConversationalModality } : item))}
+                >
+                  {(['text', 'document', 'research', 'code', 'image', 'video', 'music', 'slides', 'ppt', 'web_ai'] as ConversationalModality[]).map((modality) => (
+                    <option key={modality} value={modality}>{modality}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ))}
+        </div>
+      </CardBody>
+      <CardFooter>
+        <Button type="button" variant="primary" disabled={disabled || drafts.some((item) => !item.text.trim())} onClick={() => onConfirm(drafts)}>
+          {disabled ? t('state.loading') : t('routes.platform.confirmRequirements')}
+        </Button>
+      </CardFooter>
+    </Card>
+  )
+}
+
+function CoarseStatusList({ items }: { items: PlatformCoarseStatusItem[] }) {
+  const { t } = useTranslation()
+  if (items.length === 0) return <p className="text-muted">{t('routes.platform.progressEmpty')}</p>
+  return (
+    <ol className="platform-timeline" data-testid="platform-coarse-status">
+      {items.map((item) => (
+        <li key={item.requirement_id} className={`platform-timeline-item platform-timeline-item--${item.coarse_state === 'blocked' ? 'blocked' : item.coarse_state === 'done' ? 'complete' : item.coarse_state === 'in_progress' ? 'active' : 'normal'}`}>
+          <span className="platform-timeline-dot" aria-hidden="true" />
+          <div>
+            <strong>{item.text}</strong>
+            <span>{item.blocked_reason ?? t(`platform.coarse.${item.coarse_state}`)}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function ConversationalDeliverables({ deliverables }: { deliverables: PlatformTaskViewResponse['deliverables'] }) {
+  const { t } = useTranslation()
+  const payload = deliverables[0]
+  const byModality = new Map((payload?.modalities ?? []).map((item) => [item.modality, item]))
+  const items = deliverableModalities.map((modality) => normalizeModality(byModality.get(modality), modality, t))
+  return (
+    <section className="platform-deliverables-zone" aria-labelledby="platform-deliverables-title" data-testid="platform-deliverables-zone">
+      <div className="item-card__topline">
+        <h2 id="platform-deliverables-title" className="item-card__title">{t('routes.platform.deliverablesZone')}</h2>
+        <span className="text-muted">{payload?.title ?? t('routes.platform.artifactsEmpty')}</span>
+      </div>
+      {payload ? (
+        <div className="deliverable-gallery" data-testid="deliverable-gallery">
+          {items.map((item, index) => (
+            <ModalityTile key={deliverableModalities[index]!} item={item} modality={deliverableModalities[index]!} calm />
+          ))}
+        </div>
+      ) : (
+        <Card><CardBody><p className="text-muted">{t('routes.platform.artifactsEmpty')}</p></CardBody></Card>
+      )}
+    </section>
+  )
+}
+
+function PlatformConversationTaskPage() {
+  const { t } = useTranslation()
+  const auth = useAuthState()
+  const { taskId } = platformDetailRoute.useParams()
+  const detail = usePlatformTask(taskId, auth.status === 'ready')
+  const view = usePlatformTaskView(taskId, auth.status === 'ready')
+  const elicit = useElicitPlatformTask(taskId)
+  const sendTurn = useSendPlatformConversation(taskId)
+  const confirm = useConfirmPlatformRequirements(taskId)
+
+  if (auth.status === 'booting' || detail.isLoading || view.isLoading) return <div data-testid="platform-detail-loading" className="state-panel">{t('state.loading')}</div>
+  if (auth.status === 'degraded') return <AuthUnavailable mode={auth.mode} />
+  if (detail.isError || view.isError || !detail.data?.task || !view.data) return <div data-testid="platform-detail-error" className="state-panel state-panel--error">{t('errors.platform')}</div>
+
+  const task = detail.data.task
+  const payload = view.data
+  const busy = elicit.isPending || sendTurn.isPending || confirm.isPending
+
+  function send(text: string) {
+    if (payload.conversation.length === 0) {
+      elicit.mutate({ raw_requirement: text })
+      return
+    }
+    sendTurn.mutate({ text })
+  }
+
+  function confirmRequirements(items: Array<{ id: string; text: string; modality: ConversationalModality }>) {
+    confirm.mutate(items)
+  }
+
+  return (
+    <section data-testid="platform-conversation-root" className="stack platform-page platform-conversation-page">
+      <PageHeader
+        eyebrow={<Link to="/platform" className="platform-backlink">{t('routes.platform.backToTasks')}</Link>}
+        title={task.title}
+        subtitle={t('routes.platform.taskPanelSubtitle')}
+        actions={<TaskStateBadge state={task.state} />}
+      />
+      <CapabilityNoticeBanner notices={payload.capability_notice} />
+      <div className="platform-two-zone-grid">
+        <Card className="platform-chat-card conversation-zone" data-testid="platform-conversation-zone">
+          <CardHeader>
+            <CardTitle>{t('routes.platform.conversationZone')}</CardTitle>
+            <CardDescription>{t('routes.platform.conversationZoneDescription')}</CardDescription>
+          </CardHeader>
+          <CardBody>
+            <ConversationTranscript rows={payload.conversation} />
+            <ConversationalComposer onSend={send} disabled={busy} suggestion={suggestedAnswer(payload.conversation)} />
+          </CardBody>
+        </Card>
+        <aside className="platform-rail">
+          <h2>{t('routes.platform.progressRail')}</h2>
+          <CoarseStatusList items={payload.coarse_status} />
+        </aside>
+      </div>
+      <RequirementConfirmation items={payload.coarse_status} onConfirm={confirmRequirements} disabled={busy} />
+      <ConversationalDeliverables deliverables={payload.deliverables} />
+    </section>
+  )
 }
 
 function PlatformDeliverablePage() {
@@ -528,7 +897,7 @@ function PlatformDeliverablePage() {
       <details className="deliverable-diagnostics">
         <summary>{t('routes.platformDeliverable.diagnostics')}</summary>
         <HumanTimeline entries={timeline} />
-        <Link to="/platform/history" className="platform-backlink">{t('routes.platformDeliverable.viewDebugList')}</Link>
+        <Link to="/platform/_legacy/history" className="platform-backlink">{t('routes.platformDeliverable.viewDebugList')}</Link>
       </details>
     </section>
   )
@@ -556,7 +925,7 @@ function NewTaskModal({ onClose }: { onClose: () => void }) {
       {
         onSuccess: (task) => {
           onClose()
-          void navigate({ to: '/platform/$taskId', params: { taskId: task.task_id } })
+          void navigate({ to: '/platform/_legacy/tasks/$taskId', params: { taskId: task.task_id } })
         },
       },
     )
@@ -632,7 +1001,7 @@ function PlatformHistoryPage() {
   return (
     <section data-testid="platform-history-root" className="stack platform-page">
       <PageHeader
-        eyebrow={<Link to="/platform" className="platform-backlink">{t('routes.platformDeliverable.eyebrow')}</Link>}
+        eyebrow={<Link to="/platform/_legacy/deliverable" className="platform-backlink">{t('routes.platformDeliverable.eyebrow')}</Link>}
         title={t('routes.platform.historyTitle')}
         subtitle={t('routes.platform.historySubtitle')}
         actions={<Button type="button" variant="primary" onClick={() => setModalOpen(true)}>{t('routes.platform.newTask')}</Button>}
@@ -643,7 +1012,7 @@ function PlatformHistoryPage() {
       ) : (
         <div className="platform-task-grid" data-testid="platform-task-list">
           {taskList.map((task) => (
-            <Link key={task.task_id} to="/platform/$taskId" params={{ taskId: task.task_id }} className="platform-task-card">
+            <Link key={task.task_id} to="/platform/_legacy/tasks/$taskId" params={{ taskId: task.task_id }} className="platform-task-card">
               <Card interactive>
                 <CardHeader>
                   <div>
@@ -1094,7 +1463,7 @@ function PlatformDetailPage() {
   return (
     <section data-testid="platform-detail-root" className="stack platform-page">
       <PageHeader
-        eyebrow={<Link to="/platform/history" className="platform-backlink">{t('routes.platform.backToTasks')}</Link>}
+        eyebrow={<Link to="/platform/_legacy/history" className="platform-backlink">{t('routes.platform.backToTasks')}</Link>}
         title={task.title}
         subtitle={`${t('routes.platform.updated')} ${formatTimestamp(task.updated_ts)}`}
         actions={<TaskStateBadge state={task.state} />}
@@ -1149,17 +1518,29 @@ function PlatformDetailPage() {
 export const platformRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/platform',
+  component: PlatformConversationHome,
+})
+
+export const platformLegacyDeliverableRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/platform/_legacy/deliverable',
   component: PlatformDeliverablePage,
 })
 
-export const platformHistoryRoute = createRoute({
+export const platformLegacyHistoryRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/platform/history',
+  path: '/platform/_legacy/history',
   component: PlatformHistoryPage,
+})
+
+export const platformLegacyDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/platform/_legacy/tasks/$taskId',
+  component: PlatformDetailPage,
 })
 
 export const platformDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/platform/$taskId',
-  component: PlatformDetailPage,
+  component: PlatformConversationTaskPage,
 })
