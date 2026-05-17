@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "web-ai-research-automation-hub": {
+      "command": "node",
+      "args": [
+        "/home/l1u/workspace/noeticmind/web-ai-capability-hub/dist/src/cli.js",
+        "mcp"
+      ],
+      "env": {
+        "WAH_DEFAULT_PROFILE": "gemini"
+      }
+    }
+  }
+}
