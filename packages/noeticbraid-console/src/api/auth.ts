@@ -60,7 +60,16 @@ async function bootstrap(): Promise<EnsureBearerResult> {
     return { ok: false, mode: `http_${res.status}` }
   }
 
-  const body = (await res.json()) as AuthResponse
+  let body: AuthResponse
+  try {
+    body = (await res.json()) as AuthResponse
+  } catch {
+    // A 2xx that is not JSON (e.g. an SPA HTML fallback when the mock/back
+    // end is not intercepting) must degrade, never reject: a rejected
+    // bootstrap leaves the single-flight promise unsettled and the auth
+    // state stuck on `booting` (infinite loading panel).
+    return { ok: false, mode: 'bad_response' }
+  }
   if (body.accepted === true) {
     const header = res.headers.get(BEARER_HEADER)
     if (header) {
