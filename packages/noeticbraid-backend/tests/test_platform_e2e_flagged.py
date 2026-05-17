@@ -126,7 +126,58 @@ def test_flagged_platform_e2e_delivers_mapped_artifacts_blocks_unmapped_and_cont
             },
         }
 
+    def fake_dispatch_async_start(
+        op: str,
+        params: dict[str, Any],
+        *,
+        account: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        assert account == "beta_user_04"
+        assert task_id == delivered_task.task_id
+        modality = _requested_modality(params)
+        assert modality == "video"
+        assert op == expected_ops[modality]
+        assert set(params) == {"profile", "prompt"}
+        calls.append((op, params, {"account": account, "task_id": task_id}))
+        return {
+            "outcome": "running",
+            "status": "running",
+            "task_id": "task_hub_e2e_video",
+            "payload": {"status": "running", "task_id": "task_hub_e2e_video"},
+        }
+
+    def fake_dispatch_async_status(
+        op: str = "webai_task_status",
+        params: dict[str, Any] | None = None,
+        *,
+        account: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        assert op == "webai_task_status"
+        assert params == {"task_id": "task_hub_e2e_video"}
+        assert account == "beta_user_04"
+        assert task_id == delivered_task.task_id
+        rel_path = f"tasks/{task_id}/artifacts/video-hub.mp4"
+        content = b"video artifact\n"
+        artifact_path = resolve_user_path(account, rel_path)
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_bytes(content)
+        return {
+            "outcome": "ok",
+            "status": "ok",
+            "payload": {
+                "ok": True,
+                "status": "ok",
+                "path": rel_path,
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "size_bytes": len(content),
+            },
+        }
+
     monkeypatch.setattr(hub_adapter, "dispatch", fake_dispatch)
+    monkeypatch.setattr(hub_adapter, "dispatch_async_start", fake_dispatch_async_start)
+    monkeypatch.setattr(hub_adapter, "dispatch_async_status", fake_dispatch_async_status)
     client = TestClient(create_app(Settings(state_dir=tmp_path / "state")))
 
     with client.websocket_connect(f"/platform/ws/tasks/{delivered_task.task_id}") as websocket:

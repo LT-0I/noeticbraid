@@ -48,6 +48,30 @@ def dispatch(
     return {"outcome": "ok", "status": status or "ok", "payload": payload}
 
 
+def dispatch_async_start(
+    op: str,
+    params: dict[str, Any],
+    *,
+    account: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Delegate async task start normalization to the automation chokepoint."""
+
+    return _automation.dispatch_async_start(op, params, account=account, task_id=task_id)
+
+
+def dispatch_async_status(
+    op: str = "webai_task_status",
+    params: dict[str, Any] | None = None,
+    *,
+    account: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Delegate async task status normalization to the automation chokepoint."""
+
+    return _automation.dispatch_async_status(op, params, account=account, task_id=task_id)
+
+
 def _artifact_path_for_redaction(
     raw: object,
     *,
@@ -92,4 +116,10 @@ def _blocked(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-__all__ = ["BLOCKED_HUB_STATUSES", "dispatch", "redact_hub_response"]
+__all__ = [
+    "BLOCKED_HUB_STATUSES",
+    "dispatch",
+    "dispatch_async_start",
+    "dispatch_async_status",
+    "redact_hub_response",
+]

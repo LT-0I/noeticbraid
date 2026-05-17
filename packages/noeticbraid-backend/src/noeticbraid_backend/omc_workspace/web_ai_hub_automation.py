@@ -66,55 +66,16 @@ def dispatch_web_ai(
     """Dispatch the D10-02 web-ai hub operation subset with fail-closed guards."""
 
     try:
-        snap = dict(environ)
-        gate = web_ai_hub_gate(operation, environ=snap)
-        if gate.get("status") != "ready":
-            return gate
-
         op = str(operation or "")
-        if op not in compat.DISPATCHABLE:
-            return {"status": "not_implemented", "reason": "operation not dispatchable in D10-02"}
-
-        governed_dir: Path | None = None
-        if _requires_artifact_download_dir(op):
-            governed_dir = _resolve_governed_artifact_dir(account=account, task_id=task_id)
-            if governed_dir is None:
-                return {"status": "not_implemented", "reason": "artifact path governance violation"}
-
-        argv_tail, err = compat.validate_request(
-            op,
+        raw, governed_dir, dispatched = _dispatch_web_ai_raw(
+            operation,
             params,
-            download_dir=str(governed_dir) if governed_dir is not None else None,
-        )
-        if err is not None or argv_tail is None:
-            return {"status": "not_implemented", "reason": err or "request rejected: invalid request"}
-
-        hub_path_raw = snap.get(compat.HUB_PATH_ENV)
-        if not hub_path_raw:
-            return {"status": "not_implemented", "reason": "hub path unavailable"}
-        hub_path = Path(str(hub_path_raw))
-        if not hub_path.is_absolute() or not hub_path.is_dir():
-            return {"status": "not_implemented", "reason": "hub path unavailable"}
-
-        digest_status, _detail = compat.digest_matches(hub_path)
-        if digest_status == "not_built":
-            return {"status": "HUB_NOT_BUILT"}
-        if digest_status != "ok":
-            return {
-                "status": "not_implemented",
-                "reason": "hub exec closure unpinned/mismatch — manual review & re-pin required",
-            }
-
-        pageful = compat.is_pageful(op)
-        env = build_hub_env(snap, pageful=pageful)
-        raw = run_hub_command(
-            argv_tail,
-            hub_path=hub_path,
-            env=env,
-            timeout=compat.AUTOMATION_TIMEOUT_SECONDS,
+            environ=environ,
+            account=account,
+            task_id=task_id,
         )
         validated_artifact_path: Path | None = None
-        if _requires_artifact_download_dir(op):
+        if dispatched and _requires_artifact_download_dir(op) and _requires_terminal_artifact_reconfinement(op, raw):
             validated_artifact_path = _reconfine_returned_artifact_path(raw, governed_dir)
             if validated_artifact_path is None:
                 return {"status": "not_implemented", "reason": "artifact path governance violation"}
@@ -122,6 +83,193 @@ def dispatch_web_ai(
     except Exception as exc:  # pragma: no cover - defensive fail-closed boundary
         sanitized = sanitize_error_msg(str(exc))
         return {"status": "not_implemented", "reason": sanitized or "web-ai automation dispatch failed"}
+
+
+def dispatch_async_start(
+    op: str,
+    params: dict[str, Any],
+    *,
+    account: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Start a hub async artifact task without treating ``running`` as terminal failure."""
+
+    raw = dispatch_web_ai(op, params, account=account, task_id=task_id)
+    payload = redact_hub_response(raw, task_id=task_id, validated_artifact_path=None)
+    status = str(payload.get("status") or "")
+    async_task_id = payload.get("task_id")
+    if status == "running" and isinstance(async_task_id, str) and compat.TASK_ID_RE.fullmatch(async_task_id):
+        return {
+            "outcome": "running",
+            "status": "running",
+            "task_id": async_task_id,
+            "payload": payload,
+        }
+    return _blocked(payload)
+
+
+def dispatch_async_status(
+    op: str = "webai_task_status",
+    params: dict[str, Any] | None = None,
+    *,
+    account: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Poll a hub async artifact task and reshape terminal video results before redaction."""
+
+    try:
+        raw, _governed_for_status_op, _dispatched = _dispatch_web_ai_raw(
+            op,
+            dict(params or {}),
+            environ=os.environ,
+            account=account,
+            task_id=task_id,
+        )
+    except Exception as exc:  # pragma: no cover - defensive fail-closed boundary
+        sanitized = sanitize_error_msg(str(exc))
+        payload = redact_hub_response(
+            {"status": "not_implemented", "reason": sanitized or "web-ai automation status dispatch failed"}
+        )
+        return _blocked(payload)
+    if not isinstance(raw, dict):
+        return _blocked(redact_hub_response(raw, task_id=task_id, validated_artifact_path=None))
+
+    status = str(raw.get("status") or "")
+    if status == "done":
+        governed_dir = _resolve_governed_artifact_dir(account=account, task_id=task_id)
+        result = raw.get("result")
+        validated_artifact_path = _reconfine_returned_artifact_path(result, governed_dir)
+        if validated_artifact_path is None:
+            payload = redact_hub_response(
+                {"status": "not_implemented", "reason": "artifact path governance violation"}
+            )
+            return _blocked(payload)
+        if not isinstance(result, dict):
+            payload = redact_hub_response(
+                {"status": "not_implemented", "reason": "artifact path governance violation"}
+            )
+            return _blocked(payload)
+        flat = {
+            "status": "ok",
+            "path": result.get("path"),
+            "sha256": result.get("sha256"),
+            "size_bytes": result.get("size_bytes"),
+            "download_filename": result.get("download_filename"),
+            "errorCode": None,
+        }
+        payload = redact_hub_response(flat, task_id=task_id, validated_artifact_path=validated_artifact_path)
+        if str(payload.get("status") or "") != "ok":
+            return _blocked(payload)
+        return {"outcome": "ok", "status": "ok", "payload": payload}
+
+    payload = redact_hub_response(raw, task_id=task_id, validated_artifact_path=None)
+    redacted_status = str(payload.get("status") or status)
+    if status in {"running", "queued"}:
+        response: dict[str, Any] = {
+            "outcome": "running",
+            "status": redacted_status,
+            "payload": payload,
+        }
+        progress_label = payload.get("progress_label")
+        if isinstance(progress_label, str):
+            response["progress_label"] = progress_label
+        return response
+    if status == "failed":
+        error_code = str(payload.get("errorCode") or payload.get("error_code") or "failed")
+        return _blocked(
+            {
+                **payload,
+                "reason": f"video generation failed: {sanitize_error_msg(error_code, max_chars=compat.SCALAR_MAX_CHARS)}",
+            }
+        )
+    return _blocked(payload)
+
+
+def _dispatch_web_ai_raw(
+    operation: str,
+    params,
+    *,
+    environ,
+    account: str | None,
+    task_id: str | None,
+) -> tuple[dict[str, Any], Path | None, bool]:
+    snap = dict(environ)
+    gate = web_ai_hub_gate(operation, environ=snap)
+    if gate.get("status") != "ready":
+        return (gate, None, False)
+
+    op = str(operation or "")
+    if op not in compat.DISPATCHABLE:
+        return ({"status": "not_implemented", "reason": "operation not dispatchable in D10-02"}, None, False)
+
+    governed_dir: Path | None = None
+    if _requires_artifact_download_dir(op):
+        governed_dir = _resolve_governed_artifact_dir(account=account, task_id=task_id)
+        if governed_dir is None:
+            return ({"status": "not_implemented", "reason": "artifact path governance violation"}, None, False)
+
+    argv_tail, err = compat.validate_request(
+        op,
+        params,
+        download_dir=str(governed_dir) if governed_dir is not None else None,
+    )
+    if err is not None or argv_tail is None:
+        return ({"status": "not_implemented", "reason": err or "request rejected: invalid request"}, governed_dir, False)
+
+    hub_path_raw = snap.get(compat.HUB_PATH_ENV)
+    if not hub_path_raw:
+        return ({"status": "not_implemented", "reason": "hub path unavailable"}, governed_dir, False)
+    hub_path = Path(str(hub_path_raw))
+    if not hub_path.is_absolute() or not hub_path.is_dir():
+        return ({"status": "not_implemented", "reason": "hub path unavailable"}, governed_dir, False)
+
+    digest_status, _detail = compat.digest_matches(hub_path)
+    if digest_status == "not_built":
+        return ({"status": "HUB_NOT_BUILT"}, governed_dir, False)
+    if digest_status != "ok":
+        return (
+            {
+                "status": "not_implemented",
+                "reason": "hub exec closure unpinned/mismatch — manual review & re-pin required",
+            },
+            governed_dir,
+            False,
+        )
+
+    pageful = compat.is_pageful(op)
+    env = build_hub_env(snap, pageful=pageful)
+    raw = run_hub_command(
+        argv_tail,
+        hub_path=hub_path,
+        env=env,
+        timeout=compat.automation_timeout_for(op),
+    )
+    if isinstance(raw, dict):
+        return (raw, governed_dir, True)
+    return ({"status": "not_implemented", "reason": "hub response not an object"}, governed_dir, True)
+
+
+def _requires_terminal_artifact_reconfinement(operation: str, raw: Any) -> bool:
+    if operation != "webai_gemini_generate_video":
+        return True
+    if not isinstance(raw, dict):
+        return True
+    status = str(raw.get("status") or "")
+    return status == "ok" or isinstance(raw.get("path"), str)
+
+
+def _blocked(payload: dict[str, Any]) -> dict[str, Any]:
+    status = str(payload.get("status") or "not_implemented")
+    reason = sanitize_error_msg(
+        str(payload.get("reason") or payload.get("message") or status or "hub dispatch blocked"),
+        max_chars=512,
+    )
+    return {
+        "outcome": "blocked",
+        "status": status,
+        "reason": reason or "hub dispatch blocked",
+        "payload": payload,
+    }
 
 
 def _web_ai_hub_gate(operation: str, *, environ) -> dict[str, Any]:
@@ -495,4 +643,11 @@ def _sanitize_gemini_conversation_url(value: Any) -> str | None:
     return sanitized
 
 
-__all__ = ["build_hub_env", "dispatch_web_ai", "redact_hub_response", "web_ai_hub_gate"]
+__all__ = [
+    "build_hub_env",
+    "dispatch_async_start",
+    "dispatch_async_status",
+    "dispatch_web_ai",
+    "redact_hub_response",
+    "web_ai_hub_gate",
+]

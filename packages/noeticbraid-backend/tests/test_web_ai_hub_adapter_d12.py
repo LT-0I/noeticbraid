@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -17,6 +18,7 @@ for path in (
 
 from noeticbraid_backend.omc_workspace import web_ai_hub_automation as automation  # noqa: E402
 from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat  # noqa: E402
+from noeticbraid_backend.platform.orchestration import hub_adapter  # noqa: E402
 
 
 CHATGPT_IMAGE_OP = "webai_chatgpt_generate_image"
@@ -163,6 +165,11 @@ def _ready_dispatch(
 def test_d12_constants_pageful_mapping_and_hard_exclusion_precedence() -> None:
     assert compat.PINNED_HUB_EXEC_DIGEST == "4790db685b5340be4e40206a0fdfee5588258c7dffc5f84230da1360baa105b5"
     assert compat.ARTIFACT_FILE_MAX_BYTES == 268_435_456
+    assert compat.automation_timeout_for(CHATGPT_IMAGE_OP) == compat.GENERATE_AUTOMATION_TIMEOUT_SECONDS == 300
+    assert compat.automation_timeout_for(GEMINI_IMAGE_OP) == 300
+    assert compat.automation_timeout_for(GEMINI_VIDEO_OP) == compat.AUTOMATION_TIMEOUT_SECONDS == 200
+    assert compat.automation_timeout_for("webai_task_status") == 200
+    assert compat.automation_timeout_for(None) == 200
     assert compat.DISPATCHABLE == compat.DISPATCHABLE_D10_02 | compat.DISPATCHABLE_D10_03 | compat.DISPATCHABLE_D12
     assert compat.DISPATCHABLE_D12 == frozenset({CHATGPT_IMAGE_OP, GEMINI_IMAGE_OP, GEMINI_VIDEO_OP, MUSIC_OP})
 
@@ -298,7 +305,7 @@ def test_d12_dispatch_image_video_reconfines_path_and_redacts_to_task_relative_a
         "--output-json",
     ]
     assert kwargs["hub_path"] == hub
-    assert kwargs["timeout"] == compat.AUTOMATION_TIMEOUT_SECONDS
+    assert kwargs["timeout"] == compat.automation_timeout_for(op)
     assert kwargs["env"]["WAH_CDP_HOST"] == "127.0.0.1"
     assert kwargs["env"]["WAH_CDP_PORT"] == "9222"
     assert "WAH_BROWSER_EXECUTABLE" not in kwargs["env"]
@@ -531,3 +538,222 @@ def test_d12_over_admission_regression_still_rejects_adjacent_generation_surface
     argv, err = compat.validate_request(op, {"profile": "p", "prompt": "x"})
     assert argv is None
     assert err == "request rejected: operation not dispatchable"
+
+
+def _enable_d14_async_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, pageful: bool) -> Path:
+    _platform_data_root(tmp_path, monkeypatch)
+    hub = _make_hub(tmp_path, label="hub-d14")
+    _pin_digest(monkeypatch, hub)
+    monkeypatch.setenv(compat.AUTOMATION_ENV, "1")
+    monkeypatch.setenv(compat.HUB_PATH_ENV, str(hub))
+    if pageful:
+        monkeypatch.setenv(compat.CDP_HOST_ENV, "127.0.0.1")
+        monkeypatch.setenv(compat.CDP_PORT_ENV, "9222")
+        _allow_cdp(monkeypatch)
+    return hub
+
+
+def test_d14_hub_adapter_redactor_alias_stays_identical() -> None:
+    assert "result" not in compat.RESPONSE_KEY_ALLOWLIST
+    assert hub_adapter.redact_hub_response is automation.redact_hub_response
+
+
+def test_d14_async_start_running_and_profile_busy_use_real_start_envelopes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _enable_d14_async_env(monkeypatch, tmp_path, pageful=True)
+    hub_task_id = "task_hub_d14"
+
+    def running_response(args: list[str], kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert args[0] == "webai:gemini:generate-video"
+        assert kwargs["timeout"] == compat.automation_timeout_for(GEMINI_VIDEO_OP)
+        return {
+            "task_id": hub_task_id,
+            "status": "running",
+            "profile": "gemini-9225",
+            "lease_id": "lease_d14",
+            "started_at": "2026-05-16T00:00:00Z",
+        }
+
+    calls = _install_dispatch_spy(monkeypatch, tool_names=(GEMINI_VIDEO_OP,), dispatch_response=running_response)
+
+    result = hub_adapter.dispatch_async_start(
+        GEMINI_VIDEO_OP,
+        {"profile": "gemini-9225", "prompt": "make a video"},
+        account=ACCOUNT,
+        task_id=TASK_ID,
+    )
+
+    assert result == {
+        "outcome": "running",
+        "status": "running",
+        "task_id": hub_task_id,
+        "payload": {"task_id": hub_task_id, "status": "running"},
+    }
+    assert len(_dispatch_calls(calls)) == 1
+
+    def busy_response(args: list[str], _kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert args[0] == "webai:gemini:generate-video"
+        return {
+            "status": "failed",
+            "errorCode": "PROFILE_LEASE_BUSY",
+            "message": "profile busy at /home/l1u token=secret",
+        }
+
+    busy_calls = _install_dispatch_spy(monkeypatch, tool_names=(GEMINI_VIDEO_OP,), dispatch_response=busy_response)
+    busy = hub_adapter.dispatch_async_start(
+        GEMINI_VIDEO_OP,
+        {"profile": "gemini-9225", "prompt": "make a video"},
+        account=ACCOUNT,
+        task_id=TASK_ID,
+    )
+
+    assert busy["outcome"] == "blocked"
+    assert busy["payload"]["status"] == "failed"
+    assert busy["payload"]["errorCode"] == "PROFILE_LEASE_BUSY"
+    assert len(_dispatch_calls(busy_calls)) == 1
+    rendered = repr(busy)
+    assert "/home" not in rendered
+    assert "secret" not in rendered
+
+
+def test_d14_async_status_done_reconfines_nested_result_before_redaction(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    data_root = _platform_data_root(tmp_path, monkeypatch)
+    _enable_d14_async_env(monkeypatch, tmp_path, pageful=False)
+    hub_task_id = "task_hub_d14"
+    content = b"video bytes\n"
+    artifact = _governed_dir(data_root) / "video.mp4"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(content)
+
+    def done_response(args: list[str], kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert args == ["webai:task-status", "--task-id", hub_task_id, "--output-json"]
+        assert kwargs["timeout"] == compat.automation_timeout_for("webai_task_status")
+        return {
+            "status": "done",
+            "progress_label": "downloaded",
+            "result": {
+                "path": str(artifact),
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "size_bytes": len(content),
+                "download_filename": "/tmp/video.mp4",
+            },
+        }
+
+    _install_dispatch_spy(monkeypatch, tool_names=("webai_task_status",), dispatch_response=done_response)
+
+    result = hub_adapter.dispatch_async_status(
+        "webai_task_status",
+        {"task_id": hub_task_id},
+        account=ACCOUNT,
+        task_id=TASK_ID,
+    )
+
+    assert result == {
+        "outcome": "ok",
+        "status": "ok",
+        "payload": {
+            "status": "ok",
+            "path": f"tasks/{TASK_ID}/artifacts/video.mp4",
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "size_bytes": len(content),
+            "download_filename": "video.mp4",
+        },
+    }
+    assert "result" not in result["payload"]
+    assert str(tmp_path) not in repr(result)
+
+
+@pytest.mark.parametrize("case", ["etc_passwd", "sibling_task", "parent_escape", "symlink_escape"])
+def test_d14_async_status_outside_nested_result_path_blocks_without_path_leak(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    case: str,
+) -> None:
+    data_root = _platform_data_root(tmp_path, monkeypatch)
+    _enable_d14_async_env(monkeypatch, tmp_path, pageful=False)
+    hub_task_id = "task_hub_d14"
+    governed = _governed_dir(data_root)
+    governed.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if case == "etc_passwd":
+        bad_path = Path("/etc/passwd")
+    elif case == "sibling_task":
+        bad_path = _write_file(data_root / "users" / ACCOUNT / "tasks" / "task_d14_sibling" / "artifacts" / "video.mp4", "x")
+    elif case == "parent_escape":
+        bad_path = governed / ".." / "escape.mp4"
+        _write_file(governed.parent / "escape.mp4", "x")
+    else:
+        target = _write_file(outside / "target.mp4", "x")
+        bad_path = governed / "link.mp4"
+        bad_path.symlink_to(target)
+
+    def done_response(args: list[str], _kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert args == ["webai:task-status", "--task-id", hub_task_id, "--output-json"]
+        return {
+            "status": "done",
+            "result": {
+                "path": str(bad_path),
+                "sha256": "a" * 64,
+                "size_bytes": 1,
+                "download_filename": "video.mp4",
+            },
+        }
+
+    _install_dispatch_spy(monkeypatch, tool_names=("webai_task_status",), dispatch_response=done_response)
+
+    result = hub_adapter.dispatch_async_status(
+        "webai_task_status",
+        {"task_id": hub_task_id},
+        account=ACCOUNT,
+        task_id=TASK_ID,
+    )
+
+    assert result["outcome"] == "blocked"
+    assert result["status"] == "not_implemented"
+    assert result["reason"] == "artifact path governance violation"
+    assert "path" not in result["payload"]
+    rendered = repr(result)
+    assert str(tmp_path) not in rendered
+    assert "/home" not in rendered
+    assert "$HOME" not in rendered
+
+
+@pytest.mark.parametrize("error_code", ["COMMAND_TIMEOUT", "MODEL_ERROR"])
+def test_d14_async_status_failed_blocks_with_redacted_error_code(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    error_code: str,
+) -> None:
+    _enable_d14_async_env(monkeypatch, tmp_path, pageful=False)
+    hub_task_id = "task_hub_d14"
+
+    def failed_response(args: list[str], _kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert args == ["webai:task-status", "--task-id", hub_task_id, "--output-json"]
+        return {
+            "status": "failed",
+            "errorCode": error_code,
+            "message": "failed at /home/l1u token=secret",
+        }
+
+    _install_dispatch_spy(monkeypatch, tool_names=("webai_task_status",), dispatch_response=failed_response)
+
+    result = hub_adapter.dispatch_async_status(
+        "webai_task_status",
+        {"task_id": hub_task_id},
+        account=ACCOUNT,
+        task_id=TASK_ID,
+    )
+
+    assert result["outcome"] == "blocked"
+    assert result["status"] == "failed"
+    assert result["reason"] == f"video generation failed: {error_code}"
+    assert result["payload"]["errorCode"] == error_code
+    rendered = repr(result)
+    assert "/home" not in rendered
+    assert "secret" not in rendered

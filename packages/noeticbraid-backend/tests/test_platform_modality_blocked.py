@@ -57,7 +57,7 @@ def test_resolve_image_video_to_d12_generate_routes() -> None:
     assert video.vendor == "gemini"
     assert video.profile == "gemini-9225"
     assert video.artifact_extension == "mp4"
-    assert video.param_kind == "generate"
+    assert video.param_kind == "generate_async"
     assert "video" in video.prompt_preamble.lower()
 
 

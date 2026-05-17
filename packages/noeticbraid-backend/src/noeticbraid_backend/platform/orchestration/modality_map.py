@@ -9,7 +9,7 @@ from typing import Literal
 from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat
 
 RouteKind = Literal["route", "blocked"]
-ParamKind = Literal["textual", "generate"]
+ParamKind = Literal["textual", "generate", "generate_async"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +76,7 @@ _MODALITY_ROUTES: dict[str, dict[str, str]] = {
         "vendor": "gemini",
         "profile": "gemini-9225",
         "artifact_extension": "mp4",
-        "param_kind": "generate",
+        "param_kind": "generate_async",
         "prompt_preamble": "Generate a concise video artifact for this NoeticBraid platform task.",
     },
 }

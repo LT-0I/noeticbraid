@@ -32,6 +32,8 @@ from noeticbraid_backend.platform.workspace_paths import resolve_user_path
 
 EventType = Literal["ai_delta", "progress", "ledger", "artifact", "error", "blocked"]
 MAX_DISPATCH_STEPS = 6
+ASYNC_POLL_INTERVAL_SECONDS = 5.0
+ASYNC_POLL_BUDGET_SECONDS = 360.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +66,7 @@ class PlanStep:
     params_template: dict[str, Any]
     prompt_text: str
     artifact_extension: str
+    param_kind: str = "generate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +165,10 @@ class Dispatcher:
                     current.task_id,
                     {"message": f"dispatching {step.modality}", "step": index, "total": total},
                 )
-                hub_result = await self._dispatch_step(step, task_id=current.task_id)
+                if step.param_kind == "generate_async":
+                    hub_result = await self._dispatch_async_step(step, task_id=current.task_id)
+                else:
+                    hub_result = await self._dispatch_step(step, task_id=current.task_id)
                 safe_payload = _redact_hub_payload(
                     self.account,
                     current.task_id,
@@ -281,6 +287,10 @@ class Dispatcher:
             # the governed --download-dir is injected by dispatch_web_ai from the
             # C6-§1b dispatcher-trusted account/task_id, never via params.
             params = {"profile": route.profile, "prompt": prompt}
+        elif route.param_kind == "generate_async":
+            # Async generate starts accept the same closed generate keys; the
+            # governed --download-dir remains injected from trusted account/task_id.
+            params = {"profile": route.profile, "prompt": prompt}
         else:  # forward-safety: a new ParamKind must be wired explicitly, not silently coerced
             raise ValueError(f"unhandled modality param_kind: {route.param_kind!r}")
         return PlanStep(
@@ -290,6 +300,7 @@ class Dispatcher:
             params_template=params,
             prompt_text=prompt,
             artifact_extension=route.artifact_extension,
+            param_kind=route.param_kind,
         )
 
     async def _dispatch_step(self, step: PlanStep, *, task_id: str) -> dict[str, Any]:
@@ -302,13 +313,68 @@ class Dispatcher:
                     account=self.account,
                     task_id=task_id,
                 ),
-                timeout=compat.AUTOMATION_TIMEOUT_SECONDS,
+                timeout=compat.automation_timeout_for(step.op),
             )
         except TimeoutError:
             payload = hub_adapter.redact_hub_response(
                 {"status": "not_implemented", "reason": "hub dispatch timed out"}
             )
             return {"outcome": "blocked", "status": "not_implemented", "reason": "hub dispatch timed out", "payload": payload}
+
+    async def _dispatch_async_step(self, step: PlanStep, *, task_id: str) -> dict[str, Any]:
+        if self.cancel_event.is_set():
+            return _blocked_hub_result("task dispatch cancelled")
+        try:
+            start = await asyncio.wait_for(
+                asyncio.to_thread(
+                    hub_adapter.dispatch_async_start,
+                    step.op,
+                    dict(step.params_template),
+                    account=self.account,
+                    task_id=task_id,
+                ),
+                timeout=compat.automation_timeout_for(step.op),
+            )
+        except TimeoutError:
+            return _blocked_hub_result("hub dispatch timed out")
+
+        if start.get("outcome") != "running":
+            return start
+
+        async_task_id = start.get("task_id")
+        if not isinstance(async_task_id, str) or compat.TASK_ID_RE.fullmatch(async_task_id) is None:
+            return _blocked_hub_result("hub dispatch blocked")
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + ASYNC_POLL_BUDGET_SECONDS
+        status_params = {"task_id": async_task_id}
+        while True:
+            if self.cancel_event.is_set():
+                return _blocked_hub_result("task dispatch cancelled")
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return _blocked_hub_result("video generation exceeded platform poll budget")
+            try:
+                poll = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        hub_adapter.dispatch_async_status,
+                        "webai_task_status",
+                        status_params,
+                        account=self.account,
+                        task_id=task_id,
+                    ),
+                    timeout=min(compat.automation_timeout_for("webai_task_status"), remaining),
+                )
+            except TimeoutError:
+                if deadline - loop.time() <= 0:
+                    return _blocked_hub_result("video generation exceeded platform poll budget")
+                await asyncio.sleep(min(ASYNC_POLL_INTERVAL_SECONDS, max(0.0, deadline - loop.time())))
+                continue
+
+            if poll.get("outcome") == "running" and poll.get("status") in {"running", "queued"}:
+                await asyncio.sleep(min(ASYNC_POLL_INTERVAL_SECONDS, max(0.0, deadline - loop.time())))
+                continue
+            return poll
 
     def _transition(self, task: Task, to_state: TaskState) -> tuple[Task, LedgerEvent]:
         updated = task_store.update_task_state(self.account, task.task_id, to_state)
@@ -337,6 +403,17 @@ class Dispatcher:
     @staticmethod
     def _ledger_event(event: LedgerEvent) -> Event:
         return Event("ledger", event.task_id, event.to_json_dict())
+
+
+def _blocked_hub_result(reason: str) -> dict[str, Any]:
+    safe_reason = sanitize_error_msg(str(reason), max_chars=512) or "hub dispatch blocked"
+    payload = hub_adapter.redact_hub_response({"status": "not_implemented", "reason": safe_reason})
+    return {
+        "outcome": "blocked",
+        "status": "not_implemented",
+        "reason": safe_reason,
+        "payload": payload,
+    }
 
 
 def _redact_hub_payload(account: str, task_id: str, payload: object) -> dict[str, Any]:

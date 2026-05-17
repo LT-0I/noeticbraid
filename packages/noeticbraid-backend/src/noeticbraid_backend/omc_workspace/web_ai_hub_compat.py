@@ -26,6 +26,11 @@ CDP_LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"}
 CDP_PREFLIGHT_TIMEOUT_SECONDS = 2.0
 
 AUTOMATION_TIMEOUT_SECONDS = 200
+GENERATE_AUTOMATION_TIMEOUT_SECONDS = 300
+AUTOMATION_TIMEOUT_OVERRIDES: dict[str, int] = {
+    "webai_chatgpt_generate_image": GENERATE_AUTOMATION_TIMEOUT_SECONDS,
+    "webai_gemini_generate_image": GENERATE_AUTOMATION_TIMEOUT_SECONDS,
+}
 PROMPT_MAX_CHARS = 8192
 QUERY_MAX_CHARS = PROMPT_MAX_CHARS
 UPLOAD_FILE_MAX_BYTES = 33_554_432
@@ -259,6 +264,12 @@ def read_automation_enabled(environ) -> bool:
     """Read the web-ai automation opt-in from an environ-like mapping."""
 
     return parse_opt_in(environ.get(AUTOMATION_ENV))
+
+
+def automation_timeout_for(op: str | None) -> int:
+    """Return the bounded automation timeout for one operation."""
+
+    return AUTOMATION_TIMEOUT_OVERRIDES.get(str(op or ""), AUTOMATION_TIMEOUT_SECONDS)
 
 
 def compute_exec_digest(hub_root: Path) -> str | None:
@@ -674,6 +685,7 @@ def _contains_any_control(value: str) -> bool:
 __all__ = [
     "ALLOWED_OPERATIONS",
     "AUTOMATION_TIMEOUT_SECONDS",
+    "AUTOMATION_TIMEOUT_OVERRIDES",
     "AUTOMATION_ENV",
     "CDP_ALLOW_NONLOOPBACK_ENV",
     "CDP_HOST_DEFAULT",
@@ -692,6 +704,7 @@ __all__ = [
     "DISPATCHABLE_D10_03",
     "DISPATCHABLE_D12",
     "ENUMERATED_OFF_DIST_DEPS",
+    "GENERATE_AUTOMATION_TIMEOUT_SECONDS",
     "GENERATE_ARTIFACT_KEYS",
     "HARD_EXCLUDED_NAMES",
     "HARD_EXCLUDED_PREFIXES",
@@ -718,6 +731,7 @@ __all__ = [
     "UPLOAD_PATH_RE",
     "WORKSPACE_KEYS",
     "WORKSPACE_SURFACE_ALLOWLIST",
+    "automation_timeout_for",
     "compute_exec_digest",
     "digest_matches",
     "is_allowed_operation",
