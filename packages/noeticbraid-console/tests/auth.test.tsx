@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
@@ -10,6 +11,7 @@ import {
   ensureBearer,
   getBearer,
 } from '../src/api/auth'
+import { AuthProvider, useAuthState } from '../src/api/auth-context'
 import { fetchAccountStatus } from '../src/api/client'
 import { server } from '../src/mocks/server'
 import { routeTree } from '../src/routes/routeTree'
@@ -134,5 +136,49 @@ describe('console bearer auth', () => {
 
     renderAt('/capabilities')
     await waitFor(() => expect(screen.getByTestId('capabilities-root')).toBeInTheDocument())
+  })
+
+  // Regression: main.tsx wraps the app in <React.StrictMode>, which
+  // double-invokes effects (mount→unmount→remount). A prior ref-guard in
+  // AuthProvider left auth stuck on `booting` forever under StrictMode (the
+  // infinite "正在载入" panel) while the non-StrictMode suite stayed green.
+  // This test reproduces production by rendering inside StrictMode.
+  test('AuthProvider reaches ready under StrictMode (no stuck booting)', async () => {
+    function Probe() {
+      const auth = useAuthState()
+      return <div data-testid="strict-auth-status">{auth.status}</div>
+    }
+    render(
+      <StrictMode>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </StrictMode>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('strict-auth-status')).toHaveTextContent('ready'),
+    )
+  })
+
+  test('AuthProvider degrades (never hangs) under StrictMode when bootstrap fails', async () => {
+    server.use(
+      http.post('/api/auth/startup_token', () =>
+        HttpResponse.json({ accepted: false, mode: 'dpapi_unavailable' }),
+      ),
+    )
+    function Probe() {
+      const auth = useAuthState()
+      return <div data-testid="strict-auth-status">{auth.status}</div>
+    }
+    render(
+      <StrictMode>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </StrictMode>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('strict-auth-status')).toHaveTextContent('degraded'),
+    )
   })
 })
