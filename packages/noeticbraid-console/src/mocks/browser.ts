@@ -1,5 +1,5 @@
 import { setupWorker } from 'msw/browser'
 
-import { handlers } from './handlers'
+import { coreHandlers, handlers } from './handlers'
 
-export const worker = setupWorker(...handlers)
+export const worker = setupWorker(...(import.meta.env.VITE_PLATFORM_LIVE === '1' ? coreHandlers : handlers))

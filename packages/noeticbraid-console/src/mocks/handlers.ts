@@ -67,7 +67,7 @@ function latestRuns(): { runs: RunRecord[] } {
   return { runs: [...(runs as { runs: RunRecord[] }).runs, ...omcRunRecords] }
 }
 
-export const handlers = [
+export const coreHandlers = [
   http.get('/api/health', () =>
     HttpResponse.json({
       status: 'ok',
@@ -155,7 +155,42 @@ export const handlers = [
     })
   }),
   http.get('/api/capabilities', () => HttpResponse.json({ capabilities })),
+  http.get('/api/account/status', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json(accountStatus)
+  }),
+  http.get('/api/account/pool', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json(accountStatus)
+  }),
+  http.post('/api/capabilities/:id/health-check', ({ params }) => {
+    const capabilityId = String(params.id)
+    const capability = capabilities.find((item) => item.capability_id === capabilityId)
+    if (!capability) {
+      return HttpResponse.json({ detail: 'capability not found' }, { status: 404 })
+    }
+    const result: CapabilityHealthResult = {
+      capability_id: capabilityId,
+      mode: 'mock',
+      status: 'available',
+      checked_at: utcNow(),
+      summary: `Mock health OK for ${capability.display_name}`,
+      artifact_ref: null,
+    }
+    const updated: CapabilityRegistryEntry = {
+      ...capability,
+      status: 'available',
+      health_mode: 'mock',
+      last_checked_at: result.checked_at,
+      last_result: result,
+    }
+    capabilities = capabilities.map((item) => (item.capability_id === capabilityId ? updated : item))
+    const response: CapabilityHealthCheckResponse = { capability: updated, result }
+    return HttpResponse.json(response)
+  }),
+]
 
+export const platformHandlers = [
   http.get('/platform/tasks', ({ request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
     return HttpResponse.json({ tasks: platformTasks })
@@ -202,37 +237,6 @@ export const handlers = [
       { headers: { 'X-NoeticBraid-Bearer': MOCK_BEARER } },
     ),
   ),
-  http.get('/api/account/status', ({ request }) => {
-    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
-    return HttpResponse.json(accountStatus)
-  }),
-  http.get('/api/account/pool', ({ request }) => {
-    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
-    return HttpResponse.json(accountStatus)
-  }),
-  http.post('/api/capabilities/:id/health-check', ({ params }) => {
-    const capabilityId = String(params.id)
-    const capability = capabilities.find((item) => item.capability_id === capabilityId)
-    if (!capability) {
-      return HttpResponse.json({ detail: 'capability not found' }, { status: 404 })
-    }
-    const result: CapabilityHealthResult = {
-      capability_id: capabilityId,
-      mode: 'mock',
-      status: 'available',
-      checked_at: utcNow(),
-      summary: `Mock health OK for ${capability.display_name}`,
-      artifact_ref: null,
-    }
-    const updated: CapabilityRegistryEntry = {
-      ...capability,
-      status: 'available',
-      health_mode: 'mock',
-      last_checked_at: result.checked_at,
-      last_result: result,
-    }
-    capabilities = capabilities.map((item) => (item.capability_id === capabilityId ? updated : item))
-    const response: CapabilityHealthCheckResponse = { capability: updated, result }
-    return HttpResponse.json(response)
-  }),
 ]
+
+export const handlers = [...coreHandlers, ...platformHandlers]

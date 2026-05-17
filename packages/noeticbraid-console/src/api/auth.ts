@@ -10,6 +10,7 @@ import type { AuthResponse } from '@/types/contracts'
  */
 
 const BEARER_HEADER = 'X-NoeticBraid-Bearer'
+const BOOTSTRAP_URL = import.meta.env.VITE_PLATFORM_LIVE === '1' ? '/platform/auth/session' : '/api/auth/startup_token'
 
 let bearerToken: string | null = null
 
@@ -51,7 +52,7 @@ async function bootstrap(): Promise<EnsureBearerResult> {
   // without any backend/CORS change here.
   let res: Response
   try {
-    res = await fetch('/api/auth/startup_token', { method: 'POST' })
+    res = await fetch(BOOTSTRAP_URL, { method: 'POST' })
   } catch {
     return { ok: false, mode: 'network_unavailable' }
   }

@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 
 const projectRoot = dirname(fileURLToPath(import.meta.url))
 
@@ -36,27 +36,41 @@ function mswWorkerPlugin(): Plugin {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), mswWorkerPlugin()],
-  resolve: {
-    alias: {
-      '@': resolve(projectRoot, './src'),
-    },
-  },
-  server: {
-    host: '127.0.0.1',
-    port: 5173,
-  },
-  test: {
-    environment: 'jsdom',
-    environmentOptions: {
-      jsdom: {
-        url: 'http://127.0.0.1:5173/',
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, projectRoot, '')
+  const platformLive = env.VITE_PLATFORM_LIVE === '1'
+  const platformBackendOrigin = env.VITE_PLATFORM_BACKEND_ORIGIN || 'http://127.0.0.1:8000'
+
+  return {
+    plugins: [react(), mswWorkerPlugin()],
+    resolve: {
+      alias: {
+        '@': resolve(projectRoot, './src'),
       },
     },
-    globals: true,
-    setupFiles: ['./tests/setup.ts'],
-    include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: ['tests/e2e/**', 'node_modules/**'],
-  },
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      ...(platformLive
+        ? {
+            proxy: {
+              '/platform': { target: platformBackendOrigin, changeOrigin: true, ws: true },
+              '/api/auth/startup_token': { target: platformBackendOrigin, changeOrigin: true },
+            },
+          }
+        : {}),
+    },
+    test: {
+      environment: 'jsdom',
+      environmentOptions: {
+        jsdom: {
+          url: 'http://127.0.0.1:5173/',
+        },
+      },
+      globals: true,
+      setupFiles: ['./tests/setup.ts'],
+      include: ['tests/**/*.test.{ts,tsx}'],
+      exclude: ['tests/e2e/**', 'node_modules/**'],
+    },
+  }
 })

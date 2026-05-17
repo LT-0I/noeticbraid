@@ -4,17 +4,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import mimetypes
 import re
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse
 
+from noeticbraid_backend.platform.artifacts.ledger import _artifact_events
 from noeticbraid_backend.platform.auth import require_platform_bearer
-from noeticbraid_backend.platform.ledger.writer import ledger_path_for
 from noeticbraid_backend.platform.tasks import store as task_store
 from noeticbraid_backend.platform.tasks.models import account_ref_for
 from noeticbraid_backend.platform.workspace_paths import resolve_user_path
@@ -86,23 +84,6 @@ def _resolve_owned_artifact(account: str, task_id: str, artifact_id: str) -> _Re
         except Exception:
             continue
     raise _not_found()
-
-
-def _artifact_events(account: str, task_id: str) -> list[dict[str, Any]]:
-    path = ledger_path_for(account, task_id)
-    events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        if not isinstance(row, dict):
-            raise ValueError("ledger row must be an object")
-        if row.get("type") != "artifact_produced":
-            continue
-        payload = row.get("payload")
-        if isinstance(payload, dict):
-            events.append(payload)
-    return events
 
 
 def _is_safe_artifact_id(artifact_id: str) -> bool:

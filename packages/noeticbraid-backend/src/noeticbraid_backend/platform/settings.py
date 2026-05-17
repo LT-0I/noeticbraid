@@ -10,6 +10,7 @@ from pathlib import Path
 PLATFORM_ENABLED_ENV = "NOETICBRAID_PLATFORM_ENABLED"
 PLATFORM_DATA_ROOT_ENV = "NOETICBRAID_PLATFORM_DATA_ROOT"
 PLATFORM_STT_MODEL_DIR_ENV = "NOETICBRAID_PLATFORM_STT_MODEL_DIR"
+PLATFORM_DEV_SESSION_ACCOUNT_ENV = "NOETICBRAID_PLATFORM_DEV_SESSION_ACCOUNT"
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _DEFAULT_DATA_ROOT = Path("~/.noeticbraid-platform")
@@ -22,6 +23,7 @@ class PlatformSettings:
     enabled: bool = False
     data_root: Path = _DEFAULT_DATA_ROOT.expanduser()
     stt_model_dir: Path | None = None
+    dev_session_account: str | None = None
 
     @classmethod
     def from_env(cls) -> "PlatformSettings":
@@ -31,15 +33,23 @@ class PlatformSettings:
         data_root = Path(os.environ.get(PLATFORM_DATA_ROOT_ENV, str(_DEFAULT_DATA_ROOT))).expanduser()
         raw_stt_model_dir = os.environ.get(PLATFORM_STT_MODEL_DIR_ENV)
         stt_model_dir = Path(raw_stt_model_dir).expanduser() if raw_stt_model_dir else None
+        raw_dev_session_account = os.environ.get(PLATFORM_DEV_SESSION_ACCOUNT_ENV)
+        dev_session_account = (
+            raw_dev_session_account.strip()
+            if raw_dev_session_account is not None and raw_dev_session_account.strip()
+            else None
+        )
         return cls(
             enabled=raw_enabled.strip().lower() in _TRUE_VALUES,
             data_root=data_root,
             stt_model_dir=stt_model_dir,
+            dev_session_account=dev_session_account,
         )
 
 
 __all__ = [
     "PLATFORM_DATA_ROOT_ENV",
+    "PLATFORM_DEV_SESSION_ACCOUNT_ENV",
     "PLATFORM_ENABLED_ENV",
     "PLATFORM_STT_MODEL_DIR_ENV",
     "PlatformSettings",
