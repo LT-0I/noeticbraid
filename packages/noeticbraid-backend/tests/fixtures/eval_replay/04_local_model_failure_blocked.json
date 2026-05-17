@@ -1,0 +1,33 @@
+{
+  "name": "local_model_failure_blocked",
+  "requirements": [
+    {
+      "id": "req_failure",
+      "text": "Draft a memo but the local model command fails.",
+      "modality": "text",
+      "capability_status": "supported",
+      "coarse_state": "pending"
+    }
+  ],
+  "stub_mode": "local_failure",
+  "expect": {
+    "run_status": "deferred",
+    "per_requirement_coarse_state": {
+      "req_failure": "blocked"
+    },
+    "per_task_deliverables": [
+      {
+        "requirement_id": "req_failure",
+        "status": "blocked",
+        "has_download_ref": false,
+        "blocked_reason_contains": "api_key=[redacted]"
+      }
+    ],
+    "all_rounds_hub_false": true,
+    "no_engineering_keys": true,
+    "conversation_contains": ["api_key=[redacted]"],
+    "conversation_not_contains": ["api_key=fake"],
+    "round_count": 0,
+    "stub_call_kinds": ["fanout"]
+  }
+}

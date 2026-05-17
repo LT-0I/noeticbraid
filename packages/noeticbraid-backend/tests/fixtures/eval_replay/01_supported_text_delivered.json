@@ -1,0 +1,29 @@
+{
+  "name": "supported_text_delivered",
+  "requirements": [
+    {
+      "id": "req_text",
+      "text": "Draft a concise local-only status memo.",
+      "modality": "text",
+      "capability_status": "supported",
+      "coarse_state": "pending"
+    }
+  ],
+  "stub_mode": "consensus",
+  "expect": {
+    "run_status": "delivered",
+    "per_requirement_coarse_state": {
+      "req_text": "done"
+    },
+    "per_task_deliverables": [
+      {
+        "requirement_id": "req_text",
+        "status": "delivered",
+        "has_download_ref": true
+      }
+    ],
+    "all_rounds_hub_false": true,
+    "no_engineering_keys": true,
+    "stub_call_kinds": ["fanout", "critique_review", "critique_review"]
+  }
+}

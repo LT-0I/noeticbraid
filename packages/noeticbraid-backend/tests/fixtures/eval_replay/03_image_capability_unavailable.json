@@ -1,0 +1,32 @@
+{
+  "name": "image_capability_unavailable",
+  "requirements": [
+    {
+      "id": "req_image",
+      "text": "Create an image poster for the launch.",
+      "modality": "image",
+      "capability_status": "unavailable",
+      "coarse_state": "blocked",
+      "blocked_reason": "图像生成目前还达不到，这部分我们暂时做不了。"
+    }
+  ],
+  "stub_mode": "consensus",
+  "expect": {
+    "run_status": "deferred",
+    "per_requirement_coarse_state": {
+      "req_image": "blocked"
+    },
+    "per_task_deliverables": [
+      {
+        "requirement_id": "req_image",
+        "status": "blocked",
+        "has_download_ref": false,
+        "blocked_reason_contains": "图像生成目前还达不到"
+      }
+    ],
+    "all_rounds_hub_false": true,
+    "no_engineering_keys": true,
+    "round_count": 0,
+    "stub_call_kinds": []
+  }
+}

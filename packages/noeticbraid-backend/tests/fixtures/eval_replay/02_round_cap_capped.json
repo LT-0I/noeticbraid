@@ -1,0 +1,40 @@
+{
+  "name": "round_cap_capped",
+  "requirements": [
+    {
+      "id": "req_cap",
+      "text": "Draft a memo that keeps receiving mechanical critique.",
+      "modality": "text",
+      "capability_status": "supported",
+      "coarse_state": "pending"
+    }
+  ],
+  "stub_mode": "cap",
+  "expect": {
+    "run_status": "capped",
+    "per_requirement_coarse_state": {
+      "req_cap": "done"
+    },
+    "per_task_deliverables": [
+      {
+        "requirement_id": "req_cap",
+        "status": "delivered",
+        "has_download_ref": true
+      }
+    ],
+    "all_rounds_hub_false": true,
+    "no_engineering_keys": true,
+    "conversation_contains": ["已尽力，仍可改进"],
+    "stub_call_kinds": [
+      "fanout",
+      "critique_review",
+      "critique_review",
+      "apply_revision_directive",
+      "critique_review",
+      "critique_review",
+      "apply_revision_directive",
+      "critique_review",
+      "critique_review"
+    ]
+  }
+}
