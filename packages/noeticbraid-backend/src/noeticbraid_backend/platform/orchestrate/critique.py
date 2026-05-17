@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
+from noeticbraid_backend.omc_workspace import web_ai_hub_compat as compat
+from noeticbraid_backend.omc_workspace.web_ai_hub_client import CHATGPT_PROFILE, sanitize_error_msg
 from noeticbraid_backend.platform.conversation import model
 from noeticbraid_backend.platform.elicitation.local_ai import DEFAULT_TIMEOUT_SECONDS, run_local_task
 from noeticbraid_backend.platform.orchestrate import state
+from noeticbraid_backend.platform.orchestration import hub_adapter
 
 MAX_ROUNDS = 3
 CAP_MESSAGE = "已尽力，仍可改进 / Best effort; still can be improved."
@@ -223,7 +228,7 @@ def run_critique_loop(
                 terminated_by="MAX_ROUNDS",
                 decision_class="mechanical",
             )
-        revision = _apply_directive(requirement, current_artifact, directive, timeout=timeout)
+        revision = _apply_directive(account, task_id, requirement, current_artifact, directive, timeout=timeout)
         if revision.get("ok") is not True:
             return CritiqueResult(
                 status="failed",
@@ -316,12 +321,43 @@ def _call_reviewer(
 
 
 def _apply_directive(
+    account: str,
+    task_id: str,
     requirement: dict[str, Any],
     artifact: dict[str, Any],
     directive: ConsolidatedDirective,
     *,
     timeout: int,
 ) -> dict[str, Any]:
+    conversation_id = artifact.get("conversation_id")
+    if artifact.get("hub") is True and isinstance(conversation_id, str) and conversation_id:
+        unavailable_reason = _hub_revision_unavailable_reason()
+        if unavailable_reason is not None:
+            return {"ok": False, "error": unavailable_reason}
+        try:
+            result = hub_adapter.dispatch(
+                "webai_chatgpt_send_prompt",
+                {
+                    "profile": CHATGPT_PROFILE,
+                    "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
+                    "reuse_conversation": True,
+                },
+                account=account,
+                task_id=task_id,
+            )
+        except Exception:
+            return {"ok": False, "error": "web execution unavailable"}
+        if result.get("outcome") == "ok":
+            payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
+            response_text = str(payload.get("response_text") or "").strip()
+            if not response_text:
+                return {"ok": False, "error": "web execution produced no artifact"}
+            return {"ok": True, "artifact": {"text": response_text, "hub": True, "conversation_id": conversation_id}}
+        return {
+            "ok": False,
+            "error": sanitize_error_msg(str(result.get("reason") or "web execution unavailable"), max_chars=256)
+            or "web execution unavailable",
+        }
     return run_local_task(
         {
             "kind": "apply_revision_directive",
@@ -331,6 +367,20 @@ def _apply_directive(
         },
         timeout=timeout,
     )
+
+
+def _hub_revision_unavailable_reason() -> str | None:
+    if (os.environ.get("NOETICBRAID_PLATFORM_HUB_EXEC") or "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return "web execution unavailable"
+    hub_path_raw = os.environ.get(compat.HUB_PATH_ENV)
+    if not hub_path_raw or not os.path.isabs(hub_path_raw) or not os.path.isdir(hub_path_raw):
+        return "web execution unavailable"
+    if not compat.read_automation_enabled(os.environ):
+        return "web execution unavailable"
+    digest_status, _digest_detail = compat.digest_matches(Path(hub_path_raw))
+    if digest_status != "ok":
+        return "web execution unavailable"
+    return None
 
 
 def _append_user_gate(

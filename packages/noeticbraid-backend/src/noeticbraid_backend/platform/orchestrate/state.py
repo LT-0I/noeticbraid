@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Engineering-only orchestration state stored by path reference."""
+"""Engineering-only orchestration state stored by path reference.
+
+Forward-compat reader rule: readers MUST treat an absent ``hub`` round
+field as ``false`` and MUST NOT reject unknown additive round keys.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +18,8 @@ from noeticbraid_backend.platform.workspace_paths import resolve_user_path
 
 SCHEMA_VERSION = 1
 ORCHESTRATION_FILENAME = "orchestration.json"
-RunStatus = Literal["running", "delivered", "capped", "deferred"]
-_STATUSES = frozenset({"running", "delivered", "capped", "deferred"})
+RunStatus = Literal["running", "delivered", "capped", "deferred", "blocked"]
+_STATUSES = frozenset({"running", "delivered", "capped", "deferred", "blocked"})
 _NODE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
 
 
@@ -67,17 +71,19 @@ def append_round(
     artifact_ref: str,
     decision_class: str,
     terminated_by: str,
+    hub: bool = False,
 ) -> dict[str, Any]:
     updated = validate_state(payload)
     rounds = list(updated["rounds"])
-    rounds.append(
-        {
-            "round": int(round_no),
-            "artifact_ref": str(artifact_ref),
-            "decision_class": str(decision_class),
-            "terminated_by": str(terminated_by),
-        }
-    )
+    row: dict[str, Any] = {
+        "round": int(round_no),
+        "artifact_ref": str(artifact_ref),
+        "decision_class": str(decision_class),
+        "terminated_by": str(terminated_by),
+    }
+    if hub:
+        row["hub"] = True
+    rounds.append(row)
     updated["rounds"] = rounds
     updated["updated_ts"] = model.now_ts()
     return validate_state(updated)
@@ -117,6 +123,8 @@ def current_phase(account: str, task_id: str, requirements_payload: dict[str, An
         return "running"
     if states and states.issubset({"done", "blocked"}) and "done" in states:
         return "delivered"
+    if states and states.issubset({"blocked"}):
+        return "blocked"
     return "deferred"
 
 
@@ -146,14 +154,16 @@ def validate_state(payload: dict[str, Any], *, expected_task_id: str | None = No
         prefix = f"tasks/{task_id}/orchestration/"
         if not artifact_ref.startswith(prefix):
             raise ValueError("artifact_ref must be task-relative orchestration path")
-        rounds.append(
-            {
-                "round": round_no,
-                "artifact_ref": artifact_ref,
-                "decision_class": str(item.get("decision_class") or ""),
-                "terminated_by": str(item.get("terminated_by") or ""),
-            }
-        )
+        row = dict(item)
+        row["round"] = round_no
+        row["artifact_ref"] = artifact_ref
+        row["decision_class"] = str(item.get("decision_class") or "")
+        row["terminated_by"] = str(item.get("terminated_by") or "")
+        if item.get("hub") is True:
+            row["hub"] = True
+        elif "hub" in row:
+            row.pop("hub", None)
+        rounds.append(row)
     updated_ts = str(payload.get("updated_ts") or "").strip()
     if not updated_ts:
         raise ValueError("updated_ts required")

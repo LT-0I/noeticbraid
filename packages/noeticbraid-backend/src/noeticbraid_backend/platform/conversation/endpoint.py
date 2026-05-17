@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request, status
 
 from noeticbraid_backend.platform.auth import require_platform_bearer
+from noeticbraid_backend.platform.conversation.deliverable_view import per_task_deliverables
 from noeticbraid_backend.platform.conversation import model
 from noeticbraid_backend.platform.deliverable.endpoint import _serialize_deliverable
 from noeticbraid_backend.platform.elicitation.capabilities import serialize_capabilities
@@ -164,6 +165,15 @@ def register_platform_conversational_routes(platform_app: FastAPI) -> None:
                 "coarse_status": model.serialize_coarse_status(requirements),
                 "phase": orchestration_state.current_phase(account, task_id, requirements),
             }
+        except Exception as exc:
+            raise _not_found() from exc
+
+    @platform_app.get("/tasks/{task_id}/deliverables", summary="Read final deliverables for one conversational task")
+    async def platform_read_task_deliverables(request: Request, task_id: str) -> dict[str, Any]:
+        account = require_platform_bearer(request.headers.get("authorization"))
+        try:
+            _load_owned_task(account, task_id)
+            return {"deliverables": per_task_deliverables(account, task_id)}
         except Exception as exc:
             raise _not_found() from exc
 

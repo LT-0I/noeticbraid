@@ -11,7 +11,7 @@ from noeticbraid_backend.platform.elicitation.capabilities import capability_for
 from noeticbraid_backend.platform.elicitation.local_ai import sanitize_error_msg
 from noeticbraid_backend.platform.orchestrate import state
 from noeticbraid_backend.platform.orchestrate.critique import CritiqueResult, run_critique_loop
-from noeticbraid_backend.platform.orchestrate.nodes import LocalExecutionNode
+from noeticbraid_backend.platform.orchestrate.nodes import HubExecutionNode, LocalExecutionNode
 from noeticbraid_backend.platform.workflows.selector import select_workflow
 
 
@@ -45,8 +45,9 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
     run_state = state.initial_state(task_id, selection.spec.id)
     run_state = state.write_state(account, task_id, run_state)
     terminal_statuses: list[str] = []
-    local_node = LocalExecutionNode()
     fanout_node = _node_by_id(selection.spec.nodes, "fanout")
+    fanout_uses_hub = _fanout_uses_hub_agent(fanout_node)
+    execution_node = HubExecutionNode() if fanout_uses_hub else LocalExecutionNode()
 
     for requirement in requirements:
         if _is_capability_blocked(requirement):
@@ -66,19 +67,22 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
         )
         requirements_payload = model.load_requirements(account, task_id)
 
-        outcome = local_node.execute(
+        execution_inputs = {
+            "requirement": requirement,
+            "selected_workflow_id": selection.spec.id,
+            "workflow_version": selection.spec.version,
+        }
+        if fanout_uses_hub:
+            execution_inputs = {**execution_inputs, "account": account, "task_id": task_id}
+        outcome = execution_node.execute(
             fanout_node,
-            {
-                "requirement": requirement,
-                "selected_workflow_id": selection.spec.id,
-                "workflow_version": selection.spec.version,
-            },
+            execution_inputs,
         )
         if outcome.status != "succeeded" or outcome.artifact is None:
             reason = sanitize_error_msg(outcome.reason or "local model failed", max_chars=512) or "local model failed"
             _set_requirement_state(account, task_id, requirements_payload, requirement["id"], "blocked", blocked_reason=reason)
             _append_blocked_status(account, task_id, requirement, reason)
-            terminal_statuses.append("deferred")
+            terminal_statuses.append(_terminal_status_for_node_defer(fanout_uses_hub, reason))
             requirements_payload = model.load_requirements(account, task_id)
             continue
 
@@ -95,6 +99,7 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
             artifact_ref=artifact_ref,
             decision_class="mechanical",
             terminated_by="fanout",
+            hub=outcome.artifact.get("hub") is True,
         )
         run_state = state.write_state(account, task_id, run_state)
 
@@ -114,6 +119,7 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
                 artifact_ref=final_ref,
                 decision_class=critique.decision_class,
                 terminated_by=critique.terminated_by,
+                hub=critique.artifact.get("hub") is True,
             )
             run_state = state.write_state(account, task_id, run_state)
             _set_requirement_state(account, task_id, requirements_payload, requirement["id"], "done")
@@ -132,7 +138,7 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
             reason = sanitize_error_msg(critique.reason or "local critique failed", max_chars=512) or "local critique failed"
             _set_requirement_state(account, task_id, requirements_payload, requirement["id"], "blocked", blocked_reason=reason)
             _append_blocked_status(account, task_id, requirement, reason)
-            terminal_statuses.append("deferred")
+            terminal_statuses.append("blocked" if outcome.artifact.get("hub") is True else "deferred")
         requirements_payload = model.load_requirements(account, task_id)
 
     final_status = _run_status(terminal_statuses)
@@ -156,6 +162,7 @@ def _merge_critique_rounds(run_state: dict[str, Any], critique: CritiqueResult) 
             artifact_ref=str(row["artifact_ref"]),
             decision_class=str(row["decision_class"]),
             terminated_by=str(row["terminated_by"]),
+            hub=row.get("hub") is True,
         )
     return updated
 
@@ -165,6 +172,31 @@ def _node_by_id(nodes: tuple[dict[str, Any], ...], node_id: str) -> dict[str, An
         if node.get("id") == node_id:
             return dict(node)
     raise ValueError(f"workflow node missing: {node_id}")
+
+
+def _fanout_uses_hub_agent(fanout_node: dict[str, Any]) -> bool:
+    agents = fanout_node.get("agents")
+    if not isinstance(agents, list):
+        return False
+    return any(str(agent or "").strip().lower() in {"web_gpt", "web_chatgpt", "chatgpt_web", "web_ai"} for agent in agents)
+
+
+def _terminal_status_for_node_defer(fanout_uses_hub: bool, reason: str) -> str:
+    # Honest-Q4 aggregate distinction: gate-off/digest-gate → "deferred"
+    # (feature not enabled), real hub failure → "blocked" (tried, web AI
+    # failed). This reverse-engineers intent from the sanitized reason string,
+    # which is correct today (sanitize_error_msg is identity for these literals)
+    # but brittle. KNOWN POST-PHASE-3 DEBT: the clean fix is a NodeOutcome
+    # defer-kind flag — deliberately deferred because NodeOutcome is the frozen
+    # Phase-2 caller contract. Per-requirement coarse_state stays individually
+    # authoritative regardless, so user-facing truth is never affected here.
+    if not fanout_uses_hub:
+        return "deferred"
+    gate_reasons = {
+        capability_for("web_ai").blocked_reason,
+        "web execution is not available",
+    }
+    return "deferred" if reason in gate_reasons else "blocked"
 
 
 def _is_capability_blocked(requirement: dict[str, Any]) -> bool:
@@ -226,9 +258,13 @@ def _run_status(statuses: list[str]) -> state.RunStatus:
     # Intentional precedence (honest-Q4): if ANY requirement hit the round cap,
     # the aggregate run honestly reports "capped" even when others delivered —
     # surfacing the best-effort caveat rather than hiding it behind "delivered".
-    # Per-requirement coarse_state stays individually accurate regardless.
+    # A blocked aggregate is reserved for all-requirement real hub failures;
+    # gate-off deferrals stay "deferred". Per-requirement coarse_state stays
+    # individually accurate regardless.
     if "capped" in statuses:
         return "capped"
+    if statuses and all(status == "blocked" for status in statuses):
+        return "blocked"
     if "deferred" in statuses and "delivered" not in statuses and "capped" not in statuses:
         return "deferred"
     if "deferred" in statuses and "delivered" in statuses:

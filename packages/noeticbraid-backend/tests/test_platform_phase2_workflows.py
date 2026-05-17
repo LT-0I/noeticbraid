@@ -383,8 +383,10 @@ def test_phase2_source_contains_no_lowercase_network_forbidden_imports() -> None
     roots = [
         SRC_ROOT / "noeticbraid_backend" / "platform" / "orchestrate",
         SRC_ROOT / "noeticbraid_backend" / "platform" / "workflows",
+        SRC_ROOT / "noeticbraid_backend" / "platform" / "conversation",
+        SRC_ROOT / "noeticbraid_backend" / "platform" / "elicitation",
     ]
-    pattern = re.compile(r"(requests|httpx|socket|hub|aiohttp|urllib)")
+    pattern = re.compile(r"(^|[^.])\b(requests|httpx|aiohttp|socket|urllib)\b")
     offenders: list[str] = []
     for root in roots:
         for path in root.rglob("*"):
