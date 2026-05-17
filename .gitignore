@@ -16,12 +16,20 @@ private/**
 !private/*/
 !private/*/README.md
 
-# Browser profile data is never committed (placeholder README is OK)
-**/browser-profiles/cookies/
-**/browser-profiles/sessions/
-**/browser-profiles/Default/
-**/browser-profiles/*.json
-**/browser-profiles/*.sqlite
+# Browser profile data is NEVER committed — credential/cookie stores.
+# Whole-directory exclusion (a real Chrome user-data-dir scatters secrets
+# across many paths: Cookies, Login Data, Network/, Local State, numbered
+# Profile*/ dirs, etc.) — exclude everything, allow only a placeholder README.
+**/browser-profiles/
+**/browser-profile/
+**/cdp-profile/
+!**/browser-profiles/README.md
+# HUB (web-ai-capability-hub) is referenced in place, not vendored.
+# Any local pointer/mirror to its 11 GB credentialed data dir stays local-only.
+/.hub-data
+/.hub-data/
+**/hub-profiles/
+*.hub-data
 
 # Python
 __pycache__/
