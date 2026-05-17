@@ -237,3 +237,10 @@ export interface PlatformCapabilityEntry {
 export interface PlatformCapabilityRegistryResponse {
   capabilities: PlatformCapabilityEntry[]
 }
+
+export type PlatformOrchestrationPhase = 'running' | 'delivered' | 'capped' | 'deferred'
+
+export interface PlatformOrchestrateStatusResponse {
+  coarse_status: PlatformCoarseStatusItem[]
+  phase: PlatformOrchestrationPhase
+}

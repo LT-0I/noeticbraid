@@ -303,5 +303,15 @@
   "platform.coarse.pending": "待处理",
   "platform.coarse.in_progress": "进行中",
   "platform.coarse.done": "已完成",
-  "platform.coarse.blocked": "已阻塞"
+  "platform.coarse.blocked": "已阻塞",
+  "routes.platform.orchestrate": "运行编排",
+  "routes.platform.orchestrateStatus": "编排状态",
+  "routes.platform.status.running": "正在处理已确认的需求。",
+  "routes.platform.status.delivered": "可执行需求已完成。",
+  "routes.platform.status.capped": "已尽力交付，仍可改进。",
+  "routes.platform.status.deferred": "等待能力接入或用户决策后再继续。",
+  "platform.phase.running": "运行中",
+  "platform.phase.delivered": "已交付",
+  "platform.phase.capped": "尽力完成",
+  "platform.phase.deferred": "已延后"
 }

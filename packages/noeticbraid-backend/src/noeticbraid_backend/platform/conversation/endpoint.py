@@ -14,6 +14,8 @@ from noeticbraid_backend.platform.elicitation.capabilities import serialize_capa
 from noeticbraid_backend.platform.elicitation.local_ai import generic_degraded_question, run_elicitation_probe
 from noeticbraid_backend.platform.ledger.events import ai_call_event
 from noeticbraid_backend.platform.ledger.writer import append_event
+from noeticbraid_backend.platform.orchestrate import engine as orchestration_engine
+from noeticbraid_backend.platform.orchestrate import state as orchestration_state
 from noeticbraid_backend.platform.tasks import store as task_store
 from noeticbraid_backend.platform.tasks.models import account_ref_for
 
@@ -136,6 +138,35 @@ def register_platform_conversational_routes(platform_app: FastAPI) -> None:
             raise _not_found() from exc
         return {"requirements": stamped, "view": view}
 
+    @platform_app.post("/tasks/{task_id}/orchestrate", summary="Run confirmed conversational task orchestration")
+    async def platform_orchestrate_task(request: Request, task_id: str) -> dict[str, Any]:
+        account = require_platform_bearer(request.headers.get("authorization"))
+        try:
+            _load_owned_task(account, task_id)
+            requirements = model.load_requirements(account, task_id)
+            if requirements.get("status") != "confirmed":
+                raise _bad_request("not_confirmed")
+            orchestration_engine.run_orchestration(account, task_id)
+            view = _view_payload(account, task_id)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _not_found() from exc
+        return {"view": view}
+
+    @platform_app.get("/tasks/{task_id}/orchestrate/status", summary="Read conversational task orchestration status")
+    async def platform_read_orchestration_status(request: Request, task_id: str) -> dict[str, Any]:
+        account = require_platform_bearer(request.headers.get("authorization"))
+        try:
+            _load_owned_task(account, task_id)
+            requirements = model.load_requirements(account, task_id)
+            return {
+                "coarse_status": model.serialize_coarse_status(requirements),
+                "phase": orchestration_state.current_phase(account, task_id, requirements),
+            }
+        except Exception as exc:
+            raise _not_found() from exc
+
     @platform_app.get("/tasks/{task_id}/view", summary="Read the conversational two-zone task view")
     async def platform_read_conversational_view(request: Request, task_id: str) -> dict[str, Any]:
         account = require_platform_bearer(request.headers.get("authorization"))
@@ -174,7 +205,21 @@ def _view_payload(account: str, task_id: str) -> dict[str, Any]:
 
 
 def _assert_no_engineering_keys(value: Any) -> None:
-    forbidden = {"ledger", "dispatch", "critique", "internal_reason", "internal-reason"}
+    forbidden = {
+        "ledger",
+        "dispatch",
+        "critique",
+        "internal_reason",
+        "internal-reason",
+        "orchestration",
+        "rounds",
+        "directive",
+        "reviewer",
+        "verdict",
+        "evidence_node_ids",
+        "workflow",
+        "selector",
+    }
     if isinstance(value, dict):
         for key, item in value.items():
             if str(key) in forbidden:

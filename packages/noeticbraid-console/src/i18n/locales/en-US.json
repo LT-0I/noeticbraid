@@ -304,5 +304,15 @@
   "platform.coarse.pending": "Pending",
   "platform.coarse.in_progress": "In progress",
   "platform.coarse.done": "Done",
-  "platform.coarse.blocked": "Blocked"
+  "platform.coarse.blocked": "Blocked",
+  "routes.platform.orchestrate": "Run orchestration",
+  "routes.platform.orchestrateStatus": "Orchestration status",
+  "routes.platform.status.running": "Working on confirmed requirements.",
+  "routes.platform.status.delivered": "Finished the available requirements.",
+  "routes.platform.status.capped": "Best effort delivered; still can be improved.",
+  "routes.platform.status.deferred": "Waiting for a capability or user decision before more work.",
+  "platform.phase.running": "Running",
+  "platform.phase.delivered": "Delivered",
+  "platform.phase.capped": "Best effort",
+  "platform.phase.deferred": "Deferred"
 }

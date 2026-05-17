@@ -171,6 +171,39 @@ def run_elicitation_probe(
     )
 
 
+def run_local_task(
+    payload_obj: dict[str, Any],
+    *,
+    timeout: int,
+    argv: list[str] | None = None,
+) -> dict[str, Any]:
+    resolved_argv: list[str] | dict[str, Any] | None = argv
+    if resolved_argv is None:
+        resolved_argv = argv_from_env()
+    if resolved_argv is None:
+        return _error_dict("not_configured", "local model command is not configured")
+    if isinstance(resolved_argv, dict):
+        return resolved_argv
+    if not resolved_argv:
+        return _error_dict("config_error", "local model argv must not be empty")
+    base_payload = json.loads(build_stdin_payload("", None))
+    base_payload["task"] = "Execute the Phase-2 local orchestration or critique task. Return strict JSON only."
+    base_payload["payload"] = payload_obj if isinstance(payload_obj, dict) else {"value": payload_obj}
+    base_payload.pop("raw_requirement", None)
+    base_payload.pop("memory_profile", None)
+    # The elicitation-shaped expected_json schema is irrelevant for fanout/
+    # critique/apply-revision tasks; drop it so the local model is not handed a
+    # misleading output contract (Python-side validation is the real gate).
+    base_payload.pop("expected_json", None)
+    stdin_payload = json.dumps(base_payload, ensure_ascii=False, separators=(",", ":"))
+    return run_local_ai_command(
+        list(resolved_argv[1:]),
+        bin_path=str(resolved_argv[0]),
+        stdin_payload=stdin_payload,
+        timeout=timeout,
+    )
+
+
 def generic_degraded_question(raw_requirement: str) -> dict[str, str]:
     suggested = str(raw_requirement or "").strip()
     return {
@@ -189,6 +222,7 @@ __all__ = [
     "build_stdin_payload",
     "generic_degraded_question",
     "run_elicitation_probe",
+    "run_local_task",
     "run_local_ai_command",
     "sanitize_error_msg",
 ]

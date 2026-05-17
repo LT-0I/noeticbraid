@@ -8,6 +8,7 @@ import type {
   PlatformConversationCreateResponse,
   PlatformConversationTurnRequest,
   PlatformElicitRequest,
+  PlatformOrchestrateStatusResponse,
   PlatformRequirementConfirmItem,
   PlatformRequirementConfirmResponse,
   PlatformTaskViewResponse,
@@ -130,6 +131,16 @@ export async function fetchPlatformCapabilities(): Promise<PlatformCapabilityReg
   return fetchJson<PlatformCapabilityRegistryResponse>('/platform/capabilities')
 }
 
+export async function postOrchestrate(taskId: string): Promise<{ view: PlatformTaskViewResponse }> {
+  return fetchJson<{ view: PlatformTaskViewResponse }>(`/platform/tasks/${encodeURIComponent(taskId)}/orchestrate`, {
+    method: 'POST',
+  })
+}
+
+export async function getOrchestrateStatus(taskId: string): Promise<PlatformOrchestrateStatusResponse> {
+  return fetchJson<PlatformOrchestrateStatusResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/orchestrate/status`)
+}
+
 export async function transcribePlatformAudio(blob: Blob): Promise<PlatformTranscribeResponse> {
   const form = new FormData()
   form.append('audio', blob, 'voice-input.webm')
@@ -206,6 +217,13 @@ export const usePlatformCapabilities = (enabled = true) =>
     enabled,
   })
 
+export const useOrchestrateStatus = (taskId: string, enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'tasks', taskId, 'orchestrate', 'status'],
+    queryFn: () => getOrchestrateStatus(taskId),
+    enabled,
+  })
+
 export const useCreateConversationalPlatformTask = () => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -244,6 +262,17 @@ export const useConfirmPlatformRequirements = (taskId: string) => {
     mutationFn: (requirements: PlatformRequirementConfirmItem[]) => confirmPlatformRequirements(taskId, requirements),
     onSuccess: (response) => {
       void queryClient.setQueryData(['platform', 'tasks', taskId, 'view'], response.view)
+    },
+  })
+}
+
+export const usePostOrchestrate = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => postOrchestrate(taskId),
+    onSuccess: (response) => {
+      void queryClient.setQueryData(['platform', 'tasks', taskId, 'view'], response.view)
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks', taskId, 'orchestrate', 'status'] })
     },
   })
 }
