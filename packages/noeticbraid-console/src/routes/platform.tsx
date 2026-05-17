@@ -697,9 +697,11 @@ function suggestedAnswer(rows: PlatformConversationRow[]): string | undefined {
 function RequirementConfirmation({ items, onConfirm, disabled }: { items: PlatformCoarseStatusItem[]; onConfirm: (items: Array<{ id: string; text: string; modality: ConversationalModality }>) => void; disabled?: boolean }) {
   const { t } = useTranslation()
   const [drafts, setDrafts] = useState(() => items.map((item) => ({ id: item.requirement_id, text: item.text, modality: inferConversationalModality(item.text) })))
+  const [editing, setEditing] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     setDrafts(items.map((item) => ({ id: item.requirement_id, text: item.text, modality: inferConversationalModality(item.text) })))
+    setEditing({})
   }, [items])
 
   if (items.length === 0) return null
@@ -712,30 +714,49 @@ function RequirementConfirmation({ items, onConfirm, disabled }: { items: Platfo
       </CardHeader>
       <CardBody>
         <div className="platform-requirement-list">
-          {drafts.map((draft, index) => (
-            <div key={draft.id} className="platform-requirement-row">
-              <label className="form-field">
-                <span className="form-label">{t('routes.platform.requirementText')}</span>
-                <input
-                  className="platform-input"
-                  value={draft.text}
-                  onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value, modality: inferConversationalModality(event.target.value) } : item))}
-                />
-              </label>
-              <label className="form-field">
-                <span className="form-label">{t('routes.platform.requirementModality')}</span>
-                <select
-                  className="platform-input"
-                  value={draft.modality}
-                  onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, modality: event.target.value as ConversationalModality } : item))}
-                >
-                  {(['text', 'document', 'research', 'code', 'image', 'video', 'music', 'slides', 'ppt', 'web_ai'] as ConversationalModality[]).map((modality) => (
-                    <option key={modality} value={modality}>{modality}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ))}
+          {drafts.map((draft, index) => {
+            const source = items.find((item) => item.requirement_id === draft.id)
+            const editId = `platform-requirement-edit-${draft.id}`
+            const isEditing = editing[draft.id] === true
+            return (
+              <article key={draft.id} className="platform-requirement-card platform-requirement-row">
+                <div className="platform-requirement-main">
+                  <span className="form-label">{t('routes.platform.requirementText')}</span>
+                  <p className="platform-requirement-text">{draft.text}</p>
+                  {isEditing ? (
+                    <label className="platform-requirement-edit" htmlFor={editId}>
+                      <span className="sr-only">{t('routes.platform.requirementEditLabel')}</span>
+                      <textarea
+                        id={editId}
+                        className="platform-input platform-requirement-edit-input"
+                        value={draft.text}
+                        rows={3}
+                        onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value, modality: inferConversationalModality(event.target.value) } : item))}
+                      />
+                    </label>
+                  ) : null}
+                  {source?.blocked_reason ? <p className="platform-requirement-capability-line">{source.blocked_reason}</p> : null}
+                </div>
+                <div className="platform-requirement-meta">
+                  <span className="form-label">{t('routes.platform.requirementModality')}</span>
+                  <Badge className="platform-requirement-badge" tone="info">
+                    {t(`modality.${draft.modality}`)}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="platform-requirement-edit-toggle"
+                    aria-expanded={isEditing}
+                    aria-controls={editId}
+                    onClick={() => setEditing((current) => ({ ...current, [draft.id]: !isEditing }))}
+                  >
+                    {isEditing ? t('routes.platform.requirementEditDone') : t('routes.platform.requirementEdit')}
+                  </Button>
+                </div>
+              </article>
+            )
+          })}
         </div>
       </CardBody>
       <CardFooter>

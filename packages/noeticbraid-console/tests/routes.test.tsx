@@ -729,6 +729,62 @@ describe('console routes', () => {
     expect(screen.queryByTestId('platform-detail-error')).not.toBeInTheDocument()
   })
 
+  test('platform requirement confirmation shows AI-distilled cards with tweak-only editing', async () => {
+    let confirmPayload: unknown
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/view', () =>
+        HttpResponse.json({
+          conversation: [
+            { ts: '2026-05-16T12:00:00Z', role: 'user', kind: 'message', text: 'Research launch plan' },
+          ],
+          deliverables: [],
+          coarse_status: [
+            { requirement_id: 'req_confirm', text: 'Research launch plan', coarse_state: 'pending', capability_status: 'supported' },
+          ],
+          capability_notice: [],
+        }),
+      ),
+      http.post('/platform/tasks/task_platform_seed/requirements/confirm', async ({ request }) => {
+        confirmPayload = await request.json()
+        return HttpResponse.json({
+          requirements: {
+            task_id: 'task_platform_seed',
+            schema_version: 1,
+            status: 'confirmed',
+            confirmed_at: '2026-05-17T00:00:00Z',
+            requirements: (confirmPayload as { requirements: unknown[] }).requirements,
+          },
+          view: {
+            conversation: [],
+            deliverables: [],
+            coarse_status: [],
+            capability_notice: [],
+          },
+        })
+      }),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    const panel = await screen.findByTestId('platform-requirements-confirmation')
+
+    expect(panel).toHaveTextContent('Here is what I understood')
+    expect(panel).toHaveTextContent('Research launch plan')
+    expect(panel.querySelector('select')).toBeNull()
+    expect(panel.querySelector('.platform-requirement-badge')).toHaveTextContent('Research')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tweak wording' }))
+    const editField = screen.getByLabelText('Minor wording tweak')
+    expect(editField).toBeInTheDocument()
+
+    fireEvent.change(editField, { target: { value: 'Write code fix' } })
+    expect(panel.querySelector('.platform-requirement-badge')).toHaveTextContent('Code')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(confirmPayload).toEqual({
+      requirements: [{ id: 'req_confirm', text: 'Write code fix', modality: 'code' }],
+    }))
+  })
+
   test('platform capability notice renders unavailable modality verbatim', async () => {
     server.use(
       http.get('/platform/tasks/task_platform_seed/view', () =>

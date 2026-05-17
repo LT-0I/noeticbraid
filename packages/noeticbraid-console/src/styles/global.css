@@ -938,11 +938,60 @@ code,
   gap: var(--nb-space-3);
 }
 
+.platform-requirement-card,
 .platform-requirement-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
-  gap: var(--nb-space-3);
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
+  gap: var(--nb-space-4);
+  align-items: start;
+  padding: var(--nb-space-4);
+  border: 1px solid var(--nb-color-border-hairline);
+  border-radius: var(--nb-radius-xl);
+  background: color-mix(in srgb, var(--nb-color-surface) 76%, transparent);
+}
+
+.platform-requirement-main,
+.platform-requirement-meta,
+.platform-requirement-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-space-2);
+}
+
+.platform-requirement-text {
+  margin: 0;
+  color: var(--nb-color-text-primary);
+  line-height: var(--nb-line-body);
+  white-space: pre-wrap;
+}
+
+.platform-requirement-meta {
+  align-items: flex-start;
+}
+
+.platform-requirement-badge {
+  width: fit-content;
+}
+
+.platform-requirement-edit-toggle {
+  margin-top: var(--nb-space-1);
+  padding-inline: 0;
+}
+
+.platform-requirement-edit-input {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.platform-requirement-capability-line {
+  margin: var(--nb-space-1) 0 0;
+  padding: var(--nb-space-2) var(--nb-space-3);
+  border: 1px solid color-mix(in srgb, var(--nb-color-status-warning) 36%, var(--nb-color-border-hairline));
+  border-radius: var(--nb-radius-md);
+  background: color-mix(in srgb, var(--nb-color-status-warning) 8%, transparent);
+  color: var(--nb-color-text-muted);
+  font-size: var(--nb-font-size-caption);
+  line-height: var(--nb-line-caption);
 }
 
 .form-field {
