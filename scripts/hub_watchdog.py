@@ -26,7 +26,10 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-REPO = "LT-0I/noeticbraid"
+# Issues are filed in the HUB's OWN repo — that is where an MCP/capability
+# problem actually gets fixed. The watchdog polls there; on close it
+# re-verifies and re-injects the capability into our workflow.
+REPO = "LT-0I/web-ai-capability-hub"
 LABEL = "hub-watchdog"
 ROOT = Path(__file__).resolve().parent.parent
 HUB_MCP = ROOT / "scripts" / "hub-mcp.sh"
