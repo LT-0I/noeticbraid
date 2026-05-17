@@ -148,6 +148,38 @@ export interface PlatformArtifact {
   download_url?: string
 }
 
+export interface PlatformAttachment {
+  attachment_id: string
+  display_name: string
+  content_type: string
+  bytes: number
+  uploaded_ts: string
+}
+
+export interface PlatformAttachmentResponse {
+  attachment: PlatformAttachment
+}
+
+export interface PlatformAttachmentsResponse {
+  attachments: PlatformAttachment[]
+}
+
+export interface PlatformAttachmentDeletedResponse {
+  deleted: boolean
+}
+
+export interface PlatformAttachmentHubSendRequest {
+  prompt?: string
+  profile?: string
+  attachment_ids?: string[]
+}
+
+export interface PlatformAttachmentHubSendResponse {
+  status: string
+  available?: boolean
+  reason?: string
+}
+
 export type PlatformTranscribeResponse =
   | { status: 'ok'; text: string }
   | { text: string }

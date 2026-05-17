@@ -3,6 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getBearer } from './auth'
 
 import type {
+  PlatformAttachmentDeletedResponse,
+  PlatformAttachmentHubSendRequest,
+  PlatformAttachmentHubSendResponse,
+  PlatformAttachmentResponse,
+  PlatformAttachmentsResponse,
   PlatformDeliverableResponse,
   PlatformCapabilityRegistryResponse,
   PlatformConversationCreateResponse,
@@ -45,6 +50,35 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     headers: authHeaders(init?.headers),
   })
   if (!response.ok) throw new Error(`HTTP ${response.status} ${url}`)
+  return (await response.json()) as T
+}
+
+export class PlatformAttachmentError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string | null,
+    message = `HTTP ${status} attachment`,
+  ) {
+    super(message)
+    this.name = 'PlatformAttachmentError'
+  }
+}
+
+async function fetchAttachmentJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(requestUrl(url), {
+    ...init,
+    headers: authHeaders(init?.headers),
+  })
+  if (!response.ok) {
+    let detail: string | null = null
+    try {
+      const payload = (await response.json()) as { detail?: unknown }
+      detail = typeof payload.detail === 'string' ? payload.detail : null
+    } catch {
+      detail = null
+    }
+    throw new PlatformAttachmentError(response.status, detail, `HTTP ${response.status} ${url}`)
+  }
   return (await response.json()) as T
 }
 
@@ -178,6 +212,55 @@ export async function transcribePlatformAudio(blob: Blob): Promise<PlatformTrans
   })
 }
 
+export async function uploadPlatformAttachment(taskId: string, file: File): Promise<PlatformAttachmentResponse> {
+  const form = new FormData()
+  form.append('file', file, file.name)
+  return fetchAttachmentJson<PlatformAttachmentResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/attachments`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export async function fetchPlatformAttachments(taskId: string): Promise<PlatformAttachmentsResponse> {
+  return fetchAttachmentJson<PlatformAttachmentsResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/attachments`)
+}
+
+export async function deletePlatformAttachment(taskId: string, attachmentId: string): Promise<PlatformAttachmentDeletedResponse> {
+  const url = `/platform/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}`
+  const response = await fetch(requestUrl(url), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (response.status === 404) return { deleted: true }
+  if (!response.ok) {
+    let detail: string | null = null
+    try {
+      const payload = (await response.json()) as { detail?: unknown }
+      detail = typeof payload.detail === 'string' ? payload.detail : null
+    } catch {
+      detail = null
+    }
+    throw new PlatformAttachmentError(response.status, detail, `HTTP ${response.status} ${url}`)
+  }
+  return (await response.json()) as PlatformAttachmentDeletedResponse
+}
+
+export async function sendPlatformAttachmentToHub(
+  taskId: string,
+  attachmentId: string,
+  body?: PlatformAttachmentHubSendRequest,
+): Promise<PlatformAttachmentHubSendResponse> {
+  return fetchAttachmentJson<PlatformAttachmentHubSendResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}/send-to-hub`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+}
+
+export async function downloadPlatformAttachment(taskId: string, attachmentId: string, filename: string): Promise<void> {
+  return downloadBlob(`/platform/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}`, filename, authHeaders())
+}
+
 export async function fetchPlatformArtifactBlob(artifact: PlatformArtifact): Promise<Blob> {
   const url = artifact.download_url ?? `/platform/artifacts?path=${encodeURIComponent(artifact.rel_path)}`
   const response = await fetch(requestUrl(url), { headers: authHeaders() })
@@ -245,6 +328,44 @@ export const usePlatformTaskDeliverables = (taskId: string, enabled = true) =>
     enabled: enabled && Boolean(taskId),
     retry: false,
   })
+
+export const usePlatformAttachments = (taskId: string, enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'tasks', taskId, 'attachments'],
+    queryFn: () => fetchPlatformAttachments(taskId),
+    enabled: enabled && Boolean(taskId),
+    retry: false,
+  })
+
+export const useUploadPlatformAttachment = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => uploadPlatformAttachment(taskId, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks', taskId, 'attachments'] })
+    },
+  })
+}
+
+export const useDeletePlatformAttachment = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (attachmentId: string) => deletePlatformAttachment(taskId, attachmentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks', taskId, 'attachments'] })
+    },
+  })
+}
+
+export const useSendPlatformAttachmentToHub = (taskId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ attachmentId, body }: { attachmentId: string; body?: PlatformAttachmentHubSendRequest }) => sendPlatformAttachmentToHub(taskId, attachmentId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'tasks', taskId, 'view'] })
+    },
+  })
+}
 
 export const usePlatformCapabilities = (enabled = true) =>
   useQuery({

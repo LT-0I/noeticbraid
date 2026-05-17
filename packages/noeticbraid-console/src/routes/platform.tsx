@@ -1,10 +1,11 @@
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { DragEvent, FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useAuthState } from '@/api/auth-context'
 import {
+  PlatformAttachmentError,
   createPlatformTaskSocket,
   downloadBlob,
   fetchPlatformArtifactBlob,
@@ -14,18 +15,23 @@ import {
   useCreateConversationalPlatformTask,
   useCreatePlatformTask,
   useConfirmPlatformRequirements,
+  useDeletePlatformAttachment,
   useElicitPlatformTask,
+  usePlatformAttachments,
   usePlatformDeliverable,
   usePlatformTaskDeliverables,
   usePlatformTask,
   usePlatformTaskView,
   usePlatformTasks,
   useSendPlatformConversation,
+  useSendPlatformAttachmentToHub,
+  useUploadPlatformAttachment,
 } from '@/api/platform-client'
 import { Badge, Button, Card, CardBody, CardDescription, CardFooter, CardHeader, CardTitle, EmptyState, PageHeader } from '@/components/ui'
 import type {
   ConversationalModality,
   DeliverableModality,
+  PlatformAttachment,
   PlatformArtifact,
   PlatformCoarseStatusItem,
   PlatformConversationRow,
@@ -99,6 +105,17 @@ function sizeLabel(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function attachmentRejectionKey(error: unknown): string {
+  if (error instanceof PlatformAttachmentError) {
+    if (error.status === 413 || error.detail === 'upload_too_large') return 'routes.platform.attachments.sizeReject'
+    if (error.status === 415 || error.detail === 'unsupported_attachment_type') return 'routes.platform.attachments.typeReject'
+    if (error.detail === 'attachment_limit') return 'routes.platform.attachments.limitReject'
+    if (error.detail === 'hub_attachment_count') return 'routes.platform.attachments.countReject'
+    if (error.detail === 'invalid_attachment_name') return 'routes.platform.attachments.nameReject'
+  }
+  return 'routes.platform.attachments.genericReject'
 }
 
 function aiDeltaText(payload: Record<string, unknown>): string {
@@ -841,6 +858,153 @@ function PerTaskDeliverables({ items }: { items?: PlatformPerTaskDeliverableItem
   )
 }
 
+function TaskAttachmentRow({
+  attachment,
+  disabled,
+  confirming,
+  onConfirm,
+  onDelete,
+  onSend,
+}: {
+  attachment: PlatformAttachment
+  disabled?: boolean
+  confirming: boolean
+  onConfirm: () => void
+  onDelete: () => void
+  onSend: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <li className="platform-attachment-row">
+      <div className="platform-attachment-main">
+        <strong>{attachment.display_name}</strong>
+        <span>{attachment.content_type || 'application/octet-stream'} · {sizeLabel(attachment.bytes)}</span>
+      </div>
+      <div className="platform-attachment-actions">
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onSend}>
+          {t('routes.platform.attachments.sendToHub')}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={confirming ? onDelete : onConfirm}>
+          {t('routes.platform.attachments.deleteAction')}
+        </Button>
+      </div>
+      {confirming ? (
+        <p className="platform-attachment-confirm" role="status">
+          {t('routes.platform.attachments.deleteConfirm')}
+        </p>
+      ) : null}
+    </li>
+  )
+}
+
+function TaskAttachments({ taskId, disabled }: { taskId: string; disabled?: boolean }) {
+  const { t } = useTranslation()
+  const attachments = usePlatformAttachments(taskId, Boolean(taskId))
+  const upload = useUploadPlatformAttachment(taskId)
+  const remove = useDeletePlatformAttachment(taskId)
+  const sendToHub = useSendPlatformAttachmentToHub(taskId)
+  const [noticeKey, setNoticeKey] = useState<string | null>(null)
+  const [uploadingName, setUploadingName] = useState<string | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setNoticeKey(null)
+    setUploadingName(null)
+    setConfirmingId(null)
+  }, [taskId])
+
+  async function uploadFile(file: File | undefined) {
+    if (!file || disabled || upload.isPending) return
+    setNoticeKey(null)
+    setUploadingName(file.name)
+    try {
+      await upload.mutateAsync(file)
+    } catch (error) {
+      setNoticeKey(attachmentRejectionKey(error))
+    } finally {
+      setUploadingName(null)
+    }
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    void uploadFile(event.dataTransfer.files.item(0) ?? undefined)
+  }
+
+  async function deleteAttachment(attachmentId: string) {
+    if (disabled || remove.isPending) return
+    setNoticeKey(null)
+    try {
+      await remove.mutateAsync(attachmentId)
+      setConfirmingId(null)
+    } catch (error) {
+      setNoticeKey(attachmentRejectionKey(error))
+    }
+  }
+
+  async function sendAttachment(attachmentId: string) {
+    if (disabled || sendToHub.isPending) return
+    setNoticeKey(null)
+    try {
+      const response = await sendToHub.mutateAsync({ attachmentId })
+      if (response.available === false || response.status === 'unavailable') {
+        setNoticeKey('routes.platform.attachments.unavailableLine')
+      }
+    } catch (error) {
+      setNoticeKey(attachmentRejectionKey(error))
+    }
+  }
+
+  const rows = attachments.isError ? [] : attachments.data?.attachments ?? []
+  const busy = disabled || upload.isPending || remove.isPending || sendToHub.isPending
+
+  return (
+    <section className="platform-attachments" aria-labelledby="platform-attachments-title" data-testid="platform-attachments">
+      <div className="item-card__topline">
+        <h2 id="platform-attachments-title" className="item-card__title">{t('routes.platform.attachments.title')}</h2>
+        <span className="text-muted">{rows.length}</span>
+      </div>
+      <label
+        className="platform-attachment-dropzone"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={onDrop}
+      >
+        <span>{t('routes.platform.attachments.uploadPrompt')}</span>
+        <small>{t('routes.platform.attachments.dragDropHint')}</small>
+        <input
+          type="file"
+          aria-label={t('routes.platform.attachments.uploadPrompt')}
+          disabled={busy}
+          onChange={(event) => {
+            const files = event.currentTarget.files
+            void uploadFile(files ? (typeof files.item === 'function' ? files.item(0) ?? undefined : files[0]) : undefined)
+            event.currentTarget.value = ''
+          }}
+        />
+      </label>
+      {uploadingName ? <p className="platform-attachment-progress" role="status">{t('state.loading')} {uploadingName}</p> : null}
+      {noticeKey ? <p className="platform-attachment-info" role="status">{t(noticeKey)}</p> : null}
+      {rows.length === 0 ? (
+        <p className="text-muted">{t('routes.platform.attachments.emptyHint')}</p>
+      ) : (
+        <ul className="platform-attachment-list" aria-label={t('routes.platform.attachments.listAria')}>
+          {rows.map((attachment) => (
+            <TaskAttachmentRow
+              key={attachment.attachment_id}
+              attachment={attachment}
+              disabled={busy}
+              confirming={confirmingId === attachment.attachment_id}
+              onConfirm={() => setConfirmingId(attachment.attachment_id)}
+              onDelete={() => { void deleteAttachment(attachment.attachment_id) }}
+              onSend={() => { void sendAttachment(attachment.attachment_id) }}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function PlatformConversationTaskPage() {
   const { t } = useTranslation()
   const auth = useAuthState()
@@ -890,6 +1054,7 @@ function PlatformConversationTaskPage() {
           <CardBody>
             <ConversationTranscript rows={payload.conversation} />
             <ConversationalComposer onSend={send} disabled={busy} suggestion={suggestedAnswer(payload.conversation)} />
+            <TaskAttachments taskId={taskId} disabled={busy} />
           </CardBody>
         </Card>
         <aside className="platform-rail">

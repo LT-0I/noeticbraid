@@ -10,7 +10,7 @@ import type {
   OMCProjectTaskRequest,
   RunRecord,
 } from '@/types/contracts'
-import type { PlatformArtifact, PlatformDeliverable, PlatformTask, PlatformTaskViewResponse } from '@/types/platform'
+import type { PlatformArtifact, PlatformAttachment, PlatformDeliverable, PlatformTask, PlatformTaskViewResponse } from '@/types/platform'
 
 import accountStatus from './fixtures/account_status.json'
 import approvals from './fixtures/approvals.json'
@@ -178,6 +178,7 @@ let platformViews: Record<string, PlatformTaskViewResponse> = {
     capability_notice: [],
   },
 }
+let platformAttachments: Record<string, PlatformAttachment[]> = {}
 
 // SDD-D8-02: the happy-path startup token MSW handler issues the bearer in the
 // X-NoeticBraid-Bearer response header (same-origin, so readable in dev/test).
@@ -406,6 +407,64 @@ export const platformHandlers = [
   http.get('/platform/tasks/:taskId/deliverables', ({ request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
     return HttpResponse.json({ deliverables: [] })
+  }),
+  http.get('/platform/tasks/:taskId/attachments', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({ attachments: platformAttachments[String(params.taskId)] ?? [] })
+  }),
+  http.post('/platform/tasks/:taskId/attachments', async ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const data = await request.formData()
+    const file = data.get('file') ?? data.get('attachment')
+    if (!file || typeof file !== 'object' || !('name' in file) || !('size' in file)) {
+      return HttpResponse.json({ detail: 'invalid_attachment_name' }, { status: 400 })
+    }
+    const uploaded = file as File
+    const current = platformAttachments[taskId] ?? []
+    const attachment: PlatformAttachment = {
+      attachment_id: `att_${current.length + 1}`,
+      display_name: uploaded.name,
+      content_type: uploaded.type || 'application/octet-stream',
+      bytes: uploaded.size,
+      uploaded_ts: utcNow(),
+    }
+    platformAttachments = { ...platformAttachments, [taskId]: [...current, attachment] }
+    return HttpResponse.json({ attachment })
+  }),
+  http.get('/platform/tasks/:taskId/attachments/:attachmentId', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const attachment = (platformAttachments[String(params.taskId)] ?? []).find((item) => item.attachment_id === String(params.attachmentId))
+    if (!attachment) return HttpResponse.json({ detail: 'not found' }, { status: 404 })
+    return new HttpResponse(new Uint8Array([65, 66, 67]), {
+      headers: {
+        'Content-Type': attachment.content_type,
+        'Content-Disposition': `attachment; filename="${attachment.display_name}"`,
+      },
+    })
+  }),
+  http.delete('/platform/tasks/:taskId/attachments/:attachmentId', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const attachmentId = String(params.attachmentId)
+    const current = platformAttachments[taskId] ?? []
+    const next = current.filter((item) => item.attachment_id !== attachmentId)
+    platformAttachments = { ...platformAttachments, [taskId]: next }
+    if (next.length === current.length) return HttpResponse.json({ detail: 'not found' }, { status: 404 })
+    return HttpResponse.json({ deleted: true })
+  }),
+  http.post('/platform/tasks/:taskId/attachments/:attachmentId/send-to-hub', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const taskId = String(params.taskId)
+    const previous = platformViews[taskId] ?? emptyTaskView()
+    platformViews[taskId] = {
+      ...previous,
+      conversation: [
+        ...previous.conversation,
+        { ts: utcNow(), role: 'assistant', kind: 'message', text: `Attachment ${String(params.attachmentId)} received.` },
+      ],
+    }
+    return HttpResponse.json({ status: 'sent', available: true })
   }),
   http.post('/platform/tasks/:taskId/elicit', async ({ params, request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })

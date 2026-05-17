@@ -2,8 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
+import { setBearer } from '../src/api/auth'
+import { uploadPlatformAttachment } from '../src/api/platform-client'
 import { server } from '../src/mocks/server'
 import { routeTree } from '../src/routes/routeTree'
 
@@ -582,6 +584,159 @@ describe('console routes', () => {
     expect(screen.getByTestId('platform-deliverables-zone')).toBeInTheDocument()
     const visible = screen.getByTestId('platform-conversation-root').textContent ?? ''
     expect(visible).not.toMatch(/ledger|dispatch|critique|internal_reason/i)
+  })
+
+  test('platform attachments upload posts multipart body to endpoint with bearer auth', async () => {
+    const originalFetch = globalThis.fetch
+    let requestedUrl = ''
+    let authHeader = ''
+    let multipartBody = false
+    setBearer('mock-startup-bearer-token')
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input)
+      authHeader = new Headers(init?.headers).get('Authorization') ?? ''
+      multipartBody = init?.body instanceof FormData
+      return new Response(JSON.stringify({
+        attachment: {
+          attachment_id: 'att_upload',
+          display_name: 'note.txt',
+          content_type: 'text/plain',
+          bytes: 11,
+          uploaded_ts: '2026-05-17T00:00:00Z',
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+
+    try {
+      await uploadPlatformAttachment('task_platform_seed', new File(['hello world'], 'note.txt', { type: 'text/plain' }))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    expect(requestedUrl).toContain('/platform/tasks/task_platform_seed/attachments')
+    expect(authHeader).toBe('Bearer mock-startup-bearer-token')
+    expect(multipartBody).toBe(true)
+  })
+
+  test('platform attachments list renders clean rows only', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/attachments', () =>
+        HttpResponse.json({
+          attachments: [
+            {
+              attachment_id: 'att_clean',
+              display_name: 'clean-brief.pdf',
+              content_type: 'application/pdf',
+              bytes: 2048,
+              uploaded_ts: '2026-05-17T00:00:00Z',
+              sha256: 'deadbeefdeadbeef',
+              path: '/tmp/internal-clean-brief.pdf',
+              provenance: 'INTERNAL-PROVENANCE',
+              engineering: 'hidden',
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    const section = await screen.findByTestId('platform-attachments')
+    expect(await screen.findByText('clean-brief.pdf')).toBeInTheDocument()
+    expect(screen.getByText('clean-brief.pdf').tagName.toLowerCase()).toBe('strong')
+    const text = section.textContent ?? ''
+    expect(text).toContain('application/pdf')
+    expect(text).not.toMatch(/sha|path|provenance|engineering|deadbeef|INTERNAL-PROVENANCE/i)
+  })
+
+  test.each([
+    { status: 413, detail: 'upload_too_large', copy: 'Over the 32 MB limit' },
+    { status: 415, detail: 'unsupported_attachment_type', copy: "This file type isn't supported" },
+    { status: 400, detail: 'attachment_limit', copy: 'Up to 20 attachments per task' },
+    { status: 400, detail: 'hub_attachment_count', copy: 'Up to 3 files per Web-AI send' },
+  ])('platform attachment rejection $detail renders calm informational copy', async ({ status, detail, copy }) => {
+    server.use(
+      http.post('/platform/tasks/task_platform_seed/attachments', () =>
+        HttpResponse.json({ detail }, { status }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-attachments')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Add an attachment'), {
+      target: { files: [new File(['x'], 'blocked.txt', { type: 'text/plain' })] },
+    })
+
+    const line = await screen.findByText(copy)
+    expect(line).toHaveClass('platform-attachment-info')
+    expect(line).not.toHaveClass('state-panel--error')
+    expect(line.closest('.state-panel--error')).toBeNull()
+  })
+
+  test('platform attachment send-to-hub unavailable renders calm honest amber line', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/attachments', () =>
+        HttpResponse.json({
+          attachments: [
+            {
+              attachment_id: 'att_web',
+              display_name: 'web-ai-input.txt',
+              content_type: 'text/plain',
+              bytes: 10,
+              uploaded_ts: '2026-05-17T00:00:00Z',
+            },
+          ],
+        }),
+      ),
+      http.post('/platform/tasks/task_platform_seed/attachments/att_web/send-to-hub', () =>
+        HttpResponse.json({ status: 'unavailable', available: false, reason: 'not available' }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByText('web-ai-input.txt')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Web AI' }))
+
+    const line = await screen.findByText('Web AI is unavailable; the attachment stays on local disk.')
+    expect(line).toHaveClass('platform-attachment-info')
+    expect(line).not.toHaveClass('state-panel--error')
+    expect(line.closest('.state-panel--error')).toBeNull()
+  })
+
+  test('platform attachment delete calls DELETE then refetches list', async () => {
+    let deleted = false
+    let deleteCalled = false
+    let getCalls = 0
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/attachments', () => {
+        getCalls += 1
+        return HttpResponse.json({
+          attachments: deleted
+            ? []
+            : [{
+                attachment_id: 'att_delete',
+                display_name: 'remove-me.txt',
+                content_type: 'text/plain',
+                bytes: 7,
+                uploaded_ts: '2026-05-17T00:00:00Z',
+              }],
+        })
+      }),
+      http.delete('/platform/tasks/task_platform_seed/attachments/att_delete', () => {
+        deleteCalled = true
+        deleted = true
+        return HttpResponse.json({ deleted: true })
+      }),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByText('remove-me.txt')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByText('Click remove again to delete this attachment.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+
+    await waitFor(() => expect(deleteCalled).toBe(true))
+    await waitFor(() => expect(getCalls).toBeGreaterThan(1))
+    await waitFor(() => expect(screen.queryByText('remove-me.txt')).not.toBeInTheDocument())
   })
 
   test('primary conversational deliverables zone hides sha/provenance but keeps the clean filename', async () => {
