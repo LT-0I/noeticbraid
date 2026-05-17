@@ -7,6 +7,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 
+from noeticbraid_backend.platform.attachments.endpoint import register_platform_attachment_routes
+from noeticbraid_backend.platform.attachments.store import attachment_context_for_local_ai
 from noeticbraid_backend.platform.auth import require_platform_bearer
 from noeticbraid_backend.platform.conversation.deliverable_view import per_task_deliverables
 from noeticbraid_backend.platform.conversation import model
@@ -25,6 +27,8 @@ _ALLOWED_VIEW_KEYS = frozenset({"conversation", "deliverables", "coarse_status",
 
 def register_platform_conversational_routes(platform_app: FastAPI) -> None:
     """Register Phase-1 conversational routes on the mounted sub-app."""
+
+    register_platform_attachment_routes(platform_app)
 
     @platform_app.post("/tasks", summary="Create a conversational platform task")
     async def platform_create_conversational_task(request: Request) -> dict[str, Any]:
@@ -51,7 +55,8 @@ def register_platform_conversational_routes(platform_app: FastAPI) -> None:
         try:
             _load_owned_task(account, task_id)
             memory_profile = model.load_memory_profile(account)
-            probe = run_elicitation_probe(raw_requirement, memory_profile=memory_profile)
+            attachments = attachment_context_for_local_ai(account, task_id)
+            probe = run_elicitation_probe(raw_requirement, memory_profile=memory_profile, attachments=attachments)
             model.append_conversation_row(account, task_id, role="user", kind="message", text=raw_requirement)
             requirements = model.candidate_requirements_from_probe(raw_requirement, probe)
             model.write_requirements(
@@ -84,7 +89,8 @@ def register_platform_conversational_routes(platform_app: FastAPI) -> None:
         try:
             _load_owned_task(account, task_id)
             memory_profile = model.load_memory_profile(account)
-            probe = run_elicitation_probe(text, memory_profile=memory_profile)
+            attachments = attachment_context_for_local_ai(account, task_id)
+            probe = run_elicitation_probe(text, memory_profile=memory_profile, attachments=attachments)
             model.append_conversation_row(account, task_id, role="user", kind="answer", text=text)
             current = model.load_requirements(account, task_id)
             candidates = model.candidate_requirements_from_probe(text, probe)
