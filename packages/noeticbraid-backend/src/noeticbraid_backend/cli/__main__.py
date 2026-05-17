@@ -8,6 +8,7 @@ import sys
 from collections.abc import Callable, Sequence
 
 from noeticbraid_backend.omc_workspace import cli_adopt
+from noeticbraid_backend.platform.deliverable import materialize as deliverable_materialize
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,6 +21,16 @@ def build_parser() -> argparse.ArgumentParser:
     adopt_parser = omc_subparsers.add_parser("adopt-candidate", help="Explicitly adopt an OMC candidate")
     cli_adopt.add_arguments(adopt_parser)
     adopt_parser.set_defaults(handler=cli_adopt._run)
+
+    platform_parser = subparsers.add_parser("platform", help="Platform operator utilities")
+    platform_subparsers = platform_parser.add_subparsers(dest="platform_command")
+
+    materialize_parser = platform_subparsers.add_parser(
+        "materialize-deliverable",
+        help="Materialize the locked SDD-D17 promo deliverable locally",
+    )
+    deliverable_materialize.add_arguments(materialize_parser)
+    materialize_parser.set_defaults(handler=deliverable_materialize.run)
 
     return parser
 

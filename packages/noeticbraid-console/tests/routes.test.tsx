@@ -564,10 +564,45 @@ describe('console routes', () => {
     expect(screen.queryByText('/external-references')).not.toBeInTheDocument()
     expect(screen.queryByText('/sidenote-tracking')).not.toBeInTheDocument()
   })
-  test('platform route renders task list and appended nav item', async () => {
+  test('platform route renders single deliverable view and appended nav item', async () => {
     renderAt('/platform')
     await waitFor(() => expect(screen.getByTestId('platform-root')).toBeInTheDocument())
     expect(screen.getByTestId('nav-platform')).toHaveTextContent('Platform')
+    expect(screen.getByTestId('deliverable-gallery')).toBeInTheDocument()
+    expect(screen.getByTestId('deliverable-gallery').querySelectorAll('[data-testid^="deliverable-tile-"]')).toHaveLength(6)
+    expect(screen.getByTestId('deliverable-tile-document')).toHaveTextContent('NoeticBraid-Promo-Document.md')
+    expect(screen.getByTestId('deliverable-tile-slides')).toHaveTextContent('NoeticBraid-Promo-Deck.pptx')
+    expect(screen.getByTestId('deliverable-tile-slides')).toHaveTextContent('Converted')
+    expect(screen.getByTestId('deliverable-tile-poster').querySelector('img')).toBeInTheDocument()
+    expect(screen.getByTestId('deliverable-tile-image').querySelector('img')).toBeInTheDocument()
+    expect(screen.getByTestId('deliverable-tile-video').querySelector('video')).toBeInTheDocument()
+    expect(screen.getByTestId('deliverable-tile-image')).toHaveTextContent('hub dispatch timed out')
+    expect(screen.getByTestId('deliverable-tile-music')).toHaveTextContent('Music generation was not attempted')
+    expect(screen.getByText('Diagnostics / History')).toBeInTheDocument()
+    expect(screen.queryByTestId('platform-task-list')).not.toBeInTheDocument()
+  })
+
+  test('platform deliverable missing fields degrade to defined blocked state', async () => {
+    server.use(
+      http.get('/platform/deliverable', () =>
+        HttpResponse.json({
+          deliverable: {
+            title: 'NoeticBraid promo material',
+            generated_at: null,
+            modalities: [{ modality: 'document' }],
+          },
+        }),
+      ),
+    )
+
+    renderAt('/platform')
+    await waitFor(() => expect(screen.getByTestId('deliverable-tile-document')).toBeInTheDocument())
+    expect(screen.getByTestId('deliverable-tile-document')).toHaveTextContent('Could not load the promo deliverable view.')
+  })
+
+  test('platform history route keeps the demoted task list', async () => {
+    renderAt('/platform/history')
+    await waitFor(() => expect(screen.getByTestId('platform-history-root')).toBeInTheDocument())
     expect(screen.getByTestId('platform-task-list')).toHaveTextContent('Prepare launch brief')
     expect(screen.getByTestId('platform-task-list')).toHaveTextContent('created')
   })

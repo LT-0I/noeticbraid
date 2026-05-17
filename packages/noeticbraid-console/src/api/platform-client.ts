@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getBearer } from './auth'
 
 import type {
+  PlatformDeliverableResponse,
   PlatformArtifact,
   PlatformCreateTaskRequest,
   PlatformTask,
@@ -75,6 +76,10 @@ export async function fetchPlatformTask(taskId: string): Promise<PlatformTaskDet
   return normalizeTaskDetail(payload)
 }
 
+export async function fetchPlatformDeliverable(): Promise<PlatformDeliverableResponse> {
+  return fetchJson<PlatformDeliverableResponse>('/platform/deliverable')
+}
+
 export async function transcribePlatformAudio(blob: Blob): Promise<PlatformTranscribeResponse> {
   const form = new FormData()
   form.append('audio', blob, 'voice-input.webm')
@@ -91,6 +96,20 @@ export async function fetchPlatformArtifactBlob(artifact: PlatformArtifact): Pro
   return response.blob()
 }
 
+export async function downloadBlob(url: string, filename: string, headers?: HeadersInit): Promise<void> {
+  const response = await fetch(requestUrl(url), { headers: authHeaders(headers) })
+  if (!response.ok) throw new Error(`HTTP ${response.status} download`)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+}
+
 export const usePlatformTasks = (enabled = true) =>
   useQuery({
     queryKey: ['platform', 'tasks'],
@@ -102,6 +121,13 @@ export const usePlatformTask = (taskId: string, enabled = true) =>
   useQuery({
     queryKey: ['platform', 'tasks', taskId],
     queryFn: () => fetchPlatformTask(taskId),
+    enabled,
+  })
+
+export const usePlatformDeliverable = (enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'deliverable'],
+    queryFn: fetchPlatformDeliverable,
     enabled,
   })
 

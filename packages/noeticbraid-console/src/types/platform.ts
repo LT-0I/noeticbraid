@@ -10,6 +10,13 @@ export type PlatformTaskState =
 
 export type PlatformModality = 'document' | 'slides' | 'image' | 'poster' | 'video' | 'music'
 
+export type PlatformDeliverableStatus = 'delivered' | 'converted' | 'blocked'
+export type PlatformDeliverableProvenanceKind =
+  | 'ai_produced_markdown'
+  | 'local_format_conversion'
+  | 'on_disk_unledgered_real_binary'
+  | 'not_attempted'
+
 export interface PlatformTask {
   task_id: string
   title: string
@@ -21,6 +28,43 @@ export interface PlatformTask {
 
 export interface PlatformTaskListResponse {
   tasks: PlatformTask[]
+}
+
+export interface PlatformDeliverableResponse {
+  deliverable: PlatformDeliverable
+}
+
+export interface PlatformDeliverable {
+  title: string
+  generated_at: string | null
+  assigned_ts?: string | null
+  modalities: DeliverableModality[]
+  timeline?: TimelineEntry[]
+}
+
+export interface DeliverableModality {
+  modality: PlatformModality
+  status: PlatformDeliverableStatus
+  title: string
+  filename: string
+  content_type: string
+  bytes: number | null
+  sha256: string | null
+  download_url: string | null
+  blocked_reason: string | null
+  provenance: {
+    source_task_id: string | null
+    ledgered: boolean
+    kind: PlatformDeliverableProvenanceKind
+    note: string
+    source_artifact_sha256?: string
+  }
+}
+
+export interface TimelineEntry {
+  label: string
+  ts?: string | null
+  tone: 'neutral' | 'active' | 'done' | 'blocked' | 'error'
 }
 
 export interface PlatformCreateTaskRequest {

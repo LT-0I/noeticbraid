@@ -10,7 +10,7 @@ import type {
   OMCProjectTaskRequest,
   RunRecord,
 } from '@/types/contracts'
-import type { PlatformArtifact, PlatformTask } from '@/types/platform'
+import type { PlatformArtifact, PlatformDeliverable, PlatformTask } from '@/types/platform'
 
 import accountStatus from './fixtures/account_status.json'
 import approvals from './fixtures/approvals.json'
@@ -35,6 +35,117 @@ const platformArtifact: PlatformArtifact = {
   filename: 'brief.md',
   sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   bytes: 128,
+}
+const platformDeliverable: PlatformDeliverable = {
+  title: 'NoeticBraid promo material',
+  generated_at: '2026-05-17T06:51:59Z',
+  modalities: [
+    {
+      modality: 'document',
+      status: 'delivered',
+      title: 'NoeticBraid Promo Document',
+      filename: 'NoeticBraid-Promo-Document.md',
+      content_type: 'text/markdown; charset=utf-8',
+      bytes: 128,
+      sha256: '1111111111111111111111111111111111111111111111111111111111111111',
+      download_url: '/platform/deliverable/artifacts/document',
+      blocked_reason: null,
+      provenance: {
+        source_task_id: 'task_promo_smoke_1778967211',
+        ledgered: true,
+        kind: 'ai_produced_markdown',
+        note: 'AI-produced markdown artifact recorded in the source task ledger.',
+        source_artifact_sha256: '1111111111111111111111111111111111111111111111111111111111111111',
+      },
+    },
+    {
+      modality: 'slides',
+      status: 'converted',
+      title: 'NoeticBraid Promo Deck',
+      filename: 'NoeticBraid-Promo-Deck.pptx',
+      content_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      bytes: 2048,
+      sha256: '2222222222222222222222222222222222222222222222222222222222222222',
+      download_url: '/platform/deliverable/artifacts/slides',
+      blocked_reason: null,
+      provenance: {
+        source_task_id: 'task_promo_chatgpt_1778967273',
+        ledgered: true,
+        kind: 'local_format_conversion',
+        note: 'Rendered locally on 2026-05-17T06:51:59Z from AI-produced markdown. NOT an AI-generated binary.',
+        source_artifact_sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+    },
+    {
+      modality: 'poster',
+      status: 'converted',
+      title: 'NoeticBraid Promo Poster',
+      filename: 'NoeticBraid-Promo-Poster.png',
+      content_type: 'image/png',
+      bytes: 512,
+      sha256: '3333333333333333333333333333333333333333333333333333333333333333',
+      download_url: '/platform/deliverable/artifacts/poster',
+      blocked_reason: null,
+      provenance: {
+        source_task_id: 'task_promo_chatgpt_1778967273',
+        ledgered: true,
+        kind: 'local_format_conversion',
+        note: 'Rendered locally on 2026-05-17T06:51:59Z from AI-produced markdown. NOT an AI-generated binary.',
+        source_artifact_sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      },
+    },
+    {
+      modality: 'image',
+      status: 'blocked',
+      title: 'NoeticBraid Promo Image',
+      filename: 'NoeticBraid-Promo-Image.png',
+      content_type: 'image/png',
+      bytes: 256,
+      sha256: '4444444444444444444444444444444444444444444444444444444444444444',
+      download_url: '/platform/deliverable/artifacts/image',
+      blocked_reason: 'hub dispatch timed out',
+      provenance: {
+        source_task_id: 'task_promo_image_1778991545',
+        ledgered: false,
+        kind: 'on_disk_unledgered_real_binary',
+        note: 'Real PNG exists on disk but is not ledgered.',
+      },
+    },
+    {
+      modality: 'video',
+      status: 'blocked',
+      title: 'NoeticBraid Promo Video',
+      filename: 'NoeticBraid-Promo-Video.mp4',
+      content_type: 'video/mp4',
+      bytes: 1024,
+      sha256: '5555555555555555555555555555555555555555555555555555555555555555',
+      download_url: '/platform/deliverable/artifacts/video',
+      blocked_reason: 'artifact path governance violation',
+      provenance: {
+        source_task_id: 'task_promo_gemini_1778968111',
+        ledgered: false,
+        kind: 'on_disk_unledgered_real_binary',
+        note: 'Real MP4 exists on disk but is not ledgered.',
+      },
+    },
+    {
+      modality: 'music',
+      status: 'blocked',
+      title: 'NoeticBraid Promo Music',
+      filename: 'NoeticBraid-Promo-Music.mp3',
+      content_type: 'audio/mpeg',
+      bytes: null,
+      sha256: null,
+      download_url: null,
+      blocked_reason: 'Music generation was not attempted for this deliverable.',
+      provenance: {
+        source_task_id: null,
+        ledgered: false,
+        kind: 'not_attempted',
+        note: 'Music generation was not attempted for this deliverable.',
+      },
+    },
+  ],
 }
 let platformTasks: PlatformTask[] = [
   {
@@ -191,6 +302,35 @@ export const coreHandlers = [
 ]
 
 export const platformHandlers = [
+  http.get('/platform/deliverable', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({ deliverable: platformDeliverable })
+  }),
+  http.get('/platform/deliverable/artifacts/:modality', ({ params, request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    const modality = String(params.modality)
+    if (modality === 'document') {
+      return new HttpResponse('# NoeticBraid promo\\n\\nTraceable execution.\\n', {
+        headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+      })
+    }
+    if (modality === 'video') {
+      return new HttpResponse(new Uint8Array([0, 0, 0, 32, 102, 116, 121, 112]), {
+        headers: { 'Content-Type': 'video/mp4' },
+      })
+    }
+    if (modality === 'slides') {
+      return new HttpResponse(new Uint8Array([80, 75, 3, 4]), {
+        headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+      })
+    }
+    if (modality === 'poster' || modality === 'image') {
+      return new HttpResponse(new Uint8Array([137, 80, 78, 71]), {
+        headers: { 'Content-Type': 'image/png' },
+      })
+    }
+    return new HttpResponse(null, { status: 404 })
+  }),
   http.get('/platform/tasks', ({ request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
     return HttpResponse.json({ tasks: platformTasks })

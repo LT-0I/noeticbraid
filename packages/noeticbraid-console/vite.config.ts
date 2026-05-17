@@ -53,8 +53,20 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       ...(platformLive
         ? {
+            // Proxy ONLY the platform DATA sub-paths. The SPA client routes
+            // `/platform` (list) and `/platform/$taskId` (detail, e.g.
+            // `/platform/task_promo_...`) MUST stay on Vite's history
+            // fallback so the React app boots — proxying the whole
+            // `/platform` prefix sent the SPA route itself to the backend
+            // (404). `tasks` (API) never prefix-collides with `task_...`
+            // (SPA detail), so the explicit set is unambiguous.
             proxy: {
-              '/platform': { target: platformBackendOrigin, changeOrigin: true, ws: true },
+              '/platform/tasks': { target: platformBackendOrigin, changeOrigin: true },
+              '/platform/deliverable': { target: platformBackendOrigin, changeOrigin: true },
+              '/platform/auth': { target: platformBackendOrigin, changeOrigin: true },
+              '/platform/stt': { target: platformBackendOrigin, changeOrigin: true },
+              '/platform/health': { target: platformBackendOrigin, changeOrigin: true },
+              '/platform/ws': { target: platformBackendOrigin, changeOrigin: true, ws: true },
               '/api/auth/startup_token': { target: platformBackendOrigin, changeOrigin: true },
             },
           }

@@ -6,23 +6,28 @@ import { useTranslation } from 'react-i18next'
 import { useAuthState } from '@/api/auth-context'
 import {
   createPlatformTaskSocket,
+  downloadBlob,
   fetchPlatformArtifactBlob,
   platformAuthFrame,
   transcribePlatformAudio,
   useCreatePlatformTask,
+  usePlatformDeliverable,
   usePlatformTask,
   usePlatformTasks,
 } from '@/api/platform-client'
-import { Badge, Button, Card, CardBody, CardDescription, CardHeader, CardTitle, EmptyState, PageHeader } from '@/components/ui'
+import { Badge, Button, Card, CardBody, CardDescription, CardFooter, CardHeader, CardTitle, EmptyState, PageHeader } from '@/components/ui'
 import type {
+  DeliverableModality,
   PlatformArtifact,
   PlatformBlockedFrame,
+  PlatformDeliverableStatus,
   PlatformLedgerEvent,
   PlatformModality,
   PlatformProgressFrame,
   PlatformServerFrame,
   PlatformTask,
   PlatformTaskState,
+  TimelineEntry,
 } from '@/types/platform'
 
 import { rootRoute } from './__root'
@@ -102,7 +107,7 @@ function ledgerMeta(event: PlatformLedgerEvent): string | undefined {
   return typeof stamp === 'string' ? stamp : undefined
 }
 
-function ModalityGlyph({ modality }: { modality: string }) {
+export function ModalityGlyph({ modality }: { modality: string }) {
   const label = modality.slice(0, 2).toUpperCase()
   return <span className="platform-glyph" aria-hidden="true">{label}</span>
 }
@@ -119,6 +124,412 @@ function AuthUnavailable({ mode }: { mode: string }) {
       <div className="state-panel state-panel--error">
         <EmptyState title={t('auth.unavailable.title')} message={t('auth.unavailable.message', { mode })} />
       </div>
+    </section>
+  )
+}
+
+const deliverableModalities: readonly PlatformModality[] = ['document', 'slides', 'poster', 'image', 'video', 'music']
+
+function deliverableStatusTone(status: PlatformDeliverableStatus | 'notProduced') {
+  if (status === 'delivered') return 'success' as const
+  if (status === 'converted') return 'info' as const
+  if (status === 'blocked') return 'warning' as const
+  return 'neutral' as const
+}
+
+function deliverableStatusLabelKey(status: PlatformDeliverableStatus | 'notProduced') {
+  return status === 'notProduced' ? 'platform.status.notProduced' : `platform.status.${status}`
+}
+
+function previewKind(item: DeliverableModality): 'image' | 'video' | 'markdown' | 'pptx' | 'none' {
+  if (!item.download_url) return 'none'
+  if (item.modality === 'document' || item.content_type.startsWith('text/markdown')) return 'markdown'
+  if (item.modality === 'image' || item.modality === 'poster' || item.content_type.startsWith('image/')) return 'image'
+  if (item.modality === 'video' || item.content_type.startsWith('video/')) return 'video'
+  if (item.modality === 'slides') return 'pptx'
+  return 'none'
+}
+
+function safeFilename(item: Partial<DeliverableModality>, modality: PlatformModality, t: (key: string) => string): string {
+  return typeof item.filename === 'string' && item.filename ? item.filename : `${t(`modality.${modality}`)}`
+}
+
+function normalizeModality(
+  incoming: DeliverableModality | undefined,
+  modality: PlatformModality,
+  t: (key: string) => string,
+): DeliverableModality | null {
+  if (!incoming) return null
+  if (!incoming.title || !incoming.filename || !incoming.status) {
+    return {
+      modality,
+      status: 'blocked',
+      title: t(`modality.${modality}`),
+      filename: safeFilename(incoming, modality, t),
+      content_type: incoming.content_type ?? 'application/octet-stream',
+      bytes: null,
+      sha256: null,
+      download_url: null,
+      blocked_reason: t('errors.platformDeliverable'),
+      provenance: {
+        source_task_id: null,
+        ledgered: false,
+        kind: 'not_attempted',
+        note: t('errors.platformDeliverable'),
+      },
+    }
+  }
+  return incoming
+}
+
+function DeliverableSkeleton() {
+  const { t } = useTranslation()
+  return (
+    <section data-testid="platform-deliverable-loading" className="stack platform-page">
+      <div className="state-panel">{t('state.loading')}</div>
+      <div className="deliverable-gallery">
+        {deliverableModalities.map((modality) => (
+          <Card key={modality} className="deliverable-tile--skeleton" aria-hidden="true">
+            <CardHeader>
+              <div className="platform-artifact-heading">
+                <ModalityGlyph modality={modality} />
+                <div className="deliverable-skeleton-line" />
+              </div>
+            </CardHeader>
+            <CardBody><div className="deliverable-skeleton-block" /></CardBody>
+          </Card>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function DeliverableSummary({ items }: { items: Array<DeliverableModality | null> }) {
+  const { t } = useTranslation()
+  return (
+    <nav className="deliverable-summary" aria-label={t('routes.platformDeliverable.summaryBadge', { done: 0, total: 6 })}>
+      {items.map((item, index) => {
+        const modality = deliverableModalities[index]!
+        const status = item?.status ?? 'notProduced'
+        return (
+          <a key={modality} href={`#tile-${modality}`} className="deliverable-summary-pill">
+            <ModalityGlyph modality={modality} />
+            <span>{t(`modality.${modality}`)}</span>
+            <Badge tone={deliverableStatusTone(status)} dot={status === 'delivered' || status === 'converted'}>
+              {t(deliverableStatusLabelKey(status))}
+            </Badge>
+          </a>
+        )
+      })}
+    </nav>
+  )
+}
+
+function useObjectUrl(item: DeliverableModality): { url: string | null; failed: boolean } {
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!item.download_url) return undefined
+    let objectUrl: string | null = null
+    let active = true
+    void fetchPlatformArtifactBlob({
+      modality: item.modality,
+      rel_path: '',
+      sha256: item.sha256 ?? '',
+      bytes: item.bytes ?? 0,
+      content_type: item.content_type,
+      filename: item.filename,
+      download_url: item.download_url,
+    })
+      .then((blob) => {
+        if (!active) return
+        if (typeof URL.createObjectURL === 'function') {
+          objectUrl = URL.createObjectURL(blob)
+          setUrl(objectUrl)
+          return
+        }
+        setUrl(item.download_url)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [item])
+
+  return { url, failed }
+}
+
+function MarkdownPreview({ item }: { item: DeliverableModality }) {
+  const { t } = useTranslation()
+  const [text, setText] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!item.download_url) return undefined
+    let active = true
+    void fetchPlatformArtifactBlob({
+      modality: item.modality,
+      rel_path: '',
+      sha256: item.sha256 ?? '',
+      bytes: item.bytes ?? 0,
+      content_type: item.content_type,
+      filename: item.filename,
+      download_url: item.download_url,
+    })
+      .then((blob) => blob.text())
+      .then((value) => {
+        if (active) setText(value)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [item])
+
+  if (failed) return <div className="platform-preview-fallback">{t('routes.platform.previewUnavailable')}</div>
+  if (text === null) return <div className="platform-preview-fallback">{t('state.loading')}</div>
+
+  return (
+    <div className={`deliverable-md${expanded ? ' deliverable-md--expanded' : ''}`}>
+      <div tabIndex={0} role="region" aria-label={t('routes.platformDeliverable.markdownPreview', { title: item.title })}>
+        {renderMarkdown(text)}
+      </div>
+      <button type="button" className="deliverable-expand" onClick={() => setExpanded((current) => !current)}>
+        {expanded ? t('routes.platformDeliverable.collapseText') : t('routes.platformDeliverable.expandText')}
+      </button>
+    </div>
+  )
+}
+
+function renderMarkdown(markdown: string) {
+  return markdown.split(/\n+/).filter(Boolean).slice(0, 80).map((line, index) => {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('# ')) return <h3 key={index}>{trimmed.slice(2)}</h3>
+    if (trimmed.startsWith('## ')) return <h4 key={index}>{trimmed.slice(3)}</h4>
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) return <p key={index}>• {trimmed.slice(2)}</p>
+    return <p key={index}>{trimmed.replace(/`/g, '')}</p>
+  })
+}
+
+function DeliverablePreview({ item }: { item: DeliverableModality }) {
+  const { t } = useTranslation()
+  const kind = previewKind(item)
+  const object = useObjectUrl(item)
+
+  if (kind === 'markdown') return <MarkdownPreview item={item} />
+  if (kind === 'image') {
+    if (object.failed) return <div className="platform-preview-fallback">{t('routes.platform.previewUnavailable')}</div>
+    if (!object.url) return <div className="platform-preview-fallback">{t('state.loading')}</div>
+    return (
+      <a href={object.url} target="_blank" rel="noreferrer" aria-label={t('routes.platformDeliverable.openFull')}>
+        <img className="platform-artifact-image" src={object.url} alt={item.title} loading="lazy" />
+      </a>
+    )
+  }
+  if (kind === 'video') {
+    if (object.failed) return <div className="platform-preview-fallback">{t('routes.platform.previewUnavailable')}</div>
+    if (!object.url) return <div className="platform-preview-fallback">{t('state.loading')}</div>
+    return (
+      <video
+        className="platform-artifact-media"
+        src={object.url}
+        controls
+        preload="metadata"
+        aria-label={t('platform.video.player', { title: item.title })}
+      />
+    )
+  }
+  return (
+    <div className="platform-doc-preview">
+      <ModalityGlyph modality={item.modality} />
+      <span>{kind === 'pptx' ? t('routes.platformDeliverable.previewGenerating') : item.filename}</span>
+    </div>
+  )
+}
+
+function Provenance({ item }: { item: DeliverableModality }) {
+  const { t } = useTranslation()
+  return (
+    <details className="deliverable-provenance">
+      <summary>{t('routes.platformDeliverable.provenance')}</summary>
+      <dl>
+        {item.sha256 ? (
+          <>
+            <dt>sha256</dt>
+            <dd>{item.sha256}</dd>
+          </>
+        ) : null}
+        {item.provenance.source_artifact_sha256 ? (
+          <>
+            <dt>source sha256</dt>
+            <dd>{item.provenance.source_artifact_sha256}</dd>
+          </>
+        ) : null}
+        <dt>{item.provenance.kind}</dt>
+        <dd>{item.provenance.note}</dd>
+      </dl>
+    </details>
+  )
+}
+
+function ModalityTile({ item, modality }: { item: DeliverableModality | null; modality: PlatformModality }) {
+  const { t } = useTranslation()
+  if (!item) {
+    return (
+      <Card id={`tile-${modality}`} className="deliverable-tile deliverable-tile--absent" aria-labelledby={`tile-${modality}-title`}>
+        <CardHeader>
+          <div className="platform-artifact-heading">
+            <ModalityGlyph modality={modality} />
+            <CardTitle id={`tile-${modality}-title`}>{t(`modality.${modality}`)}</CardTitle>
+          </div>
+          <Badge tone="neutral">{t('platform.status.notProduced')}</Badge>
+        </CardHeader>
+        <CardBody>
+          <div className="platform-preview-fallback">{t('routes.platformDeliverable.notProducedBody')}</div>
+        </CardBody>
+      </Card>
+    )
+  }
+
+  const statusDot = item.status === 'delivered' || item.status === 'converted'
+  const inspectableBlocked = item.status === 'blocked' && Boolean(item.download_url)
+  return (
+    <Card
+      id={`tile-${modality}`}
+      className={`deliverable-tile${item.status === 'blocked' ? ' platform-blocked-card' : ''}`}
+      aria-labelledby={`tile-${modality}-title`}
+      data-testid={`deliverable-tile-${modality}`}
+    >
+      <CardHeader>
+        <div className="platform-artifact-heading">
+          <ModalityGlyph modality={modality} />
+          <div>
+            <CardTitle id={`tile-${modality}-title`}>{t(`modality.${modality}`)}</CardTitle>
+            <CardDescription>{item.title}</CardDescription>
+          </div>
+        </div>
+        <Badge tone={deliverableStatusTone(item.status)} dot={statusDot}>{t(deliverableStatusLabelKey(item.status))}</Badge>
+      </CardHeader>
+      <CardBody>
+        {item.status === 'blocked' && !inspectableBlocked ? (
+          <div className="deliverable-blocked-body">
+            <strong>⚠</strong>
+            <p>{item.blocked_reason ?? t('routes.platformDeliverable.notProducedBody')}</p>
+            <span>{t('routes.platformDeliverable.notProducedBody')}</span>
+          </div>
+        ) : (
+          <>
+            <DeliverablePreview item={item} />
+            {item.status === 'converted' ? <p className="deliverable-caption">{t('routes.platformDeliverable.convertedNote')}</p> : null}
+            {inspectableBlocked ? (
+              <p className="deliverable-caption">{item.blocked_reason}</p>
+            ) : null}
+          </>
+        )}
+      </CardBody>
+      <CardFooter className="deliverable-footer">
+        <span className="deliverable-filename" title={item.filename}>{item.filename}</span>
+        <span>{item.bytes === null ? '—' : sizeLabel(item.bytes)}</span>
+        {item.download_url && item.status !== 'blocked' ? (
+          <Button type="button" size="sm" onClick={() => void downloadBlob(item.download_url!, item.filename)}>
+            {t('routes.platform.download')}
+          </Button>
+        ) : null}
+        <Provenance item={item} />
+      </CardFooter>
+    </Card>
+  )
+}
+
+function HumanTimeline({ entries }: { entries: TimelineEntry[] }) {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <h3 className="item-card__title">{t('routes.platformDeliverable.timelineTitle')}</h3>
+      <ol className="platform-timeline">
+        {entries.map((entry, index) => (
+          <li key={`${entry.label}-${index}`} className={`platform-timeline-item platform-timeline-item--${entry.tone === 'done' ? 'complete' : entry.tone}`}>
+            <span className="platform-timeline-dot" aria-hidden="true" />
+            <div>
+              <strong>{entry.label}</strong>
+              {entry.ts ? <span>{formatTimestamp(entry.ts)}</span> : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function timelineFor(items: Array<DeliverableModality | null>, t: (key: string, options?: Record<string, unknown>) => string): TimelineEntry[] {
+  return items.map((item, index) => {
+    const modality = deliverableModalities[index]!
+    if (!item) {
+      return { label: `${t(`modality.${modality}`)} · ${t('platform.status.notProduced')}`, tone: 'neutral' }
+    }
+    const tone: TimelineEntry['tone'] = item.status === 'blocked' ? 'blocked' : 'done'
+    return { label: `${item.title} · ${t(deliverableStatusLabelKey(item.status))}`, tone }
+  })
+}
+
+function PlatformDeliverablePage() {
+  const { t } = useTranslation()
+  const auth = useAuthState()
+  const deliverable = usePlatformDeliverable(auth.status === 'ready')
+
+  if (auth.status === 'booting') return <DeliverableSkeleton />
+  if (auth.status === 'degraded') return <AuthUnavailable mode={auth.mode} />
+  if (deliverable.isLoading) return <DeliverableSkeleton />
+  if (deliverable.isError || !deliverable.data?.deliverable) {
+    return <div data-testid="platform-deliverable-error" className="state-panel state-panel--error">{t('errors.platformDeliverable')}</div>
+  }
+
+  const payload = deliverable.data.deliverable
+  if ((payload.modalities ?? []).length === 0) {
+    return (
+      <section data-testid="platform-root" className="stack platform-page">
+        <PageHeader title={payload.title || t('routes.platform.title')} subtitle={t('routes.platform.subtitle')} />
+        <EmptyState title={t('empty.platformDeliverable.title')} message={t('empty.platformDeliverable.message')} />
+      </section>
+    )
+  }
+
+  const byModality = new Map(payload.modalities.map((item) => [item.modality, item]))
+  const items = deliverableModalities.map((modality) => normalizeModality(byModality.get(modality), modality, t))
+  const done = items.filter((item) => item?.status === 'delivered' || item?.status === 'converted').length
+  const total = deliverableModalities.length
+  const assignedTs = payload.assigned_ts ?? payload.generated_at ?? '—'
+  const timeline = payload.timeline?.length ? payload.timeline : timelineFor(items, t)
+
+  return (
+    <section data-testid="platform-root" className="stack platform-page">
+      <PageHeader
+        eyebrow={t('routes.platformDeliverable.eyebrow')}
+        title={payload.title || t('routes.platform.title')}
+        subtitle={t('routes.platformDeliverable.subtitle', { ts: assignedTs === '—' ? assignedTs : formatTimestamp(assignedTs), done, total })}
+        actions={<Badge tone={done === total ? 'success' : 'info'} dot>{t('routes.platformDeliverable.summaryBadge', { done, total })}</Badge>}
+      />
+
+      <DeliverableSummary items={items} />
+
+      <div className="deliverable-gallery" data-testid="deliverable-gallery">
+        {items.map((item, index) => (
+          <ModalityTile key={deliverableModalities[index]!} item={item} modality={deliverableModalities[index]!} />
+        ))}
+      </div>
+
+      <details className="deliverable-diagnostics">
+        <summary>{t('routes.platformDeliverable.diagnostics')}</summary>
+        <HumanTimeline entries={timeline} />
+        <Link to="/platform/history" className="platform-backlink">{t('routes.platformDeliverable.viewDebugList')}</Link>
+      </details>
     </section>
   )
 }
@@ -199,7 +610,7 @@ function NewTaskModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function PlatformListPage() {
+function PlatformHistoryPage() {
   const { t } = useTranslation()
   const auth = useAuthState()
   const tasks = usePlatformTasks(auth.status === 'ready')
@@ -219,10 +630,11 @@ function PlatformListPage() {
   const taskList = tasks.data?.tasks ?? []
 
   return (
-    <section data-testid="platform-root" className="stack platform-page">
+    <section data-testid="platform-history-root" className="stack platform-page">
       <PageHeader
-        title={t('routes.platform.title')}
-        subtitle={t('routes.platform.subtitle')}
+        eyebrow={<Link to="/platform" className="platform-backlink">{t('routes.platformDeliverable.eyebrow')}</Link>}
+        title={t('routes.platform.historyTitle')}
+        subtitle={t('routes.platform.historySubtitle')}
         actions={<Button type="button" variant="primary" onClick={() => setModalOpen(true)}>{t('routes.platform.newTask')}</Button>}
       />
 
@@ -682,7 +1094,7 @@ function PlatformDetailPage() {
   return (
     <section data-testid="platform-detail-root" className="stack platform-page">
       <PageHeader
-        eyebrow={<Link to="/platform" className="platform-backlink">{t('routes.platform.backToTasks')}</Link>}
+        eyebrow={<Link to="/platform/history" className="platform-backlink">{t('routes.platform.backToTasks')}</Link>}
         title={task.title}
         subtitle={`${t('routes.platform.updated')} ${formatTimestamp(task.updated_ts)}`}
         actions={<TaskStateBadge state={task.state} />}
@@ -737,7 +1149,13 @@ function PlatformDetailPage() {
 export const platformRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/platform',
-  component: PlatformListPage,
+  component: PlatformDeliverablePage,
+})
+
+export const platformHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/platform/history',
+  component: PlatformHistoryPage,
 })
 
 export const platformDetailRoute = createRoute({
