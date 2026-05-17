@@ -30,6 +30,9 @@ private/**
 /.hub-data/
 **/hub-profiles/
 *.hub-data
+# HUB MCP watchdog local state (issue/dedup bookkeeping — never committed)
+/.hub-watchdog-state.json
+.hub-watchdog-state.tmp
 
 # Python
 __pycache__/
