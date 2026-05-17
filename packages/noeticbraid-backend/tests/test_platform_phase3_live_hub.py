@@ -399,7 +399,7 @@ def test_per_task_deliverables_blocked_cases_and_cross_account(monkeypatch: pyte
         "requirement_id": "req_done_missing",
         "title": "Done but file missing",
         "status": "blocked",
-        "blocked_reason": "Final artifact is not available.",
+        "blocked_reason": "最终结果尚未生成。",
     }
 
 

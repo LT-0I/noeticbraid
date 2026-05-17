@@ -73,7 +73,12 @@ def _blocked_reason(requirement: dict[str, Any]) -> str:
     capability = capability_for(str(requirement.get("modality") or "text"))
     if capability.blocked_reason:
         return capability.blocked_reason
-    return "Final artifact is not available."
+    # House-style honest copy: zh-canonical, calm (not error-toned), matching
+    # the capability-registry blocked_reason strings. The console renders
+    # blocked_reason verbatim (as it does for capability/engine reasons), so a
+    # single zh-canonical source keeps every blocked_reason consistent rather
+    # than splitting one generic case across the i18n layer.
+    return "最终结果尚未生成。"
 
 
 __all__ = ["per_task_deliverables"]
