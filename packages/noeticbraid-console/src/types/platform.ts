@@ -190,6 +190,18 @@ export interface PlatformTaskViewResponse {
   capability_notice: PlatformCapabilityNotice[]
 }
 
+export interface PlatformPerTaskDeliverableItem {
+  requirement_id: string
+  title: string
+  status: 'delivered' | 'blocked'
+  download_ref?: string
+  blocked_reason?: string
+}
+
+export interface PlatformPerTaskDeliverablesResponse {
+  deliverables: PlatformPerTaskDeliverableItem[]
+}
+
 export interface PlatformConversationCreateResponse {
   task: PlatformTask
   view: PlatformTaskViewResponse
@@ -238,7 +250,7 @@ export interface PlatformCapabilityRegistryResponse {
   capabilities: PlatformCapabilityEntry[]
 }
 
-export type PlatformOrchestrationPhase = 'running' | 'delivered' | 'capped' | 'deferred'
+export type PlatformOrchestrationPhase = 'running' | 'delivered' | 'capped' | 'deferred' | 'blocked'
 
 export interface PlatformOrchestrateStatusResponse {
   coarse_status: PlatformCoarseStatusItem[]

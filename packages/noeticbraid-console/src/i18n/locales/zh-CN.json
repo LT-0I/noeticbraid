@@ -297,6 +297,9 @@
   "routes.platform.requirementModality": "模态",
   "routes.platform.confirmRequirements": "确认需求",
   "routes.platform.deliverablesZone": "交付区",
+  "routes.platform.pertaskDeliverables.title": "最终结果",
+  "routes.platform.pertaskDeliverables.delivered": "最终结果已生成",
+  "routes.platform.pertaskDeliverables.blocked": "网络执行未完成",
   "routes.platform.conversationZone": "对话区",
   "routes.platform.conversationZoneDescription": "这里只显示用户可见的问题、回答、引导和温和状态。",
   "routes.platform.taskPanelSubtitle": "先对话；最终产物只进入交付区。",
@@ -310,8 +313,10 @@
   "routes.platform.status.delivered": "可执行需求已完成。",
   "routes.platform.status.capped": "已尽力交付，仍可改进。",
   "routes.platform.status.deferred": "等待能力接入或用户决策后再继续。",
+  "routes.platform.status.blocked": "网络执行未完成，已暂缓。",
   "platform.phase.running": "运行中",
   "platform.phase.delivered": "已交付",
   "platform.phase.capped": "尽力完成",
-  "platform.phase.deferred": "已延后"
+  "platform.phase.deferred": "已延后",
+  "platform.phase.blocked": "网络执行未完成"
 }

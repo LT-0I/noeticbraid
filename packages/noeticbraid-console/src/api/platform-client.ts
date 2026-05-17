@@ -9,6 +9,8 @@ import type {
   PlatformConversationTurnRequest,
   PlatformElicitRequest,
   PlatformOrchestrateStatusResponse,
+  PlatformPerTaskDeliverableItem,
+  PlatformPerTaskDeliverablesResponse,
   PlatformRequirementConfirmItem,
   PlatformRequirementConfirmResponse,
   PlatformTaskViewResponse,
@@ -52,6 +54,27 @@ function normalizeTaskList(payload: PlatformTaskListResponse | PlatformTask[]): 
 
 function normalizeTaskDetail(payload: PlatformTaskDetailResponse | PlatformTask): PlatformTaskDetailResponse {
   return 'task' in payload ? payload : { task: payload }
+}
+
+function normalizePerTaskDeliverables(payload: unknown): PlatformPerTaskDeliverablesResponse {
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { deliverables?: unknown }).deliverables)) {
+    return { deliverables: [] }
+  }
+  const deliverables = (payload as { deliverables: unknown[] }).deliverables.flatMap((item): PlatformPerTaskDeliverableItem[] => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Record<string, unknown>
+    const status = row.status
+    if (status !== 'delivered' && status !== 'blocked') return []
+    if (typeof row.requirement_id !== 'string' || typeof row.title !== 'string' || !row.title.trim()) return []
+    return [{
+      requirement_id: row.requirement_id,
+      title: row.title,
+      status,
+      ...(typeof row.download_ref === 'string' ? { download_ref: row.download_ref } : {}),
+      ...(typeof row.blocked_reason === 'string' ? { blocked_reason: row.blocked_reason } : {}),
+    }]
+  })
+  return { deliverables }
 }
 
 export function createPlatformTaskSocket(taskId: string): WebSocket {
@@ -125,6 +148,11 @@ export async function confirmPlatformRequirements(
 
 export async function fetchPlatformTaskView(taskId: string): Promise<PlatformTaskViewResponse> {
   return fetchJson<PlatformTaskViewResponse>(`/platform/tasks/${encodeURIComponent(taskId)}/view`)
+}
+
+export async function fetchPlatformTaskDeliverables(taskId: string): Promise<PlatformPerTaskDeliverablesResponse> {
+  const payload = await fetchJson<unknown>(`/platform/tasks/${encodeURIComponent(taskId)}/deliverables`)
+  return normalizePerTaskDeliverables(payload)
 }
 
 export async function fetchPlatformCapabilities(): Promise<PlatformCapabilityRegistryResponse> {
@@ -208,6 +236,14 @@ export const usePlatformTaskView = (taskId: string, enabled = true) =>
     queryKey: ['platform', 'tasks', taskId, 'view'],
     queryFn: () => fetchPlatformTaskView(taskId),
     enabled,
+  })
+
+export const usePlatformTaskDeliverables = (taskId: string, enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'tasks', taskId, 'deliverables'],
+    queryFn: () => fetchPlatformTaskDeliverables(taskId),
+    enabled: enabled && Boolean(taskId),
+    retry: false,
   })
 
 export const usePlatformCapabilities = (enabled = true) =>

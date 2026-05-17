@@ -403,6 +403,10 @@ export const platformHandlers = [
     if (!platformTasks.some((item) => item.task_id === taskId)) return HttpResponse.json({ detail: 'task not found' }, { status: 404 })
     return HttpResponse.json(platformViews[taskId] ?? emptyTaskView())
   }),
+  http.get('/platform/tasks/:taskId/deliverables', ({ request }) => {
+    if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
+    return HttpResponse.json({ deliverables: [] })
+  }),
   http.post('/platform/tasks/:taskId/elicit', async ({ params, request }) => {
     if (!isAuthorized(request)) return new HttpResponse(null, { status: 401 })
     const taskId = String(params.taskId)

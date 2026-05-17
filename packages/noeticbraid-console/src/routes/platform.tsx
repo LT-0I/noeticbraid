@@ -16,6 +16,7 @@ import {
   useConfirmPlatformRequirements,
   useElicitPlatformTask,
   usePlatformDeliverable,
+  usePlatformTaskDeliverables,
   usePlatformTask,
   usePlatformTaskView,
   usePlatformTasks,
@@ -32,6 +33,7 @@ import type {
   PlatformDeliverableStatus,
   PlatformLedgerEvent,
   PlatformModality,
+  PlatformPerTaskDeliverableItem,
   PlatformProgressFrame,
   PlatformServerFrame,
   PlatformTask,
@@ -787,12 +789,44 @@ function ConversationalDeliverables({ deliverables }: { deliverables: PlatformTa
   )
 }
 
+function PerTaskDeliverables({ items }: { items?: PlatformPerTaskDeliverableItem[] }) {
+  const { t } = useTranslation()
+  const safeItems = (items ?? []).filter((item) => (
+    item
+    && typeof item.requirement_id === 'string'
+    && typeof item.title === 'string'
+    && item.title.trim()
+    && (item.status === 'delivered' || item.status === 'blocked')
+  ))
+  if (safeItems.length === 0) return null
+
+  return (
+    <section className="platform-deliverables-zone" aria-labelledby="platform-pertask-deliverables-title" data-testid="platform-pertask-deliverables">
+      <div className="item-card__topline">
+        <h2 id="platform-pertask-deliverables-title" className="item-card__title">{t('routes.platform.pertaskDeliverables.title')}</h2>
+      </div>
+      <ol className="platform-timeline">
+        {safeItems.map((item, index) => (
+          <li key={`${item.requirement_id}-${index}`} className={`platform-timeline-item platform-timeline-item--${item.status === 'blocked' ? 'blocked' : 'complete'}`}>
+            <span className="platform-timeline-dot" aria-hidden="true" />
+            <div>
+              <strong>{item.title}</strong>
+              <span>{item.status === 'blocked' ? item.blocked_reason ?? t('routes.platform.pertaskDeliverables.blocked') : t('routes.platform.pertaskDeliverables.delivered')}</span>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 function PlatformConversationTaskPage() {
   const { t } = useTranslation()
   const auth = useAuthState()
   const { taskId } = platformDetailRoute.useParams()
   const detail = usePlatformTask(taskId, auth.status === 'ready')
   const view = usePlatformTaskView(taskId, auth.status === 'ready')
+  const perTaskDeliverables = usePlatformTaskDeliverables(taskId, auth.status === 'ready')
   const elicit = useElicitPlatformTask(taskId)
   const sendTurn = useSendPlatformConversation(taskId)
   const confirm = useConfirmPlatformRequirements(taskId)
@@ -844,6 +878,7 @@ function PlatformConversationTaskPage() {
       </div>
       <RequirementConfirmation items={payload.coarse_status} onConfirm={confirmRequirements} disabled={busy} />
       <ConversationalDeliverables deliverables={payload.deliverables} />
+      <PerTaskDeliverables items={perTaskDeliverables.isError ? undefined : perTaskDeliverables.data?.deliverables} />
     </section>
   )
 }

@@ -638,6 +638,97 @@ describe('console routes', () => {
     expect(zone.querySelector('.deliverable-provenance')).toBeNull()
   })
 
+  test('per-task deliverables render delivered final result without internal leakage', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/deliverables', () =>
+        HttpResponse.json({
+          deliverables: [
+            {
+              requirement_id: 'req_final',
+              title: 'Clean launch brief',
+              status: 'delivered',
+              download_ref: 'tasks/task_platform_seed/orchestration/final/final_req_final.json',
+              sha: 'deadbeefdeadbeefdeadbeefdeadbeef',
+              provenance: 'INTERNAL-PROVENANCE must not render',
+              conversation_id: 'conversation_id_internal',
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-pertask-deliverables')).toBeInTheDocument())
+    const section = screen.getByTestId('platform-pertask-deliverables')
+    const text = section.textContent ?? ''
+
+    expect(section).toHaveTextContent('Clean launch brief')
+    expect(section).toHaveTextContent('Final result ready')
+    expect(text).not.toMatch(/[0-9a-f]{12,}/i)
+    expect(text).not.toContain('INTERNAL-PROVENANCE')
+    expect(text).not.toContain('conversation_id')
+    expect(text).not.toContain('tasks/task_platform_seed/orchestration/final/final_req_final.json')
+    expect(section.querySelector('.deliverable-provenance')).toBeNull()
+    expect(section.querySelector('a')).toBeNull()
+    expect(section.querySelector('button')).toBeNull()
+  })
+
+  test('per-task deliverables render blocked result as calm amber information', async () => {
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/deliverables', () =>
+        HttpResponse.json({
+          deliverables: [
+            {
+              requirement_id: 'req_blocked',
+              title: 'Web research result',
+              status: 'blocked',
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(screen.getByTestId('platform-pertask-deliverables')).toBeInTheDocument())
+    const section = screen.getByTestId('platform-pertask-deliverables')
+
+    expect(section).toHaveTextContent('Web research result')
+    expect(section).toHaveTextContent('Web execution did not complete')
+    expect(section.querySelector('.platform-timeline-item--blocked')).toBeInTheDocument()
+    expect(section.querySelector('.state-panel--error')).toBeNull()
+  })
+
+  test('per-task deliverables empty response renders nothing extra and keeps SDD-D17 zone', async () => {
+    let called = false
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/deliverables', () => {
+        called = true
+        return HttpResponse.json({ deliverables: [] })
+      }),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(called).toBe(true))
+    expect(screen.getByTestId('platform-deliverables-zone')).toBeInTheDocument()
+    expect(screen.queryByTestId('platform-pertask-deliverables')).not.toBeInTheDocument()
+  })
+
+  test('per-task deliverables endpoint failure renders nothing extra and keeps SDD-D17 zone', async () => {
+    let called = false
+    server.use(
+      http.get('/platform/tasks/task_platform_seed/deliverables', () => {
+        called = true
+        return new HttpResponse(null, { status: 500 })
+      }),
+    )
+
+    renderAt('/platform/task_platform_seed')
+    await waitFor(() => expect(called).toBe(true))
+    expect(screen.getByTestId('platform-deliverables-zone')).toBeInTheDocument()
+    expect(screen.queryByTestId('platform-pertask-deliverables')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('platform-detail-error')).not.toBeInTheDocument()
+  })
+
   test('platform capability notice renders unavailable modality verbatim', async () => {
     server.use(
       http.get('/platform/tasks/task_platform_seed/view', () =>

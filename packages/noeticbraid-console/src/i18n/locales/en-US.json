@@ -298,6 +298,9 @@
   "routes.platform.requirementModality": "Modality",
   "routes.platform.confirmRequirements": "Confirm requirements",
   "routes.platform.deliverablesZone": "Deliverables zone",
+  "routes.platform.pertaskDeliverables.title": "Final results",
+  "routes.platform.pertaskDeliverables.delivered": "Final result ready",
+  "routes.platform.pertaskDeliverables.blocked": "Web execution did not complete",
   "routes.platform.conversationZone": "Conversation zone",
   "routes.platform.conversationZoneDescription": "Only user-visible questions, answers, steering, and calm status lines appear here.",
   "routes.platform.taskPanelSubtitle": "Conversation first; final artifacts stay in the deliverables zone.",
@@ -311,8 +314,10 @@
   "routes.platform.status.delivered": "Finished the available requirements.",
   "routes.platform.status.capped": "Best effort delivered; still can be improved.",
   "routes.platform.status.deferred": "Waiting for a capability or user decision before more work.",
+  "routes.platform.status.blocked": "Web execution did not complete; paused.",
   "platform.phase.running": "Running",
   "platform.phase.delivered": "Delivered",
   "platform.phase.capped": "Best effort",
-  "platform.phase.deferred": "Deferred"
+  "platform.phase.deferred": "Deferred",
+  "platform.phase.blocked": "Web execution did not complete"
 }
