@@ -10,10 +10,10 @@ import stat
 from pathlib import Path
 
 # Diagnostic reference only: git HEAD does not cover gitignored dist/ execution bytes.
-PINNED_HUB_HEAD = "ad1f61f"
+PINNED_HUB_HEAD = "e866e29"
 # Diagnostic reference only: hub version strings are not trusted as a security gate.
 MIN_HUB_PACKAGE_VERSION = "0.6.0"
-PINNED_HUB_EXEC_DIGEST: str = "6531d50a1c0787aebe5db8c4af0ca1248e975c3b615383907fb93a9d2b910846"
+PINNED_HUB_EXEC_DIGEST: str = "e120186cdca3840737322fab152351292b614760c169c3f7baf1ae8e381cf2dd"
 ENUMERATED_OFF_DIST_DEPS = ("better-sqlite3", "playwright", "pino")
 
 AUTOMATION_ENV = "NOETICBRAID_WEB_AI_HUB_AUTOMATION"
