@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,7 +14,9 @@ from noeticbraid_backend.omc_workspace.web_ai_hub_client import CHATGPT_PROFILE,
 from noeticbraid_backend.platform.conversation import model
 from noeticbraid_backend.platform.elicitation.local_ai import DEFAULT_TIMEOUT_SECONDS, run_local_task
 from noeticbraid_backend.platform.orchestrate import state
+from noeticbraid_backend.platform.orchestrate.web_modality_routes import resolve_web_modality
 from noeticbraid_backend.platform.orchestration import hub_adapter
+from noeticbraid_backend.platform.workspace_paths import resolve_user_path
 
 MAX_ROUNDS = 3
 CAP_MESSAGE = "已尽力，仍可改进 / Best effort; still can be improved."
@@ -132,7 +135,7 @@ def run_critique_loop(
     initial_evidence_node_id: str,
     *,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
-    reviewer_families: tuple[str, str] = ("codex", "gemini"),
+    reviewer_families: tuple[str, ...] = ("codex", "gemini"),
 ) -> CritiqueResult:
     current_artifact = dict(artifact)
     current_evidence = [initial_evidence_node_id]
@@ -158,7 +161,17 @@ def run_critique_loop(
                 return verdict_result
             verdicts.append(verdict_result)
         families = {verdict.reviewer_family for verdict in verdicts}
-        if len(families) < 2:
+        if _uses_web_reviewer(reviewer_families) and not verdicts:
+            return CritiqueResult(
+                status="deferred",
+                artifact=current_artifact,
+                artifact_ref=current_ref,
+                evidence_node_ids=current_evidence,
+                rounds=round_rows,
+                terminated_by="deferred",
+                reason="web reviewer produced no conforming verdict",
+            )
+        if len(families) < 2 and not _uses_web_reviewer(reviewer_families):
             return CritiqueResult(
                 status="delivered",
                 artifact=current_artifact,
@@ -230,6 +243,25 @@ def run_critique_loop(
             )
         revision = _apply_directive(account, task_id, requirement, current_artifact, directive, timeout=timeout)
         if revision.get("ok") is not True:
+            if revision.get("error") == CAP_MESSAGE:
+                model.append_conversation_row(
+                    account,
+                    task_id,
+                    role="assistant",
+                    kind="coarse_status",
+                    text=CAP_MESSAGE,
+                    requirement_id=str(requirement["id"]),
+                )
+                return CritiqueResult(
+                    status="capped",
+                    artifact=current_artifact,
+                    artifact_ref=current_ref,
+                    evidence_node_ids=[*current_evidence, directive_evidence],
+                    rounds=round_rows,
+                    terminated_by="MAX_ROUNDS",
+                    decision_class="mechanical",
+                    reason=CAP_MESSAGE,
+                )
             return CritiqueResult(
                 status="failed",
                 artifact=current_artifact,
@@ -287,6 +319,72 @@ def _call_reviewer(
     prior_directive: dict[str, Any] | None,
     timeout: int,
 ) -> ReviewerVerdict | CritiqueResult:
+    if _is_web_reviewer_family(family):
+        unavailable_reason = _hub_revision_unavailable_reason()
+        if unavailable_reason is not None:
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason=sanitize_error_msg(unavailable_reason, max_chars=256) or "web execution unavailable",
+            )
+        route = resolve_web_modality(str(requirement.get("modality") or "text"))
+        if route.kind == "blocked":
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason=sanitize_error_msg(route.reason, max_chars=256) or "web execution unavailable",
+            )
+        params = _web_reviewer_params(route, account, task_id, requirement, artifact, evidence_node_ids, round_no, prior_directive)
+        if isinstance(params, CritiqueResult):
+            return params
+        try:
+            result = hub_adapter.dispatch(route.reviewer_op, params, account=account, task_id=task_id)
+        except Exception:
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason="web execution unavailable",
+            )
+        if result.get("outcome") != "ok":
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason=sanitize_error_msg(str(result.get("reason") or "web execution unavailable"), max_chars=256)
+                or "web execution unavailable",
+            )
+        try:
+            verdict = ReviewerVerdict.from_json_dict(_extract_web_verdict_payload(result))
+        except Exception as exc:
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason=sanitize_error_msg(str(exc) or "web reviewer unavailable", max_chars=256)
+                or "web reviewer unavailable",
+            )
+        state.write_round_artifact(
+            account,
+            task_id,
+            round_no,
+            f"review_{_safe_family(verdict.reviewer_family)}_{round_no}",
+            {"verdict": verdict.to_json_dict()},
+        )
+        return verdict
+
     result = run_local_task(
         {
             "kind": "critique_review",
@@ -330,18 +428,31 @@ def _apply_directive(
     timeout: int,
 ) -> dict[str, Any]:
     conversation_id = artifact.get("conversation_id")
+    if artifact.get("hub") is True and not (isinstance(conversation_id, str) and conversation_id):
+        return {"ok": False, "error": CAP_MESSAGE}
     if artifact.get("hub") is True and isinstance(conversation_id, str) and conversation_id:
         unavailable_reason = _hub_revision_unavailable_reason()
         if unavailable_reason is not None:
             return {"ok": False, "error": unavailable_reason}
+        route = resolve_web_modality(str(requirement.get("modality") or "text"))
+        if route.kind == "blocked":
+            return {"ok": False, "error": route.reason}
+        if route.param_kind == "textual":
+            params = {
+                "profile": CHATGPT_PROFILE if route.generator_profile == "chatgpt" else route.generator_profile,
+                "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
+                "reuse_conversation": True,
+            }
+        else:
+            params = {
+                "profile": route.generator_profile,
+                "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
+                "reuse_conversation": True,
+            }
         try:
             result = hub_adapter.dispatch(
-                "webai_chatgpt_send_prompt",
-                {
-                    "profile": CHATGPT_PROFILE,
-                    "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
-                    "reuse_conversation": True,
-                },
+                route.generator_op,
+                params,
                 account=account,
                 task_id=task_id,
             )
@@ -350,6 +461,17 @@ def _apply_directive(
         if result.get("outcome") == "ok":
             payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
             response_text = str(payload.get("response_text") or "").strip()
+            path_ref = str(payload.get("path") or "").strip()
+            if route.reviewer_input_kind == "file" and path_ref:
+                return {
+                    "ok": True,
+                    "artifact": {
+                        "path": path_ref,
+                        "text": response_text or path_ref,
+                        "hub": True,
+                        "conversation_id": conversation_id,
+                    },
+                }
             if not response_text:
                 return {"ok": False, "error": "web execution produced no artifact"}
             return {"ok": True, "artifact": {"text": response_text, "hub": True, "conversation_id": conversation_id}}
@@ -381,6 +503,81 @@ def _hub_revision_unavailable_reason() -> str | None:
     if digest_status != "ok":
         return "web execution unavailable"
     return None
+
+
+def _is_web_reviewer_family(family: str) -> bool:
+    return str(family or "").strip().lower().startswith("web:")
+
+
+def _uses_web_reviewer(families: tuple[str, ...]) -> bool:
+    return any(_is_web_reviewer_family(family) for family in families)
+
+
+def _web_reviewer_params(
+    route: Any,
+    account: str,
+    task_id: str,
+    requirement: dict[str, Any],
+    artifact: dict[str, Any],
+    evidence_node_ids: list[str],
+    round_no: int,
+    prior_directive: dict[str, Any] | None,
+) -> dict[str, Any] | CritiqueResult:
+    query = _web_review_query(requirement, artifact, evidence_node_ids, round_no, prior_directive)
+    params: dict[str, Any] = {"profile": route.reviewer_profile, "query": query[: compat.PROMPT_MAX_CHARS]}
+    if route.reviewer_input_kind == "file":
+        ref = str(artifact.get("path") or "").strip()
+        try:
+            resolved = resolve_user_path(account, ref)
+        except Exception as exc:
+            return CritiqueResult(
+                status="deferred",
+                artifact=artifact,
+                artifact_ref=state.round_artifact_ref(task_id, round_no, f"review_deferred_{round_no}"),
+                evidence_node_ids=evidence_node_ids,
+                terminated_by="deferred",
+                reason=sanitize_error_msg(str(exc) or "web reviewer unavailable", max_chars=256)
+                or "web reviewer unavailable",
+            )
+        params["files"] = [str(resolved)]
+    return params
+
+
+def _web_review_query(
+    requirement: dict[str, Any],
+    artifact: dict[str, Any],
+    evidence_node_ids: list[str],
+    round_no: int,
+    prior_directive: dict[str, Any] | None,
+) -> str:
+    return json.dumps(
+        {
+            "instruction": (
+                "Review the artifact against the confirmed requirement. Return only JSON with keys "
+                "reviewer_family, issues, rationale, confidence, evidence_node_ids. Every issue must cite "
+                "one of the provided evidence_node_ids."
+            ),
+            "requirement": {"id": requirement.get("id"), "text": requirement.get("text"), "modality": requirement.get("modality")},
+            "artifact_text": artifact.get("text"),
+            "evidence_node_ids": evidence_node_ids,
+            "round": round_no,
+            "prior_directive": prior_directive,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+
+
+def _extract_web_verdict_payload(result: dict[str, Any]) -> Any:
+    payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
+    direct = payload.get("verdict") if isinstance(payload, dict) else None
+    if isinstance(direct, dict):
+        return direct
+    response_text = str(payload.get("response_text") or result.get("response_text") or "").strip()
+    if not response_text:
+        return result.get("verdict") if isinstance(result.get("verdict"), dict) else payload
+    return json.loads(response_text)
 
 
 def _append_user_gate(

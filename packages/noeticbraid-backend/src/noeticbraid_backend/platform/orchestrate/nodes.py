@@ -52,6 +52,8 @@ class LocalExecutionNode:
 
 class HubExecutionNode:
     def execute(self, spec_node: dict[str, Any], inputs: dict[str, Any]) -> NodeOutcome:
+        from noeticbraid_backend.platform.orchestrate.web_modality_routes import resolve_web_modality
+
         capability = capability_for("web_ai")
         if (os.environ.get("NOETICBRAID_PLATFORM_HUB_EXEC") or "").strip().lower() not in {"1", "true", "yes", "on"}:
             return NodeOutcome(status="deferred", reason=capability.blocked_reason, evidence_node_ids=[])
@@ -79,16 +81,28 @@ class HubExecutionNode:
             return NodeOutcome(status="deferred", reason=reason or "web execution unavailable", evidence_node_ids=[])
 
         requirement = inputs.get("requirement") if isinstance(inputs.get("requirement"), dict) else {}
+        route = resolve_web_modality(str(requirement.get("modality") or "text"))
+        if route.kind == "blocked":
+            return NodeOutcome(status="deferred", reason=route.reason, evidence_node_ids=[])
         prompt = (
+            f"{route.prompt_preamble}\n\n"
             "Confirmed requirement:\n"
             f"{str(requirement.get('text') or '').strip()}\n\n"
             "Workflow node:\n"
             f"{json.dumps(dict(spec_node), ensure_ascii=False, sort_keys=True, default=str)}"
         )[: compat.PROMPT_MAX_CHARS]
+        if route.param_kind == "textual":
+            params = {
+                "profile": CHATGPT_PROFILE if route.generator_profile == "chatgpt" else route.generator_profile,
+                "prompt": prompt,
+                "reuse_conversation": False,
+            }
+        else:
+            params = {"profile": route.generator_profile, "prompt": prompt}
         try:
             result = hub_adapter.dispatch(
-                "webai_chatgpt_send_prompt",
-                {"profile": CHATGPT_PROFILE, "prompt": prompt, "reuse_conversation": False},
+                route.generator_op,
+                params,
                 account=str(inputs["account"]),
                 task_id=str(inputs["task_id"]),
             )
@@ -98,9 +112,19 @@ class HubExecutionNode:
         if result.get("outcome") == "ok":
             payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
             response_text = str(payload.get("response_text") or "").strip()
-            if not response_text:
-                return NodeOutcome(status="deferred", reason="web execution produced no artifact", evidence_node_ids=[])
-            artifact: dict[str, Any] = {"text": response_text, "hub": True}
+            path_ref = str(payload.get("path") or "").strip()
+            if route.reviewer_input_kind == "file":
+                if not path_ref:
+                    return NodeOutcome(status="deferred", reason="web execution produced no artifact", evidence_node_ids=[])
+                artifact = {
+                    "path": path_ref,
+                    "text": response_text or path_ref,
+                    "hub": True,
+                }
+            else:
+                if not response_text:
+                    return NodeOutcome(status="deferred", reason="web execution produced no artifact", evidence_node_ids=[])
+                artifact = {"text": response_text, "hub": True}
             conversation_id = payload.get("conversation_id")
             if isinstance(conversation_id, str) and conversation_id:
                 artifact["conversation_id"] = conversation_id

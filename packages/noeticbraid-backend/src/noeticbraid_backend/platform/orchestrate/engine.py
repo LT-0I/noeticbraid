@@ -2,7 +2,6 @@
 """Synchronous Phase-2 orchestration engine."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,11 +45,24 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
     run_state = state.write_state(account, task_id, run_state)
     terminal_statuses: list[str] = []
     fanout_node = _node_by_id(selection.spec.nodes, "fanout")
+    critique_node = _node_by_id(selection.spec.nodes, "critique_loop")
     fanout_uses_hub = _fanout_uses_hub_agent(fanout_node)
     execution_node = HubExecutionNode() if fanout_uses_hub else LocalExecutionNode()
+    reviewer_families_raw = critique_node.get("reviewer_families")
+    reviewer_families = (
+        tuple(str(item) for item in reviewer_families_raw if str(item or "").strip())
+        if isinstance(reviewer_families_raw, list)
+        else ("codex", "gemini")
+    )
 
     for requirement in requirements:
-        if _is_capability_blocked(requirement):
+        modality = str(requirement.get("modality") or "text").strip().lower()
+        if _is_capability_blocked(requirement) and not (
+            fanout_uses_hub
+            and modality in {"image", "video", "slides", "poster"}
+            and (__import__("os").environ.get("NOETICBRAID_PLATFORM_HUB_EXEC") or "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ):
             _ensure_blocked(account, task_id, requirements_payload, requirement)
             terminal_statuses.append("deferred")
             requirements_payload = model.load_requirements(account, task_id)
@@ -69,8 +81,10 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
 
         execution_inputs = {
             "requirement": requirement,
+            "requirement_modality": requirement.get("modality"),
             "selected_workflow_id": selection.spec.id,
             "workflow_version": selection.spec.version,
+            "reviewer_families": reviewer_families,
         }
         if fanout_uses_hub:
             execution_inputs = {**execution_inputs, "account": account, "task_id": task_id}
@@ -103,7 +117,7 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
         )
         run_state = state.write_state(account, task_id, run_state)
 
-        critique = run_critique_loop(account, task_id, requirement, outcome.artifact, evidence_id)
+        critique = run_critique_loop(account, task_id, requirement, outcome.artifact, evidence_id, reviewer_families=reviewer_families)
         run_state = _merge_critique_rounds(run_state, critique)
         run_state = state.write_state(account, task_id, run_state)
         if critique.status in {"delivered", "capped"}:
@@ -133,6 +147,23 @@ def run_orchestration(account: str, task_id: str) -> OrchestrationView:
             )
             terminal_statuses.append(critique.status)
         elif critique.status == "deferred":
+            if outcome.artifact.get("hub") is True and critique.terminated_by == "deferred":
+                final_ref = state.write_final_artifact(
+                    account,
+                    task_id,
+                    f"final_{requirement['id']}",
+                    {"artifact": critique.artifact, "source_artifact_ref": critique.artifact_ref, "review_status": "deferred"},
+                )
+                run_state = state.append_round(
+                    run_state,
+                    round_no=len(run_state["rounds"]) + 1,
+                    artifact_ref=final_ref,
+                    decision_class=critique.decision_class,
+                    terminated_by="review_deferred",
+                    hub=critique.artifact.get("hub") is True,
+                )
+                run_state = state.write_state(account, task_id, run_state)
+                _set_requirement_state(account, task_id, requirements_payload, requirement["id"], "done")
             terminal_statuses.append("deferred")
         else:
             reason = sanitize_error_msg(critique.reason or "local critique failed", max_chars=512) or "local critique failed"

@@ -1,0 +1,36 @@
+{
+  "workflow": {
+    "id": "web_generate_and_cross_review",
+    "version": "1.0.0",
+    "description": "Use when a confirmed requirement needs Web-AI generation for image, video, slides, or poster output followed by cross-model web review.",
+    "selector": {
+      "intent_tags": ["image", "video", "slides", "poster"],
+      "deliverable_types": ["image", "video", "slides", "poster"],
+      "required_capabilities": [],
+      "excluded_capabilities": ["music"],
+      "requirement_predicates": ["web_generation == true"]
+    },
+    "inputs": [{"name": "web_generation_request", "from": "requirement.text", "required": true}],
+    "isolation": {"scope": "per_task", "persona_read": ["user_id/persona"], "persona_write": false},
+    "nodes": [
+      {"id": "elicit", "type": "interview", "impl": "clarifygpt_divergence"},
+      {"id": "fanout", "type": "orchestrate", "agents": ["web_ai"]},
+      {
+        "id": "critique_loop",
+        "type": "reconcile",
+        "max_rounds": 3,
+        "exit": ["consensus", "good_enough", "marginal<0.05"],
+        "reviewer_families": ["web:claude"],
+        "reviewer_routing": {"cross_model": true, "vendor_must_differ_from_generator": true}
+      },
+      {"id": "deliver", "type": "artifact_sink", "target": "task.deliverables"}
+    ],
+    "edges": [
+      {"from": "elicit", "to": "fanout", "when": "requirement_confirmed"},
+      {"from": "fanout", "to": "critique_loop"},
+      {"from": "critique_loop", "to": "deliver", "when": "loop_terminated"}
+    ],
+    "termination": {"max_total_rounds": 3, "require_evidence_provenance": true},
+    "capability_honesty": {"on_missing_capability": "declare_and_degrade"}
+  }
+}

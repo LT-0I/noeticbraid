@@ -146,13 +146,14 @@ def test_workflow_library_discovers_four_public_specs_and_audit_passes() -> None
         "code_change_and_review",
         "document_draft_and_refine",
         "research_and_synthesize",
+        "web_generate_and_cross_review",
         "open_orchestration",
     ]
-    assert len(specs) == 4
+    assert len(specs) == 5
     assert all("_internal" not in spec.id for spec in specs)
     result = audit_library()
     assert result.ok, result.messages
-    assert result.selectable_count == 4
+    assert result.selectable_count == 5
 
 
 def test_workflow_loader_rejects_malformed_and_duplicate_id(tmp_path: Path) -> None:

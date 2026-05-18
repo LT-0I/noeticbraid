@@ -99,6 +99,10 @@ def _inferred_intents(requirements: list[dict[str, Any]]) -> set[str]:
         "code": ("code", "bug", "repo", "test", "implement", "代码", "修复", "实现"),
         "review": ("review", "critique", "check", "评审", "检查"),
         "orchestrate": ("plan", "coordinate", "multi", "workflow", "规划", "协调"),
+        "image": ("image", "picture", "illustration", "hero art", "图像", "图片", "插画"),
+        "video": ("video", "movie", "clip", "animation", "视频", "动画"),
+        "slides": ("slides", "deck", "ppt", "presentation", "幻灯片", "演示"),
+        "poster": ("poster", "flyer", "one-pager", "海报", "传单"),
     }
     for item in requirements:
         modality = str(item.get("modality") or "").strip().lower()
@@ -120,10 +124,14 @@ def _inferred_deliverables(requirements: list[dict[str, Any]]) -> set[str]:
         "patch": ("patch", "fix", "implement", "diff", "修复", "实现"),
         "review_notes": ("review", "critique", "notes", "评审", "意见"),
         "plan": ("plan", "steps", "strategy", "计划", "步骤"),
+        "image": ("image", "picture", "illustration", "hero art", "图像", "图片", "插画"),
+        "video": ("video", "movie", "clip", "animation", "视频", "动画"),
+        "slides": ("slides", "deck", "ppt", "presentation", "幻灯片", "演示"),
+        "poster": ("poster", "flyer", "one-pager", "海报", "传单"),
     }
     for item in requirements:
         modality = str(item.get("modality") or "").strip().lower()
-        if modality in {"document", "research", "code", "text"}:
+        if modality in {"document", "research", "code", "text", "image", "video", "slides", "poster"}:
             deliverables.add(modality)
         text = str(item.get("text") or "").lower()
         for deliverable, needles in checks.items():
@@ -144,6 +152,36 @@ def _predicate_truth(predicate: str, requirements: list[dict[str, Any]]) -> bool
         return "code" in modalities or any(word in all_text for word in ("code", "repo", "bug", "test", "patch"))
     if normalized == "open_scope == true":
         return True
+    if normalized == "web_generation == true":
+        return bool(modalities.intersection({"image", "video", "slides", "poster"})) or any(
+            word in all_text
+            for word in (
+                "image",
+                "picture",
+                "illustration",
+                "hero art",
+                "video",
+                "movie",
+                "clip",
+                "animation",
+                "slides",
+                "deck",
+                "ppt",
+                "presentation",
+                "poster",
+                "flyer",
+                "one-pager",
+                "图像",
+                "图片",
+                "插画",
+                "视频",
+                "动画",
+                "幻灯片",
+                "演示",
+                "海报",
+                "传单",
+            )
+        )
     return False
 
 
