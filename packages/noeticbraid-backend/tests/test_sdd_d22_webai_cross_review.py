@@ -372,12 +372,16 @@ def test_d22_frozen_files_and_contract_sidecar_are_unchanged() -> None:
         "scripts/check_phase1_2_contract_gate.py",
         "pyproject.toml",
     ]
+    # HEAD-relative (matches the D21 _match_git_head guard): catches any
+    # uncommitted/unauthorized drift of the §1 frozen set, while not
+    # permanently failing on a separately SDD-authorized, reviewed, shipped
+    # frozen change (e.g. the SDD-D23 hub re-pin of web_ai_hub_compat.py).
     diff = subprocess.run(
-        ["git", "diff", "--quiet", "f3fcc0cb3bff4943929addf0bfd1b890e80653e4", "--", *frozen],
+        ["git", "diff", "--quiet", "HEAD", "--", *frozen],
         cwd=REPO_ROOT,
         check=False,
     )
-    assert diff.returncode == 0, "frozen §1 set changed vs base f3fcc0c"
+    assert diff.returncode == 0, "frozen §1 set changed vs HEAD (uncommitted/unauthorized)"
 
     # The contract "sidecar" is docs/contracts/phase1_2_openapi.yaml.sha256
     # (`<64 hex> *phase1_2_openapi.yaml`); 96ce4bac…839b7 is the SHA-256 *value*
