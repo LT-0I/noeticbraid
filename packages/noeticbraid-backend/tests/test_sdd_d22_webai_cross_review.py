@@ -175,7 +175,7 @@ def test_d22_reinject_uses_reuse_conversation_and_missing_conversation_caps(
 
     def dispatch(op: str, params: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
         calls.append((op, dict(params)))
-        if op == "webai_claude_upload_and_query" and len(calls) == 1:
+        if op == "webai_claude_send_prompt" and len(calls) == 1:
             return {
                 "outcome": "ok",
                 "status": "ok",

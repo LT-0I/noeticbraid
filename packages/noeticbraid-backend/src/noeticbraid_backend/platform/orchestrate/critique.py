@@ -524,8 +524,8 @@ def _web_reviewer_params(
     prior_directive: dict[str, Any] | None,
 ) -> dict[str, Any] | CritiqueResult:
     query = _web_review_query(requirement, artifact, evidence_node_ids, round_no, prior_directive)
-    params: dict[str, Any] = {"profile": route.reviewer_profile, "query": query[: compat.PROMPT_MAX_CHARS]}
     if route.reviewer_input_kind == "file":
+        params: dict[str, Any] = {"profile": route.reviewer_profile, "query": query[: compat.PROMPT_MAX_CHARS]}
         ref = str(artifact.get("path") or "").strip()
         try:
             resolved = resolve_user_path(account, ref)
@@ -540,7 +540,8 @@ def _web_reviewer_params(
                 or "web reviewer unavailable",
             )
         params["files"] = [str(resolved)]
-    return params
+        return params
+    return {"profile": route.reviewer_profile, "prompt": query[: compat.PROMPT_MAX_CHARS]}
 
 
 def _web_review_query(

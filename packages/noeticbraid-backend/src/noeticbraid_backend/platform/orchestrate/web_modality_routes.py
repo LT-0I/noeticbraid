@@ -50,7 +50,7 @@ _TEXTUAL_ROUTE = {
     "generator_op": "webai_chatgpt_send_prompt",
     "generator_vendor": "chatgpt",
     "generator_profile": "chatgpt",
-    "reviewer_op": "webai_claude_upload_and_query",
+    "reviewer_op": "webai_claude_send_prompt",
     "reviewer_vendor": "claude",
     "reviewer_profile": "claude",
     "artifact_extension": "md",
