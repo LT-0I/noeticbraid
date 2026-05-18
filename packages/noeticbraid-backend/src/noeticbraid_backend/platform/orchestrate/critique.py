@@ -646,32 +646,11 @@ def _balanced_json_object_candidates(text: str) -> list[str]:
     return candidates
 
 
-def _prefer_markdown_fenced_block(text: str) -> str:
-    fence_start = text.find("```")
-    if fence_start < 0:
-        return text
-    candidate = text[fence_start + 3 :]
-    fence_end = candidate.find("```")
-    if fence_end >= 0:
-        candidate = candidate[:fence_end]
-    stripped = candidate.lstrip()
-    if stripped[:4].lower() == "json":
-        stripped = stripped[4:].lstrip()
-    return stripped.strip()
-
-
 def _loads_json_object_candidate(candidate: str) -> Any | None:
     try:
         return json.loads(candidate)
     except Exception:
         return None
-
-
-def _first_balanced_json_object(text: str) -> str | None:
-    start = text.find("{")
-    if start < 0:
-        return None
-    return _balanced_json_object_from(text, start)
 
 
 def _balanced_json_object_from(text: str, start: int) -> str | None:
