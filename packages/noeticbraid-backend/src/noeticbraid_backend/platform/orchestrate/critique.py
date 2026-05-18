@@ -365,7 +365,11 @@ def _call_reviewer(
                 or "web execution unavailable",
             )
         try:
-            verdict = ReviewerVerdict.from_json_dict(_extract_web_verdict_payload(result))
+            payload = _extract_web_verdict_payload(result)
+            payload = _normalize_web_verdict_dict(payload, evidence_node_ids, family)
+            verdict = ReviewerVerdict.from_json_dict(payload)
+            if not set(verdict.evidence_node_ids).issubset(set(evidence_node_ids)):
+                raise ValueError("web reviewer evidence not provided")
         except Exception as exc:
             return CritiqueResult(
                 status="deferred",
@@ -578,7 +582,188 @@ def _extract_web_verdict_payload(result: dict[str, Any]) -> Any:
     response_text = str(payload.get("response_text") or result.get("response_text") or "").strip()
     if not response_text:
         return result.get("verdict") if isinstance(result.get("verdict"), dict) else payload
-    return json.loads(response_text)
+    fallback = result.get("verdict") if isinstance(result.get("verdict"), dict) else payload
+    parsed = _single_unambiguous_web_verdict_candidate(response_text)
+    return parsed if parsed is not None else fallback
+
+
+def _single_unambiguous_web_verdict_candidate(text: str) -> Any | None:
+    distinct: dict[str, Any] = {}
+    for candidate in [*_markdown_fenced_json_candidates(text), *_balanced_json_object_candidates(text)]:
+        parsed = _loads_json_object_candidate(candidate)
+        if not _is_web_verdict_shaped(parsed):
+            continue
+        key = json.dumps(parsed, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        distinct[key] = parsed
+    if len(distinct) != 1:
+        return None
+    return next(iter(distinct.values()))
+
+
+def _is_web_verdict_shaped(value: Any) -> bool:
+    return isinstance(value, dict) and ("reviewer_family" in value or "issues" in value)
+
+
+def _markdown_fenced_json_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    search_from = 0
+    while True:
+        fence_start = text.find("```", search_from)
+        if fence_start < 0:
+            return candidates
+        content_start = fence_start + 3
+        fence_end = text.find("```", content_start)
+        if fence_end < 0:
+            return candidates
+        block = _strip_markdown_fence_prefix(text[content_start:fence_end])
+        candidates.append(block)
+        candidates.extend(_balanced_json_object_candidates(block))
+        search_from = fence_end + 3
+
+
+def _strip_markdown_fence_prefix(block: str) -> str:
+    stripped = block.strip().lstrip("\ufeff").lstrip()
+    if stripped[:4].lower() == "json":
+        after_tag = stripped[4:]
+        if not after_tag or after_tag[0].isspace() or after_tag[0] in {"{", "["} or after_tag[0] == "\ufeff":
+            stripped = after_tag.lstrip("\ufeff").lstrip()
+    return stripped.strip()
+
+
+def _balanced_json_object_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            break
+        candidate = _balanced_json_object_from(text, start)
+        if candidate is None:
+            index = start + 1
+            continue
+        candidates.append(candidate)
+        index = start + len(candidate)
+    return candidates
+
+
+def _prefer_markdown_fenced_block(text: str) -> str:
+    fence_start = text.find("```")
+    if fence_start < 0:
+        return text
+    candidate = text[fence_start + 3 :]
+    fence_end = candidate.find("```")
+    if fence_end >= 0:
+        candidate = candidate[:fence_end]
+    stripped = candidate.lstrip()
+    if stripped[:4].lower() == "json":
+        stripped = stripped[4:].lstrip()
+    return stripped.strip()
+
+
+def _loads_json_object_candidate(candidate: str) -> Any | None:
+    try:
+        return json.loads(candidate)
+    except Exception:
+        return None
+
+
+def _first_balanced_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start < 0:
+        return None
+    return _balanced_json_object_from(text, start)
+
+
+def _balanced_json_object_from(text: str, start: int) -> str | None:
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
+def _normalize_web_verdict_dict(obj: Any, provided_evidence_node_ids: list[str], route_reviewer_family: str) -> Any:
+    try:
+        if not isinstance(obj, dict):
+            return obj
+        issues_raw = obj.get("issues")
+        if not isinstance(issues_raw, list) or not any(isinstance(item, dict) for item in issues_raw):
+            return obj
+
+        normalized_issues: list[str] = []
+        evidence_union: list[str] = []
+        provided = {item.strip() for item in provided_evidence_node_ids if isinstance(item, str) and item.strip()}
+        for issue in issues_raw:
+            if not isinstance(issue, dict):
+                continue
+            issue_type_raw = issue.get("type")
+            description_raw = issue.get("description")
+            issue_type = issue_type_raw.strip() if isinstance(issue_type_raw, str) else ""
+            description = description_raw.strip() if isinstance(description_raw, str) else ""
+            if issue_type and description:
+                issue_text = f"{issue_type}: {description}"
+            elif description or issue_type:
+                issue_text = description or issue_type
+            else:
+                continue
+            evidence_raw = issue.get("evidence_node_ids")
+            issue_evidence: list[str] = []
+            if isinstance(evidence_raw, list):
+                issue_evidence = [
+                    item.strip()
+                    for item in evidence_raw
+                    if isinstance(item, str) and item.strip() and item.strip() in provided
+                ]
+            issue_evidence = _dedupe_strings(issue_evidence)
+            if not issue_evidence:
+                continue
+            normalized_issues.append(issue_text)
+            evidence_union.extend(issue_evidence)
+
+        if not normalized_issues:
+            return obj
+
+        evidence_node_ids = [item for item in _dedupe_strings(evidence_union) if item in provided]
+        reviewer_family_raw = obj.get("reviewer_family")
+        reviewer_family = (
+            reviewer_family_raw.strip()
+            if isinstance(reviewer_family_raw, str) and reviewer_family_raw.strip()
+            else str(route_reviewer_family or "").strip()
+        )
+        rationale_raw = obj.get("rationale")
+        confidence = obj.get("confidence")
+        try:
+            confidence_value = float(confidence)
+        except (TypeError, ValueError):
+            confidence_value = 0.0
+        if confidence_value < 0 or confidence_value > 1:
+            confidence_value = 0.0
+        return {
+            "reviewer_family": reviewer_family,
+            "issues": normalized_issues,
+            "rationale": rationale_raw if isinstance(rationale_raw, str) else "",
+            "confidence": confidence_value,
+            "evidence_node_ids": evidence_node_ids,
+        }
+    except Exception:
+        return obj
 
 
 def _append_user_gate(
