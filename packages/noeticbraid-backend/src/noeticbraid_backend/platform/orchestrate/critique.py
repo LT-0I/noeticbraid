@@ -21,6 +21,39 @@ from noeticbraid_backend.platform.workspace_paths import resolve_user_path
 MAX_ROUNDS = 3
 CAP_MESSAGE = "已尽力，仍可改进 / Best effort; still can be improved."
 DecisionClass = Literal["mechanical", "taste", "user_challenge"]
+_MINIMAL_EDIT_COMPLETE_ARTIFACT_INSTRUCTION = (
+    "Apply ONLY the change(s) the directive requires. Preserve ALL other content that already passed review verbatim. "
+    "Return the COMPLETE revised artifact in full — never a summary, change-note, diff, or acknowledgement. "
+    "If the directive would remove required content, keep that content and apply only the surgical fix."
+)
+_COLLAPSE_PRIOR_MIN_CHARS = 400
+_COLLAPSE_MAX_FRACTION = 0.4
+_BROAD_REDUCTION_MARKERS = (
+    "summarize",
+    "summary",
+    "condense",
+    "condensed",
+    "shorten",
+    "abridge",
+    "compress",
+    "make concise",
+    "cut down",
+    "reduce the artifact",
+    "reduce content",
+    "remove all",
+    "delete all",
+    "drop all",
+    "remove section",
+    "delete section",
+    "drop section",
+    "remove the section",
+    "delete the section",
+    "drop the section",
+    "remove slides",
+    "delete slides",
+    "remove paragraphs",
+    "delete paragraphs",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +175,7 @@ def run_critique_loop(
     current_ref = state.round_artifact_ref(task_id, 1, f"fanout_{requirement['id']}")
     previous_score = 0.0
     prior_directive: dict[str, Any] | None = None
+    last_substantial_text = _text_artifact_body(current_artifact)
     round_rows: list[dict[str, Any]] = []
     for round_no in range(1, MAX_ROUNDS + 1):
         verdicts: list[ReviewerVerdict] = []
@@ -274,6 +308,8 @@ def run_critique_loop(
         revised_artifact = revision.get("artifact") if isinstance(revision.get("artifact"), dict) else None
         if revised_artifact is None:
             revised_artifact = {"text": str(revision.get("text") or revision.get("content") or "").strip()}
+        baseline_artifact = {"text": last_substantial_text} if last_substantial_text is not None else current_artifact
+        collapsed_revision = _collapsed_revision_without_broad_reduction(baseline_artifact, revised_artifact, directive)
         revised_ref, revised_evidence = state.write_round_artifact(
             account,
             task_id,
@@ -284,8 +320,14 @@ def run_critique_loop(
         current_artifact = revised_artifact
         current_ref = revised_ref
         current_evidence = [revised_evidence]
+        if collapsed_revision:
+            revision = {**revision, "score": previous_score}
+        else:
+            revised_text = _text_artifact_body(revised_artifact)
+            if revised_text is not None:
+                last_substantial_text = revised_text
         next_score = _score_from_result(revision, previous_score + 0.1)
-        if round_no > 1 and next_score - previous_score < 0.05:
+        if round_no > 1 and not collapsed_revision and next_score - previous_score < 0.05:
             return CritiqueResult(
                 status="delivered",
                 artifact=current_artifact,
@@ -384,7 +426,7 @@ def _call_reviewer(
             account,
             task_id,
             round_no,
-            f"review_{_safe_family(verdict.reviewer_family)}_{round_no}",
+            f"review_{_safe_seg(str(requirement['id']))}_{round_no}",
             {"verdict": verdict.to_json_dict()},
         )
         return verdict
@@ -416,7 +458,7 @@ def _call_reviewer(
         account,
         task_id,
         round_no,
-        f"review_{_safe_family(verdict.reviewer_family)}_{round_no}",
+        f"review_{_safe_seg(str(requirement['id']))}_{round_no}",
         {"verdict": verdict.to_json_dict()},
     )
     return verdict
@@ -441,16 +483,17 @@ def _apply_directive(
         route = resolve_web_modality(str(requirement.get("modality") or "text"))
         if route.kind == "blocked":
             return {"ok": False, "error": route.reason}
+        prompt = _revision_prompt_for_route(route, requirement, artifact, directive)
         if route.param_kind == "textual":
             params = {
                 "profile": CHATGPT_PROFILE if route.generator_profile == "chatgpt" else route.generator_profile,
-                "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
+                "prompt": prompt,
                 "reuse_conversation": True,
             }
         else:
             params = {
                 "profile": route.generator_profile,
-                "prompt": directive.directive_text[: compat.PROMPT_MAX_CHARS],
+                "prompt": prompt,
                 "reuse_conversation": True,
             }
         try:
@@ -507,6 +550,54 @@ def _hub_revision_unavailable_reason() -> str | None:
     if digest_status != "ok":
         return "web execution unavailable"
     return None
+
+
+def _revision_prompt_for_route(
+    route: Any,
+    requirement: dict[str, Any],
+    artifact: dict[str, Any],
+    directive: ConsolidatedDirective,
+) -> str:
+    artifact_text = _text_artifact_body(artifact)
+    if route.reviewer_input_kind == "file" or artifact_text is None:
+        return directive.directive_text[: compat.PROMPT_MAX_CHARS]
+    return _complete_artifact_revision_prompt(requirement, artifact_text, directive.directive_text)
+
+
+def _complete_artifact_revision_prompt(requirement: dict[str, Any], artifact_text: str, directive_text: str) -> str:
+    requirement_block = json.dumps(
+        {
+            "id": requirement.get("id"),
+            "text": requirement.get("text"),
+            "modality": requirement.get("modality"),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    prefix = (
+        "You are revising an already-reviewed NoeticBraid artifact.\n\n"
+        f"Requirement (id, text, modality):\n{requirement_block}\n\n"
+        f"Revision directive (verbatim):\n{directive_text}\n\n"
+        f"Revision rule:\n{_MINIMAL_EDIT_COMPLETE_ARTIFACT_INSTRUCTION}\n\n"
+        "Current COMPLETE artifact to revise:\n"
+        "<<<NOETICBRAID_CURRENT_ARTIFACT>>>\n"
+    )
+    suffix = "\n<<<END_NOETICBRAID_CURRENT_ARTIFACT>>>\n\nReturn only the COMPLETE revised artifact in full."
+    prompt = f"{prefix}{artifact_text}{suffix}"
+    max_chars = int(compat.PROMPT_MAX_CHARS)
+    if len(prompt) <= max_chars:
+        return prompt
+    artifact_budget = max_chars - len(prefix) - len(suffix)
+    if artifact_budget > 0:
+        return f"{prefix}{artifact_text[:artifact_budget]}{suffix}"[:max_chars]
+    fallback = (
+        "Revision directive and completion rule (directive prioritized because the prompt is capped):\n"
+        f"{directive_text}\n\n"
+        f"{_MINIMAL_EDIT_COMPLETE_ARTIFACT_INSTRUCTION}\n\n"
+        "Return the COMPLETE revised artifact in full."
+    )
+    return fallback[:max_chars]
 
 
 def _is_web_reviewer_family(family: str) -> bool:
@@ -764,7 +855,41 @@ def _append_user_gate(
     )
 
 
+def _collapsed_revision_without_broad_reduction(
+    prior_artifact: dict[str, Any],
+    revised_artifact: dict[str, Any],
+    directive: ConsolidatedDirective,
+) -> bool:
+    prior_text = _text_artifact_body(prior_artifact)
+    revised_text = _text_artifact_body(revised_artifact)
+    if prior_text is None or revised_text is None:
+        return False
+    prior_len = len(prior_text.strip())
+    revised_len = len(revised_text.strip())
+    if prior_len < _COLLAPSE_PRIOR_MIN_CHARS or revised_len == 0:
+        return False
+    if revised_len >= max(120, int(prior_len * _COLLAPSE_MAX_FRACTION)):
+        return False
+    return not _directive_allows_broad_reduction(directive.directive_text)
+
+
+def _directive_allows_broad_reduction(directive_text: str) -> bool:
+    normalized = " ".join(str(directive_text or "").lower().split())
+    return any(marker in normalized for marker in _BROAD_REDUCTION_MARKERS)
+
+
+def _text_artifact_body(artifact: dict[str, Any]) -> str | None:
+    text = artifact.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return text
+
+
 def _safe_family(value: str) -> str:
+    return _safe_seg(value)
+
+
+def _safe_seg(value: str) -> str:
     safe = "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value.strip())
     return safe[:80] or "reviewer"
 
