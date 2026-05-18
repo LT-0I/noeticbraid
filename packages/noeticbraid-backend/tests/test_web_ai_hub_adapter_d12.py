@@ -163,7 +163,7 @@ def _ready_dispatch(
 
 
 def test_d12_constants_pageful_mapping_and_hard_exclusion_precedence() -> None:
-    assert compat.PINNED_HUB_EXEC_DIGEST == "e120186cdca3840737322fab152351292b614760c169c3f7baf1ae8e381cf2dd"
+    assert compat.PINNED_HUB_EXEC_DIGEST == "3a358f1f0b9705716bb09ff5eef95e9120a5d2e26284d1e8ec14534eb33bef06"
     assert compat.ARTIFACT_FILE_MAX_BYTES == 268_435_456
     assert compat.automation_timeout_for(CHATGPT_IMAGE_OP) == compat.GENERATE_AUTOMATION_TIMEOUT_SECONDS == 300
     assert compat.automation_timeout_for(GEMINI_IMAGE_OP) == 300
